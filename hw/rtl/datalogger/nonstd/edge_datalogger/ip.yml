@@ -1,0 +1,53 @@
+# edge_datalogger — Single-line edge-capture datalogger ("logic-analyzer" path)
+#
+# Captures every rising / falling / both edge on a single input pin
+# with a timestamp; no protocol decode. The output stream IS the
+# trace. Used by deepskopion for general-purpose logic-analyzer
+# capture on any line that doesn't have a dedicated protocol datalogger.
+#
+# Naming wart to remember: entity is `edge_datalogger`, port prefix is
+# `ED_*`, input pin is `EDGE_IN` — the datalogger-builder protocols.yml
+# mapping was the silent-drift hit point caught in DS-P3.16.
+#
+# Mirrors uart_datalogger (DS-P2.33 / SNIF.1), i2c_datalogger (DS-P3.18 /
+# SNIF.2), and qspi_datalogger (DS-P3.19 / SNIF.3). See
+# docs/standards/datalogger_compliance_checklist.md section 8b.
+
+ip:
+  name: edge_datalogger
+  library: tich
+  language: vhdl
+  description: |
+    Single-line edge-capture datalogger. Tags rising / falling / both
+    edges on `EDGE_IN` with the global TIMESTAMP and emits a 32-bit
+    message per detected event. CONFIG bits select the edge mode
+    (rising / falling / both) and trigger semantics (continuous /
+    one-shot / read-gated). Optional infilter at G_ENABLE_INFILTER=1.
+
+hdl:
+  top_module: edge_datalogger
+  top_sim:    edge_datalogger
+
+paths:
+  sources: .
+
+synthesis:
+  mode: rtl
+  sources:
+    - edge_datalogger.vhd
+
+build:
+  simulation:
+    sources: []                # falls back to synthesis.sources
+    # DS-P2.187: the edge suite's own directory. It was the shared nonstd/
+    # parent, so coverage-map also walked level_datalogger/ and reported
+    # its LEVEL-REQ-* tags as edge_datalogger orphans.
+    test_dir: ../../../../sim/cocotb/tests/datalogger/nonstd/edge_datalogger
+    simulator: nvc
+    waves:
+      formats: [fst]
+
+requirements: requirements.yml
+
+ips:
+  - ../../../fifo/ip.yml

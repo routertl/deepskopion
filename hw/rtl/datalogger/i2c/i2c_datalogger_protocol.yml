@@ -1,0 +1,234 @@
+# =============================================================================
+# I2C Datalogger Protocol Definition
+# Extracted from: hw/rtl/datalogger/i2c/i2c_datalogger.vhd
+# =============================================================================
+# This file defines the HW<->SW protocol for the I2C datalogger module.
+# The message width is 32 bits total.
+# =============================================================================
+
+protocol:
+  name: i2c_datalogger
+  description: I2C raw data datalogger protocol
+  message_width: 32
+  version: "1.0"
+
+# =============================================================================
+# Identity — domain
+# =============================================================================
+# system_ids.yml is the source of truth for protocol domain codepoints.
+identity:
+  domain: 0x2
+
+# =============================================================================
+# Constants
+# =============================================================================
+constants:
+  # Widths
+  device_id_width: 5
+  timestamp_width: 16
+  event_code_width: 8
+  data_width: 8
+  address_width: 7
+  rw_bit_width: 1
+  
+  # Message types (3-bit, MSB of payload after device_id)
+  i2c_type_event: 0b100      # Event message type
+  i2c_type_payload: 0b00     # Payload message type (2-bit, ACK/NACK is the 3rd bit)
+  
+  # Event codes (8-bit)
+  events:
+    enabled: 0x03
+    disabled: 0x00
+    start: 0x09
+    stop: 0x0A
+    repeated_start: 0x0B
+    stop_error: 0x05
+    stretch_error: 0x06
+    repeated_start_error: 0x07
+    glitch_error: 0x08
+
+  # Timing parameters (derived from VHDL constants)
+  scl_timeout_ms: 25
+  debounce_cycles: 3
+
+# =============================================================================
+# Message Formats
+# =============================================================================
+# All messages are 32-bit wide. The topmost 5 bits are always the device ID.
+# The remaining 27 bits define the message content.
+# =============================================================================
+
+messages:
+  # ---------------------------------------------------------------------------
+  # Event Message
+  # Sent for: START, STOP, Repeated START, Enabled, Disabled, Errors
+  # ---------------------------------------------------------------------------
+  - name: event
+    description: Event notification (START, STOP, errors, etc.)
+    type_code: 0b100
+    total_bits: 32
+    fields:
+      - name: device_id
+        bits: [31, 27]
+        width: 5
+        description: Datalogger device ID (from G_I2C_DEV_ID generic)
+        
+      - name: type
+        bits: [26, 24]
+        width: 3
+        value: 0b100
+        description: Message type indicator (always 0b100 for events)
+        
+      - name: timestamp
+        bits: [23, 8]
+        width: 16
+        description: Low 16 bits of the global timestamp
+        
+      - name: event_code
+        bits: [7, 0]
+        width: 8
+        description: |
+          Event type identifier:
+            0x03 = Enabled
+            0x00 = Disabled
+            0x09 = Start condition
+            0x0A = Stop condition
+            0x0B = Repeated Start condition
+            0x05 = Stop Error
+            0x06 = SCL Stretch Timeout Error
+            0x07 = Repeated Start Error (NACK before ReStart)
+            0x08 = Glitch Error (SDA/SCL transient)
+
+  # ---------------------------------------------------------------------------
+  # Payload Message
+  # Sent for: Address byte (7-bit addr + R/W) or Data byte
+  # ---------------------------------------------------------------------------
+  - name: payload
+    description: I2C data payload (address or data byte with ACK/NACK)
+    type_code: 0b00x  # x = ACK/NACK bit
+    total_bits: 32
+    fields:
+      - name: device_id
+        bits: [31, 27]
+        width: 5
+        description: Datalogger device ID (from G_I2C_DEV_ID generic)
+        
+      - name: type
+        bits: [26, 25]
+        width: 2
+        value: 0b00
+        description: Message type indicator (always 0b00 for payload)
+        
+      - name: ack_nack
+        bits: [24, 24]
+        width: 1
+        description: |
+          ACK/NACK status:
+            0 = ACK (acknowledged)
+            1 = NACK (not acknowledged)
+        
+      - name: timestamp
+        bits: [23, 8]
+        width: 16
+        description: Low 16 bits of the global timestamp
+        
+      - name: data
+        bits: [7, 0]
+        width: 8
+        description: |
+          For address byte: [7:1] = 7-bit I2C address, [0] = R/W bit (0=Write, 1=Read)
+          For data byte: 8-bit data value
+
+# =============================================================================
+# Configuration Register
+# =============================================================================
+# The CONFIG port is G_CONFIG_WIDTH bits wide (default 16).
+# The datalogger checks if its device_id matches and extracts local config bits.
+# =============================================================================
+
+config:
+  name: i2c_config
+  description: Configuration register for I2C datalogger
+  width: 16  # G_CONFIG_WIDTH default
+  fields:
+    - name: device_id
+      bits: [15, 11]
+      width: 5
+      description: Target device ID (must match G_I2C_DEV_ID to apply config)
+      
+    - name: reserved
+      bits: [10, 1]
+      width: 10
+      description: Reserved for future use
+      
+    - name: enable
+      bits: [0, 0]
+      width: 1
+      description: |
+        Datalogger enable bit:
+          0 = Disabled
+          1 = Enabled
+
+# =============================================================================
+# Error Outputs
+# =============================================================================
+# The I2C_ERRORS port is G_ERROR_WIDTH bits wide (default 2).
+# Currently unused in the implementation but reserved for future use.
+# =============================================================================
+
+errors:
+  name: i2c_errors
+  description: Error status outputs
+  width: 2  # G_ERROR_WIDTH default
+  fields:
+    - name: reserved
+      bits: [1, 0]
+      width: 2
+      description: Reserved (currently not driven by i2c_datalogger)
+
+# =============================================================================
+# Decoding Examples (Python)
+# =============================================================================
+# Example decoder implementation for SW integration
+# =============================================================================
+
+examples:
+  decode_message: |
+    def decode_i2c_msg(msg: int) -> dict:
+        """Decode a 32-bit I2C datalogger message."""
+        device_id = (msg >> 27) & 0x1F
+        msg_type = (msg >> 24) & 0x07
+        timestamp = (msg >> 8) & 0xFFFF
+        data = msg & 0xFF
+        
+        result = {
+            "device_id": device_id,
+            "timestamp": timestamp,
+        }
+        
+        if msg_type == 0b100:  # Event
+            result["name"] = "event"
+            events = {
+                0x00: "disabled", 0x03: "enabled",
+                0x09: "start", 0x0A: "stop", 0x0B: "repeated_start",
+                0x05: "stop_error", 0x06: "stretch_error",
+                0x07: "restart_error", 0x08: "glitch_error"
+            }
+            result["event"] = events.get(data, f"unknown_{data:#x}")
+        else:  # Payload (type = 0b00x where x = ACK/NACK)
+            result["name"] = "payload"
+            result["ack"] = (msg_type & 0x01) == 0
+            result["data"] = data
+            # First byte after START is address
+            result["address"] = data >> 1
+            result["rw"] = "read" if data & 0x01 else "write"
+        
+        return result
+
+  parse_address_byte: |
+    def parse_i2c_address(data: int) -> dict:
+        """Extract I2C address and R/W from address byte."""
+        return {
+            "address_7bit": (data >> 1) & 0x7F,
+            "direction": "read" if data & 0x01 else "write"
+        }

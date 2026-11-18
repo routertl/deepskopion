@@ -1,0 +1,1099 @@
+{
+  "schema": "rr.hw.run/v1",
+  "contract_version": 0.2,
+  "run_id": "2026-10-09T23-23-38_replay_fbcd",
+  "req_id": "DS-DE25-INTEG-001",
+  "mode": "replay",
+  "target": {
+    "project": "deepskopion",
+    "sof_sha256": "0dde6ad6e075610c271ca42d442c32b33962c0d87574774022ad181ff446b9b5",
+    "git_rev": "97c36feb",
+    "config_delta_from_last_run": [
+      "session: B-N",
+      "order: 1 of 2",
+      "daemon: stopped",
+      "map-access preamble: project_regbank.yml walked at base_address 0x20000000 with address_mode bytes (contract leaves base 0 / words)"
+    ],
+    "board": "de25-standard"
+  },
+  "preconditions": [
+    {
+      "name": "sof_programmed",
+      "applied": true,
+      "via": "de25_datalogger image whose REA G_BUILD_ID is CONFIRMED by rr hw bit-sha --record-chain"
+    },
+    {
+      "name": "fresh_configuration",
+      "applied": true,
+      "via": "power cycle and boot; telemetry counters reset with rst_sys"
+    },
+    {
+      "name": "hps_bridges_enabled",
+      "applied": true,
+      "via": "generated DE25 boot command ran bridge enable"
+    },
+    {
+      "name": "no_foreign_armer",
+      "applied": true,
+      "via": "no other process writes the stimulus or datalogger controls"
+    }
+  ],
+  "steps": [
+    {
+      "idx": 1,
+      "kind": "poke",
+      "t": 0.0,
+      "addr": "0x20000020",
+      "comment": "EDGE0 disabled/reset",
+      "value": "0x00000800"
+    },
+    {
+      "idx": 2,
+      "kind": "poke",
+      "t": 0.001,
+      "addr": "0x20000020",
+      "comment": "EDGE0 capture enabled",
+      "value": "0x00000801"
+    },
+    {
+      "idx": 3,
+      "kind": "poke",
+      "t": 0.002,
+      "addr": "0x20000024",
+      "comment": "route stimulus EDGE_O to EDGE0",
+      "value": "0x00000080"
+    },
+    {
+      "idx": 4,
+      "kind": "poke",
+      "t": 0.003,
+      "addr": "0x20000244",
+      "comment": "free-running toggle, half-period 25 clocks",
+      "value": "0x00000191"
+    },
+    {
+      "idx": 5,
+      "kind": "rate",
+      "t": 0.004,
+      "read": "0x20000150",
+      "observed": "0x00CA6869",
+      "interval_s": 2.0,
+      "width": 32,
+      "raw_reads": [
+        "0x001FA102",
+        "0x00CA6869"
+      ],
+      "reads": [
+        {
+          "observed": "0x001FA102",
+          "t": 0.004
+        },
+        {
+          "observed": "0x00CA6869",
+          "t": 2.421860055997153
+        }
+      ],
+      "timestamps": [
+        0.004,
+        2.421860055997153
+      ],
+      "elapsed_s": 2.417860055997153,
+      "delta": 11192167,
+      "rate_per_s": 4628955.663599904,
+      "satisfied": true,
+      "in_range": true,
+      "t_final": 2.421860055997153,
+      "min_per_s": 3600000,
+      "max_per_s": 26400000,
+      "derivation": "E=100e6/25=4e6 edges/s. Each edge contributes one word and each batch adds a five-word header (edge_batcher.vhd; zs_msg_framer.vhd), hence [E,6E] words/s; +/-10% host timing gives [3.6e6,26.4e6]. A stale absolute pointer has delta zero and fails this step.",
+      "evidence_status": "map-access-unproven"
+    },
+    {
+      "idx": 6,
+      "kind": "peek",
+      "t": 2.421860055997153,
+      "addr": "0x200000C4",
+      "comment": "FIFO_OVERFLOW_CNT",
+      "observed": "0x00000000",
+      "expected": "0x00000000",
+      "evidence_status": "map-access-unproven"
+    },
+    {
+      "idx": 7,
+      "kind": "peek",
+      "t": 2.4228600559971527,
+      "addr": "0x20000168",
+      "comment": "DDR_BACKPRESSURE_CNT",
+      "observed": "0x00000000",
+      "expected": "0x00000000",
+      "evidence_status": "map-access-unproven"
+    },
+    {
+      "idx": 8,
+      "kind": "peek",
+      "t": 2.4238600559971526,
+      "addr": "0x20000100",
+      "comment": "ERR_CNT_EDGE",
+      "observed": "0x00000000",
+      "expected": "0x00000000",
+      "evidence_status": "map-access-unproven"
+    },
+    {
+      "idx": 9,
+      "kind": "peek",
+      "t": 2.4248600559971525,
+      "addr": "0x20000170",
+      "comment": "EMIT_VALID_CNT",
+      "observed": "0x00000000",
+      "expected": "0x00000000",
+      "evidence_status": "map-access-unproven"
+    },
+    {
+      "idx": 10,
+      "kind": "wait_for",
+      "t": 2.4258600559971524,
+      "addr": "0x20000050",
+      "comment": "DMA write_error live/sticky clear",
+      "mask": "0x00010400",
+      "expected": "0x00000000",
+      "observed": "0x0000F81E",
+      "timeout_s": 1.0,
+      "satisfied": true,
+      "t_final": 2.8357732689966793,
+      "evidence_status": "map-access-unproven"
+    },
+    {
+      "idx": 11,
+      "kind": "poke",
+      "t": 2.8357732689966793,
+      "addr": "0x20000244",
+      "comment": "stop stimulus",
+      "value": "0x00000000"
+    }
+  ],
+  "evidence": [],
+  "assertions": [
+    {
+      "id": "I1",
+      "expr": "step[5].satisfied == true",
+      "result": "fail",
+      "reason": "map-access-unproven: preamble failed (GIT_HASH, SYSTEM_VERSION, BUILD_DATE, REGBANK_VERSION, REGBANK_NUM_WORDS, REGBANK_DATA, CONFIG_DATA, CONTRACT_ABI_VER, EMIO_PROBE, I2C_INJ_STATUS, SPI_INJ_STATUS, CLK_DDR_TICKS, DDR_RESET_STATUS, HEARTBEAT_CNT, RING_BASE_LOW, RING_BYTES)"
+    },
+    {
+      "id": "I2",
+      "expr": "step[6].observed == step[6].expected",
+      "result": "fail",
+      "reason": "map-access-unproven: preamble failed (GIT_HASH, SYSTEM_VERSION, BUILD_DATE, REGBANK_VERSION, REGBANK_NUM_WORDS, REGBANK_DATA, CONFIG_DATA, CONTRACT_ABI_VER, EMIO_PROBE, I2C_INJ_STATUS, SPI_INJ_STATUS, CLK_DDR_TICKS, DDR_RESET_STATUS, HEARTBEAT_CNT, RING_BASE_LOW, RING_BYTES)"
+    },
+    {
+      "id": "I3",
+      "expr": "step[7].observed == step[7].expected",
+      "result": "fail",
+      "reason": "map-access-unproven: preamble failed (GIT_HASH, SYSTEM_VERSION, BUILD_DATE, REGBANK_VERSION, REGBANK_NUM_WORDS, REGBANK_DATA, CONFIG_DATA, CONTRACT_ABI_VER, EMIO_PROBE, I2C_INJ_STATUS, SPI_INJ_STATUS, CLK_DDR_TICKS, DDR_RESET_STATUS, HEARTBEAT_CNT, RING_BASE_LOW, RING_BYTES)"
+    },
+    {
+      "id": "I4",
+      "expr": "step[8].observed == step[8].expected",
+      "result": "fail",
+      "reason": "map-access-unproven: preamble failed (GIT_HASH, SYSTEM_VERSION, BUILD_DATE, REGBANK_VERSION, REGBANK_NUM_WORDS, REGBANK_DATA, CONFIG_DATA, CONTRACT_ABI_VER, EMIO_PROBE, I2C_INJ_STATUS, SPI_INJ_STATUS, CLK_DDR_TICKS, DDR_RESET_STATUS, HEARTBEAT_CNT, RING_BASE_LOW, RING_BYTES)"
+    },
+    {
+      "id": "I5",
+      "expr": "step[9].observed == step[9].expected",
+      "result": "fail",
+      "reason": "map-access-unproven: preamble failed (GIT_HASH, SYSTEM_VERSION, BUILD_DATE, REGBANK_VERSION, REGBANK_NUM_WORDS, REGBANK_DATA, CONFIG_DATA, CONTRACT_ABI_VER, EMIO_PROBE, I2C_INJ_STATUS, SPI_INJ_STATUS, CLK_DDR_TICKS, DDR_RESET_STATUS, HEARTBEAT_CNT, RING_BASE_LOW, RING_BYTES)"
+    },
+    {
+      "id": "I6",
+      "expr": "step[10].satisfied == true",
+      "result": "fail",
+      "reason": "map-access-unproven: preamble failed (GIT_HASH, SYSTEM_VERSION, BUILD_DATE, REGBANK_VERSION, REGBANK_NUM_WORDS, REGBANK_DATA, CONFIG_DATA, CONTRACT_ABI_VER, EMIO_PROBE, I2C_INJ_STATUS, SPI_INJ_STATUS, CLK_DDR_TICKS, DDR_RESET_STATUS, HEARTBEAT_CNT, RING_BASE_LOW, RING_BYTES)"
+    }
+  ],
+  "conclusion": {
+    "status": "fail",
+    "req_status": "unexpected_fail",
+    "summary": "replay run of DS-DE25-INTEG-001: 11 step(s), 6 assertion(s); map-access-unproven: preamble failed (GIT_HASH, SYSTEM_VERSION, BUILD_DATE, REGBANK_VERSION, REGBANK_NUM_WORDS, REGBANK_DATA, CONFIG_DATA, CONTRACT_ABI_VER, EMIO_PROBE, I2C_INJ_STATUS, SPI_INJ_STATUS, CLK_DDR_TICKS, DDR_RESET_STATUS, HEARTBEAT_CNT, RING_BASE_LOW, RING_BYTES)",
+    "agent_prose": null
+  },
+  "map_access_preamble": {
+    "status": "fail",
+    "passed": false,
+    "registers": [
+      {
+        "name": "GIT_HASH",
+        "address": "0x20000000",
+        "access": "ro",
+        "status": "fail",
+        "expected": "0x00000000",
+        "observed": "0x97C36FEB",
+        "read_status": "fail",
+        "write_status": "not_applicable",
+        "reason": "read observed 0x97C36FEB != expected 0x00000000"
+      },
+      {
+        "name": "SYSTEM_VERSION",
+        "address": "0x20000004",
+        "access": "ro",
+        "status": "fail",
+        "expected": "0x00000000",
+        "observed": "0x00013D01",
+        "read_status": "fail",
+        "write_status": "not_applicable",
+        "reason": "read observed 0x00013D01 != expected 0x00000000"
+      },
+      {
+        "name": "BUILD_DATE",
+        "address": "0x20000008",
+        "access": "ro",
+        "status": "fail",
+        "expected": "0x00000000",
+        "observed": "0x6AC96F31",
+        "read_status": "fail",
+        "write_status": "not_applicable",
+        "reason": "read observed 0x6AC96F31 != expected 0x00000000"
+      },
+      {
+        "name": "REGBANK_VERSION",
+        "address": "0x2000000c",
+        "access": "ro",
+        "status": "fail",
+        "expected": "0x00000000",
+        "observed": "0x00030000",
+        "read_status": "fail",
+        "write_status": "not_applicable",
+        "reason": "read observed 0x00030000 != expected 0x00000000"
+      },
+      {
+        "name": "REGBANK_NUM_WORDS",
+        "address": "0x20000010",
+        "access": "rom",
+        "status": "fail",
+        "expected": "0x00000000",
+        "observed": "0x00001A73",
+        "read_status": "fail",
+        "write_status": "not_applicable",
+        "reason": "read observed 0x00001A73 != expected 0x00000000"
+      },
+      {
+        "name": "REGBANK_DATA",
+        "address": "0x20000014",
+        "access": "ro",
+        "status": "fail",
+        "expected": "0x00000000",
+        "observed": "0x656D616E",
+        "read_status": "fail",
+        "write_status": "not_applicable",
+        "reason": "read observed 0x656D616E != expected 0x00000000"
+      },
+      {
+        "name": "CONFIG_NUM_WORDS",
+        "address": "0x20000018",
+        "access": "rom",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "CONFIG_DATA",
+        "address": "0x2000001c",
+        "access": "ro",
+        "status": "fail",
+        "expected": "0x00000000",
+        "observed": "0xC0A1DE02",
+        "read_status": "fail",
+        "write_status": "not_applicable",
+        "reason": "read observed 0xC0A1DE02 != expected 0x00000000"
+      },
+      {
+        "name": "DATALOGGER_CONFIG",
+        "address": "0x20000020",
+        "access": "rw",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "EMIO_MUX_SEL",
+        "address": "0x20000024",
+        "access": "rw",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "CONTRACT_ABI_VER",
+        "address": "0x20000028",
+        "access": "ro",
+        "status": "fail",
+        "expected": "0x00000000",
+        "observed": "0x00020000",
+        "read_status": "fail",
+        "write_status": "not_applicable",
+        "reason": "read observed 0x00020000 != expected 0x00000000"
+      },
+      {
+        "name": "EMIO_PROBE",
+        "address": "0x2000002c",
+        "access": "ro",
+        "status": "fail",
+        "expected": "0x00000000",
+        "observed": "0x707CA45C",
+        "read_status": "fail",
+        "write_status": "not_applicable",
+        "reason": "read observed 0x707CA45C != expected 0x00000000"
+      },
+      {
+        "name": "I2C_INJ_CONTROL",
+        "address": "0x20000030",
+        "access": "rw",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "I2C_INJ_DATAIN",
+        "address": "0x20000034",
+        "access": "rw",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "I2C_INJ_STATUS",
+        "address": "0x20000038",
+        "access": "ro",
+        "status": "fail",
+        "expected": "0x00000000",
+        "observed": "0x00000001",
+        "read_status": "fail",
+        "write_status": "not_applicable",
+        "reason": "read observed 0x00000001 != expected 0x00000000"
+      },
+      {
+        "name": "SPI_INJ_CONTROL",
+        "address": "0x20000040",
+        "access": "rw",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "SPI_INJ_DATAIN",
+        "address": "0x20000044",
+        "access": "rw",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "SPI_INJ_STATUS",
+        "address": "0x20000048",
+        "access": "ro",
+        "status": "fail",
+        "expected": "0x00000000",
+        "observed": "0x00000001",
+        "read_status": "fail",
+        "write_status": "not_applicable",
+        "reason": "read observed 0x00000001 != expected 0x00000000"
+      },
+      {
+        "name": "STIM_UART_CONTROL",
+        "address": "0x20000220",
+        "access": "rw",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "STIM_UART_BAUD_DIV",
+        "address": "0x20000224",
+        "access": "rw",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "STIM_UART_DATA",
+        "address": "0x20000228",
+        "access": "rw",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "STIM_I2C_CONTROL",
+        "address": "0x2000022c",
+        "access": "rw",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "STIM_I2C_CLK_DIV",
+        "address": "0x20000230",
+        "access": "rw",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "STIM_I2C_DATA",
+        "address": "0x20000234",
+        "access": "rw",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "STIM_SPI_CONTROL",
+        "address": "0x20000238",
+        "access": "rw",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "STIM_SPI_CLK_DIV",
+        "address": "0x2000023c",
+        "access": "rw",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "STIM_SPI_DATA",
+        "address": "0x20000240",
+        "access": "rw",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "STIM_EDGE_CONTROL",
+        "address": "0x20000244",
+        "access": "rw",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "CLK_DDR_TICKS",
+        "address": "0x2000004c",
+        "access": "ro",
+        "status": "fail",
+        "expected": "0x00000000",
+        "observed": "0x03223CF2",
+        "read_status": "fail",
+        "write_status": "not_applicable",
+        "reason": "read observed 0x03223CF2 != expected 0x00000000"
+      },
+      {
+        "name": "DDR_RESET_STATUS",
+        "address": "0x20000050",
+        "access": "ro",
+        "status": "fail",
+        "expected": "0x00000000",
+        "observed": "0x0000019E",
+        "read_status": "fail",
+        "write_status": "not_applicable",
+        "reason": "read observed 0x0000019E != expected 0x00000000"
+      },
+      {
+        "name": "HEARTBEAT_CNT",
+        "address": "0x200000c0",
+        "access": "ro",
+        "status": "fail",
+        "expected": "0x00000000",
+        "observed": "0x270F1588",
+        "read_status": "fail",
+        "write_status": "not_applicable",
+        "reason": "read observed 0x270F1588 != expected 0x00000000"
+      },
+      {
+        "name": "FIFO_OVERFLOW_CNT",
+        "address": "0x200000c4",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "FIFO_OVERFLOW_CNT_RSVD",
+        "address": "0x200000c8",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "PKT_CNT_I2C",
+        "address": "0x200000d0",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "PKT_CNT_SPI",
+        "address": "0x200000d4",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "PKT_CNT_UART",
+        "address": "0x200000d8",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "PKT_CNT_QSPI",
+        "address": "0x200000dc",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "PKT_CNT_EDGE",
+        "address": "0x200000e0",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "PKT_CNT_I2S",
+        "address": "0x200000e4",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "PKT_CNT_CAN",
+        "address": "0x200000e8",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "PKT_CNT_JTAG",
+        "address": "0x200000ec",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "ERR_CNT_I2C",
+        "address": "0x200000f0",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "ERR_CNT_SPI",
+        "address": "0x200000f4",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "ERR_CNT_UART",
+        "address": "0x200000f8",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "ERR_CNT_QSPI",
+        "address": "0x200000fc",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "ERR_CNT_EDGE",
+        "address": "0x20000100",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "ERR_CNT_CAN",
+        "address": "0x20000104",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "ERR_CNT_JTAG",
+        "address": "0x20000108",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "ARB_GRANT_CNT",
+        "address": "0x20000110",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "ARB_GRANT_CNT_RSVD",
+        "address": "0x20000114",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "DROP_CNT_I2C",
+        "address": "0x20000120",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "DROP_CNT_SPI",
+        "address": "0x20000124",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "DROP_CNT_UART",
+        "address": "0x20000128",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "FIFO_HIGH_WATERMARK",
+        "address": "0x20000130",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "FIFO_HIGH_WATERMARK_RSVD",
+        "address": "0x20000134",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "TELEMETRY_CTRL",
+        "address": "0x20000140",
+        "access": "rw",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "TELEMETRY_SNAPSHOT_TRIGGER",
+        "address": "0x20000144",
+        "access": "rw",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "RING_WRITE_PTR",
+        "address": "0x20000150",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "RING_READ_PTR",
+        "address": "0x20000154",
+        "access": "rw",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "RING_BASE_LOW",
+        "address": "0x20000158",
+        "access": "ro",
+        "status": "fail",
+        "expected": "0x00000000",
+        "observed": "0xA0000000",
+        "read_status": "fail",
+        "write_status": "not_applicable",
+        "reason": "read observed 0xA0000000 != expected 0x00000000"
+      },
+      {
+        "name": "RING_BASE_HIGH",
+        "address": "0x2000015c",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "RING_BYTES",
+        "address": "0x20000160",
+        "access": "ro",
+        "status": "fail",
+        "expected": "0x00000000",
+        "observed": "0x10000000",
+        "read_status": "fail",
+        "write_status": "not_applicable",
+        "reason": "read observed 0x10000000 != expected 0x00000000"
+      },
+      {
+        "name": "RING_COMMIT_PTR",
+        "address": "0x20000164",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "DDR_BACKPRESSURE_CNT",
+        "address": "0x20000168",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "RING_ALARM_CNT",
+        "address": "0x2000016c",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "EMIT_VALID_CNT",
+        "address": "0x20000170",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "EMIT_DONE_CNT",
+        "address": "0x20000174",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "EYE_CONTROL",
+        "address": "0x20000200",
+        "access": "rw",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "EYE_BIT_TARGET",
+        "address": "0x20000204",
+        "access": "rw",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "EYE_STATUS",
+        "address": "0x20000208",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "EYE_ERR_COUNT_LO",
+        "address": "0x2000020c",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "EYE_ERR_COUNT_HI",
+        "address": "0x20000210",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "EYE_BIT_COUNT_LO",
+        "address": "0x20000214",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "EYE_BIT_COUNT_HI",
+        "address": "0x20000218",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "EYE_PHASE_STATUS",
+        "address": "0x2000021c",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      }
+    ],
+    "unreachable_registers": [
+      "GIT_HASH",
+      "SYSTEM_VERSION",
+      "BUILD_DATE",
+      "REGBANK_VERSION",
+      "REGBANK_NUM_WORDS",
+      "REGBANK_DATA",
+      "CONFIG_DATA",
+      "CONTRACT_ABI_VER",
+      "EMIO_PROBE",
+      "I2C_INJ_STATUS",
+      "SPI_INJ_STATUS",
+      "CLK_DDR_TICKS",
+      "DDR_RESET_STATUS",
+      "HEARTBEAT_CNT",
+      "RING_BASE_LOW",
+      "RING_BYTES"
+    ],
+    "summary": "map-access fail: 16 unreachable register(s): GIT_HASH, SYSTEM_VERSION, BUILD_DATE, REGBANK_VERSION, REGBANK_NUM_WORDS, REGBANK_DATA, CONFIG_DATA, CONTRACT_ABI_VER, EMIO_PROBE, I2C_INJ_STATUS, SPI_INJ_STATUS, CLK_DDR_TICKS, DDR_RESET_STATUS, HEARTBEAT_CNT, RING_BASE_LOW, RING_BYTES"
+  },
+  "capture_chain": {
+    "backend": "rea",
+    "bitstream_identity": {
+      "applicable": true,
+      "expected": "d6cdbb85",
+      "method": "rea-jtag-build-id-32",
+      "observed": "d6cdbb85",
+      "outcome": "CONFIRMED",
+      "status": "validated"
+    },
+    "instrument_self_check": {
+      "applicable": false,
+      "expected": null,
+      "method": "not-applicable",
+      "observed": null,
+      "status": "not_applicable"
+    },
+    "leased": true,
+    "portable_id": "rea-jtag-build-id",
+    "status": "validated"
+  },
+  "requirement_snapshot": {
+    "local_id": "DS-DE25-INTEG-001",
+    "recipe_sha256": "ed22ca361afbad1593db4d0ba77ba90ab4f83ab801e3eca8b5f2e4a4c56a5698",
+    "contract_version": 0.2
+  },
+  "execution": {
+    "backend": "hps-devmem",
+    "hardware_access": true
+  }
+}

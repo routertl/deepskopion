@@ -1,0 +1,8 @@
+version: 1
+
+# DS-P1.72 audit baseline. Clock domains are declared per launch target so
+# cdc.signoff is applicable. No crossing is accepted here yet: rr cdc check
+# and RR-CDC-002 found unreviewed plain-2FF/multi-bit structures, and recording
+# them as accepted before their protocols and endpoint constraints are proven
+# would turn a launch blocker into a paper waiver.
+crossings: []

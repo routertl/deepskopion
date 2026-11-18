@@ -1,0 +1,87 @@
+# EtherCAT research contract. This is an implementation input, not a claim that
+# an EtherCAT RTL block or live capture path exists.
+
+protocol: ethercat
+contract_version: "0.1"
+status: "research-only; no RTL or capture path"
+
+sources:
+  - title: EtherCAT Technology Group - EtherCAT implementation
+    url: https://www.ethercat.org/en/technology.html
+    supports: [standard_ethernet_frame, ethertype, physical_layer]
+  - title: Beckhoff InfoSys - EtherCAT telegram, datagram, and Working Counter
+    url: https://infosys.beckhoff.com/content/1033/tc3_io_intro/1257993099.html
+    supports: [frame_header, datagram_header, working_counter]
+  - title: Beckhoff InfoSys - EtherCAT frame size example
+    url: https://infosys.beckhoff.com/content/1033/tc3_io_intro/1446515467.html
+    supports: [header_sizes, datagram_sizes, line_rate]
+  - title: IEEE SA - Use of the IEEE Assigned EtherType
+    url: https://standards.ieee.org/wp-content/uploads/import/documents/tutorials/ethertype.pdf
+    supports: [ethertype_wire_order]
+
+physical_layer:
+  copper_phy: 100BASE-TX
+  line_rate_bit_s: 100000000
+  duplex: full
+  mac_interface: [MII, RMII]
+
+ethernet:
+  frame: IEEE 802.3 Ethernet II
+  untagged_header_bytes: 14
+  ethertype: 0x88A4
+  # IEEE 802.3 transmits the most-significant EtherType octet first. EtherCAT
+  # fields following it use little-endian byte order.
+  ethertype_wire_bytes: [0x88, 0xA4]
+  ethercat_header_offset_untagged: 14
+  fcs_bytes: 4
+  fcs_scope: Ethernet frame, not an EtherCAT datagram
+
+byte_order:
+  ethernet_ethertype: big-endian
+  ethercat_multibyte_fields: little-endian
+
+ethercat_frame_header:
+  bytes: 2
+  length:
+    bits: [10, 0]
+    maximum: 1498
+    counts: datagram region only
+    excludes:
+      - 2-byte EtherCAT frame header
+      - Ethernet padding
+      - Ethernet FCS
+  reserved:
+    bit: 11
+    required: 0
+  type:
+    bits: [15, 12]
+    ethercat_commands: 0x1
+
+datagram:
+  header_bytes: 10
+  payload_bytes: 0..1486
+  working_counter_bytes: 2
+  working_counter_scope: each datagram
+  total_bytes_formula: 10 + payload_length + 2
+  fields:
+    - {name: command, offset: 0, bytes: 1}
+    - {name: index, offset: 1, bytes: 1}
+    - {name: address, offset: 2, bytes: 4}
+    - {name: length_flags, offset: 6, bytes: 2}
+    - {name: irq, offset: 8, bytes: 2}
+    - {name: payload, offset: 10, bytes: payload_length}
+    - {name: working_counter, offset: "10 + payload_length", bytes: 2}
+  length_flags:
+    payload_length_bits: [10, 0]
+    reserved_bits: [13, 11]
+    circulating_bit: 14
+    more_bit: 15
+
+parser_prohibitions:
+  - Do not accept byte-swapped EtherType 0xA488 as EtherCAT.
+  - Do not include the 2-byte EtherCAT frame header in its own 11-bit length.
+  - Do not parse Ethernet padding or FCS as another EtherCAT datagram.
+  - Do not place one Working Counter at the end of the whole Ethernet frame;
+    every datagram has its own 2-byte Working Counter immediately after data.
+  - Do not advance beyond the declared frame or datagram length when the capture
+    is truncated or a length field exceeds the enclosing region.

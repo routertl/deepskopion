@@ -1,0 +1,275 @@
+# uart_datalogger — Requirements catalog (contract-first per ROUTERTL convention)
+#
+# Each UART-REQ-N below is referenced by ≥1 cocotb test in
+# hw/sim/cocotb/tests/datalogger/uart/test_*.py via @requires(UART-REQ-N).
+# `rr sim coverage-map` enforces the mapping.
+#
+# Complementary to: hw/rtl/datalogger/uart/uart_datalogger_protocol.yml (HW
+# word format / message-type encoding) and
+# docs/standards/datalogger_compliance_checklist.md (cross-datalogger rules).
+#
+# v0.1 SCOPE: only REQs that paired existing cocotb tests prove are
+# declared. Adding a REQ here without a paired test is a contract
+# without a proof — that's how `@requires` becomes the new vacuous PASS.
+# Grow the contract by adding REQs WITH their tests, in follow-up
+# tickets:
+#   - DS-P3.<a> — status/error messaging REQs + tests
+#                 (REQ-20..23 — calibration_done, timeout, parity, overflow)
+#   - DS-P3.<b> — CONFIG/handshake/reset REQs + tests
+#                 (REQ-13, 30-31, 40-41, 50)
+#   - DS-P3.<c> — adversarial (negative) REQs + tests
+#                 (REQ-100..104 — disabled, mismatched id, idle, noise)
+
+ip: uart_datalogger
+version: 0.2
+schema_version: 1
+
+port_contract:
+  slaves: []
+  masters: []
+  scalars:
+    - { name: UART_IN,      dir: in,  width: "1" }
+    - { name: CONFIG,       dir: in,  width: "G_CONFIG_WIDTH-1 downto 0" }
+    - { name: TIMESTAMP,    dir: in,  width: "G_TIMESTAMP_WIDTH-1 downto 0" }
+    - { name: UART_MSG_OUT, dir: out, width: "C_DATALOGGER_MSG_WIDTH-1 downto 0" }
+    - { name: UART_MSG_VLD, dir: out, width: "1" }
+    - { name: UART_MSG_RDY, dir: in,  width: "1" }
+    - { name: UART_ERRORS,  dir: out, width: "G_ERROR_WIDTH-1 downto 0" }
+  clocks:
+    - { name: CLK }
+  resets:
+    - { name: RST, polarity: active_high }
+
+parameters:
+  - { name: G_SYSTEM_CLK_FREQ, default: 100000000 }
+  - { name: G_TICK_PRESCALER,  default: "C_TICK_PRESCALER" }
+  - { name: G_UART_ID_WIDTH,   default: 5 }
+  - { name: G_UART_DEV_ID,     default: 28 }
+  - { name: G_TIMESTAMP_WIDTH, default: 16 }
+  - { name: G_CONFIG_WIDTH,    default: 16 }
+  - { name: G_ERROR_WIDTH,     default: 2 }
+  - { name: G_ILA_EN,          default: 1 }
+
+# CONFIG bit map (DS-T3.12 — was UNDOCUMENTED here, and the RTL entity comment
+# wrongly declared [10:1] "Reserved = 0". CONFIG[15:11] = device_id; the low 11
+# bits (deviceLoadConfig) carry enable + auto/explicit format). Driving CONFIG
+# with autoSync=0 forces explicit decode where nbits = dataBits + 5 (default 5).
+# CONFIG bit-field map (documentation only — NOT a contract schema key, so it is
+# a comment block; a top-level `config_format:` key fails requirements.yml schema
+# validation and silently disabled coverage-map for this IP — DS-T3.26):
+#   device_id  [15:11]  target instance — must match G_UART_DEV_ID
+#   enable     [0]      datalogger enable
+#   autoSync   [1]      1 = auto-detect baud + byte format from the line; 0 = use
+#                       the explicit [10:2] fields. SET 1 for auto-baud/format.
+#   dataBits   [4:2]    explicit data bits as (nbits-5): 0->5 .. 4->9 (autoSync=0 only)
+#   parityEn   [5]      explicit parity enable (autoSync=0)
+#   parityType [6]      explicit parity type (autoSync=0)
+#   stopBits   [10:7]   explicit stop-bit config (autoSync=0)
+#   The baud is ALWAYS auto-measured from edges; these fields set FORMAT only.
+
+functional_contract:
+
+  # ── Blind-discovery auto-calibration (v0.1) ─────────────────────
+  - id: UART-REQ-1
+    kind: behavioral
+    desc: >-
+      With CONFIG[0]=1 and a continuously-modulated UART line on
+      UART_IN, the datalogger locks the baud rate from raw inter-edge
+      intervals within CAL_BYTES bytes of stable traffic
+      (dut.calibrationDone_r asserts '1'). CALIBRATION VARIETY
+      (DS-T2.20): the preamble MUST be BOTH enough bytes (>= CAL_BYTES;
+      the SW self-test uses 150) AND VARIED — the detector infers baud
+      from inter-edge-interval diversity, so a repeated constant (e.g.
+      0x55, uniform edges) BIASES/degenerates the estimate and may never
+      assert calibrationDone. Drive random / high-edge-diversity bytes,
+      not a repeated constant; a single byte never calibrates. Pair:
+      a FLUSH tail is needed to emit the final frame (UART-REQ-13).
+  - id: UART-REQ-2
+    kind: behavioral
+    desc: >-
+      Auto-detects data-bit width across the full supported range
+      (5..9 bits) from frame-shape statistics. Proven by running the
+      same calibration sequence across configs with G_DATA_BITS ∈
+      {5,6,7,8,9} and observing calibrationDone for each.
+  - id: UART-REQ-3
+    kind: behavioral
+    desc: >-
+      Auto-detects parity mode (none / even / odd). Proven by running
+      calibration across configs with each parity setting and
+      observing calibrationDone for each.
+  - id: UART-REQ-4
+    kind: behavioral
+    desc: >-
+      Auto-detects stop-bit count (1 or 2). Proven by running
+      calibration across configs with each stop-bit setting and
+      observing calibrationDone for each.
+
+  # ── Payload capture (v0.1) ──────────────────────────────────────
+  - id: UART-REQ-10
+    kind: behavioral
+    desc: >-
+      Once calibrated, emits one PAYLOAD message (type=0b010) per
+      received byte with ≤ 8 data bits. The captured byte sequence
+      from the data bus matches the transmitted byte sequence.
+  - id: UART-REQ-11
+    kind: behavioral
+    desc: >-
+      For 9-bit configurations, emits PAYLOAD_9BIT (type=0b011) for
+      bytes where bit8=1; the host can reconstruct the 9-bit value
+      from data[7:0] | (type==0b011 ? 0x100 : 0).
+  - id: UART-REQ-12
+    kind: behavioral
+    desc: >-
+      UART_MSG_OUT[7:0] carries the decoded byte value. Verified
+      by comparing the captured payload sequence against the
+      transmitted sequence (subsequence match).
+
+  # ── Playback FIFO flush / tail (DS-T2.20) ───────────────────────
+  - id: UART-REQ-13
+    kind: behavioral
+    desc: >-
+      FLUSH: no trapped last byte. After the line goes idle, the LAST decoded
+      byte of a burst MUST emit on `UART_MSG_OUT` (as a PAYLOAD frame) without
+      any further traffic — including a burst of ONE byte, and the byte before
+      a long gap when more traffic follows later. Mechanism: the buffer
+      idle-timeout flush (DS-T2.27) plus the synthetic idle edge regenerate the
+      last byte's stop bit so uart_frame_gen emits it. Witnesses:
+      test_uart_sparse_flush.single_byte_flushes and
+      byte_gap_byte_both_flush (explicit 8N1, so calibration is out of the
+      picture). History: this REQ first recorded the defect itself (the
+      playback held the final frame until later edges pushed it out, and
+      tests appended a flush tail); DS-P3.53 resolved it, and DS-P2.139
+      restated the REQ as the behaviour that must not regress.
+
+  # ── Parity auto-detection must not false-positive (DS-T3.5) ──────
+  - id: UART-REQ-14
+    kind: behavioral
+    desc: >-
+      A no-parity (8N1) stream MUST NEVER be auto-detected as has-parity (so it
+      can never emit a runtime parity_error), for ANY data; 8E1/8O1 MUST still
+      be detected and must not spuriously error. Observable: through the FULL
+      uart_datalogger with autoSync calibration, an 8N1 wire produces zero
+      type-"100" status frames (no parity_error, code `C_UART_PARITY_ERROR` =
+      0x02, and no per-byte code-0x00 status frames from uart_frame_gen
+      RESOLVE_PARITY) and a contiguous payload on `UART_MSG_OUT`, i.e. the
+      latched verdict (`parityConf_r`, taken at calibration-done from the
+      winning finder's parityMatch) stays "no parity"; an 8E1 or 8O1 wire
+      latches has-parity and produces zero parity_error frames on clean data.
+      Witnesses: test_uart_no_spurious_parity.no_spurious_parity_on_clean_8n1
+      (8N1 asserts zero status frames, zero parity_error, contiguous payload,
+      and latched verdict bit 0 == 0) and
+      test_uart_parity_detected.parity_detected_on_8e1_and_8o1 (8E1 and 8O1
+      assert parity detected in latched parityConf_r, zero parity_error, and
+      contiguous payload). History (DS-T3.5, closed): the silicon symptom
+      (~45% of bytes flagged 0x02) was traced to the unconditioned async EMIO
+      input, not to this logic, and was fixed by a glitch_filter at the top
+      level; the "windowed parity voter" once planned here was never needed.
+
+  - id: UART-REQ-15
+    kind: behavioral
+    desc: >-
+      Per-datalogger reset reachable from SW (DS-T2.31). The datalogger takes its
+      synchronous reset from config_control.CAPTURE_RST (= global RST OR latched
+      ENABLE=0; see config_control CC-REQ-51), NOT from global RST alone. So
+      writing ENABLE=0 for this device MUST clear ALL stale state — the
+      calibration FSM (`calibrationDone_r` -> 0), the baud accumulator
+      (`baudRateMin_r` -> all-1s), and flush the edge FIFO (`fifoUartEmpty`
+      -> 1) and BRAM addresses. (DS-P2.139: these are the real RTL signal
+      names; the desc previously named non-existent `calibrationDone` /
+      `baudRateMin`, so the coverage gate could not tie the test to them.) Re-asserting ENABLE=1 with a (possibly different) format
+      MUST then run a FRESH calibration with no traces of the prior config.
+      Rationale: every prior sim started from a fresh global RST and so never
+      exercised reconfiguration; on silicon the datalogger is enabled once at boot
+      and later switched (e.g. into autoSync), and stale calibration/FIFO/BRAM
+      state blocked the new lock (autoSync emitted zero frames across the full
+      baud x format sweep). Sanctioned reconfiguration procedure: ENABLE=0
+      (reset) then ENABLE=1 + new config. Verified by
+      test_uart_reset_reachable.reset_reachable_from_sw (Phase B asserts the
+      flush; Phase C asserts clean autoSync recalibration after the SW reset).
+
+  - id: UART-REQ-16
+    kind: behavioral
+    desc: >-
+      'Late to the party' calibration robustness (DS-T2.31). A passive datalogger
+      cannot control when bus traffic starts, so auto-calibration MUST be able
+      to lock when ENABLE is asserted while a stream is already mid-flight: it
+      must discard the first PARTIAL frame and synchronise to a clean idle gap
+      (line high for > one max frame time) before measuring baud / running the
+      stop-finder, otherwise it locks on a truncated first frame and mis-detects
+      baud/format. INTERIM CONTRACT (self-test / HW validation, where SW owns
+      both the EMIO driver and the datalogger): always RESET -> ENABLE the datalogger
+      and only THEN start the traffic (enable-before-traffic), so calibration
+      sees the stream from its first start bit. Falsifier: with the datalogger
+      enabled mid-burst (no leading idle), assert it still recovers the payload.
+      Planned: an idle-gap sync gate ahead of the calibration FSM.
+      STATUS: OPEN (DS-P2.139). This REQ is NOT met and has NO witness test, so
+      coverage-map reports it "missing". Measured during DS-P2.139 (115200
+      8N1, one back-to-back stream, autoSync ENABLE written part-way into byte
+      10, test not landed): ENABLE 3.5 / 6.5 / 9.5 bits after the start edge
+      calibrates and recovers the payload on `UART_MSG_OUT`; ENABLE 0.5 bit
+      after the start edge sets `calibrationDone_r` but decodes NOTHING for
+      the rest of the stream. The parked witness is a follow-up to DS-P2.139.
+      Openness is not recorded in a `status:` key: the schema rejects that
+      key, and it had stopped this whole contract from loading.
+
+  - id: UART-REQ-17
+    kind: characterization
+    desc: >-
+      Baud-precision bound from the tick prescaler (DS-T2.31 characterization).
+      The timebase counts in prescaled ticks (G_TICK_PRESCALER, default 8), so
+      the measured bit period (`baudRateMin_r`) is quantised to +/-1 tick and
+      the error grows as ticks/bit shrinks. DATASHEET: 8N1 at 230400 and
+      460800 baud (>= 27 ticks/bit) MUST recover the payload on
+      `UART_MSG_OUT` in BOTH explicit and autoSync mode. STATUS: OPEN — no
+      witness asserts this band yet, so coverage-map reports this REQ
+      "missing". test_uart_baud_limit.baud_limit is a characterization sweep
+      that asserts nothing about recovery, and as written it dies at its
+      second baud point: the first UartSource's strict line monitor stays
+      attached and flags the next point's traffic as UART_FRAME_ERR. The
+      per-baud split plus the band assertion is a follow-up to DS-P2.139.
+      MEASURED (characterization with that split, not landed; deepskopion
+      f5954301, DS-P2.139, one seed, 16-byte probe): explicit/autoSync
+      recover at every point 230400..806400 (54.3..15.5 t/b) and at 1000000
+      (12.5 t/b); at 921600 (13.6 t/b) explicit FAILS while autoSync
+      recovers. The ceiling is therefore non-monotonic and payload-dependent
+      above 460.8 kbaud; do not promise more than 460.8 kbaud. (The earlier
+      table here, FAIL from 576000 up, predates later RTL fixes and was never
+      re-measured.) test_uart_scenarios covers the 5-8 bit x N/E/O x 1/2
+      format matrix at 230400. deepskopion's EMIO UART (9600) and typical
+      captured buses (<= 115200) sit well inside. To raise the ceiling, lower
+      G_TICK_PRESCALER (finer ticks, wider counters).
+
+  - id: UART-REQ-18
+    kind: behavioral
+    desc: >-
+      Uniform datalogger lifecycle (DS-P3.90 Phase 1). The UART datalogger emits a
+      symmetric pair of status frames via the shared datalogger_lifecycle component
+      (SL-REQ-1..4), in the ALWAYS-ON (global RST) domain — deliberately NOT
+      gated by dataloggerRst — so the markers survive the per-datalogger reset (H.96):
+      exactly one ENABLED frame (event type "100", code 0x05) on the per-device
+      ENABLE rising edge and one DISABLED frame (code 0x06) on the falling edge,
+      on `UART_MSG_OUT` (with `UART_MSG_VLD` high one cycle) with the standard
+      frame layout (dev_id | type | timestamp | code). The event type "100" is
+      distinct from the UART payload types
+      (PAYLOAD=0b010, PAYLOAD_9BIT=0b011), so a lifecycle frame never masks nor
+      is masked by payload capture (the output mux gives the lifecycle frame top
+      priority). Verified by test_uart_lifecycle.lifecycle_enable_disable. See
+      the shared lifecycle contract in
+      docs/standards/datalogger_compliance_checklist.md (§Datalogger Lifecycle).
+
+  - id: UART-REQ-19
+    kind: behavioral
+    desc: >-
+      A failed autoSync calibration is reported (DS-P2.239). When the
+      calibration matches no format instance (calibrationFail_r = 1) the frame
+      generator stays idle, so the data logger emits exactly one STATUS frame
+      (event type "100", code 0x01 CALIBRATION_TIMEOUT, "no valid frames
+      detected") on `UART_MSG_OUT`, standard layout (dev_id | type | timestamp
+      | code), and then nothing until it is re-armed. The frame is held on
+      `UART_MSG_VLD` until `UART_MSG_RDY` takes it (one transfer under
+      backpressure); a re-arm (dataloggerRst) clears it, so each failed
+      calibration reports once; a calibration that locks emits none. Output
+      priority: lifecycle frame, then this frame, then the frame generator.
+      Verified by test_uart_calibration_fail_status_ds_p2_239 (the decoder side,
+      uart_calibration_timeout with is_error true, by
+      sw/stream/tests/test_uart_calibration_timeout_is_error_ds_p2_239.py).

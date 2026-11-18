@@ -1,0 +1,5 @@
+ip:
+  name: rr_rea_generated
+  library: rr_rea
+hdl:
+  library: rr_rea

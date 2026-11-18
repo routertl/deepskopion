@@ -1,0 +1,212 @@
+#!/bin/sh
+#
+# Busybox init script — launches the deepskopion wave_stream daemon on boot.
+# Lives at /etc/init.d/S99deepskopion-stream so the overlay's own /init
+# runs it last in the boot sequence.
+#
+# THIS IS THE ONLY WAY THE DAEMON STARTS (SW-C0, DS-P1.46). There is no
+# systemd variant and no second mechanism: the contract is declared in
+# sw/linux/deployment_contract.yml, stated in docs/DEPLOYMENT_CONTRACT.md,
+# and enforced by sw/linux/deployment_contract.py, which fails the image
+# build if the overlay starts anything the contract does not name. This
+# header used to point at a .service unit that shipped nowhere.
+
+NAME="deepskopion-stream"
+# DS_ROOT_PREFIX: same hermetic-test override S49dropbear already uses — lets
+# a test exercise this script's real logic against a scratch tree instead of
+# the live board's /usr, /var (unset in production, so behaviour there is
+# unchanged).
+ROOT_PREFIX="${DS_ROOT_PREFIX:-}"
+DAEMON_DIR="${ROOT_PREFIX}/usr/local/share/deepskopion"
+PID_FILE="${ROOT_PREFIX}/var/run/${NAME}.pid"
+LOG_FILE="${ROOT_PREFIX}/var/log/${NAME}.log"
+
+# DS-P2.102 MEASURED on silicon: once python3 could actually exec (the
+# DS-P2.102 glibc lib64 fix), `python3 -c "print(1)"` still failed here —
+# but ONLY after this script's own `cd "${DAEMON_DIR}"` below, not from the
+# board's default cwd. python-build-standalone's runtime prefix-detection
+# (getpath) is cwd-sensitive on this toolchain: from `/` it resolves its
+# stdlib at ../lib/python3.13 fine, but from `/usr/local/share/deepskopion`
+# it fails "Could not find platform independent libraries <prefix>" and
+# dies before importing even `encodings`. `PYTHONHOME=/` bypasses the
+# autodetection entirely and was confirmed to fix it stand-alone on the
+# same board. Exported unconditionally (harmless under
+# DS_ROOT_PREFIX-scoped hermetic tests: their fake python3 shim ignores
+# every env var and just exits).
+export PYTHONHOME="${ROOT_PREFIX}/"
+# DS-P2.157 MEASURED: a distro python3.12 overlay keeps its stdlib
+# under /usr/lib/python3.12, so PYTHONHOME=/ sent getpath to
+# /lib/python3.12 and the self-test died on `encodings`. Follow the stdlib: use
+# /usr only when the stdlib is there and NOT under /lib (the DE25
+# python-build-standalone layout keeps PYTHONHOME=/).
+if ! ls -d "${ROOT_PREFIX}"/lib/python3*/encodings >/dev/null 2>&1 \
+   && ls -d "${ROOT_PREFIX}"/usr/lib/python3*/encodings >/dev/null 2>&1; then
+    export PYTHONHOME="${ROOT_PREFIX}/usr/"
+fi
+
+# DS-P2.77 / DS-P1.18: one rootfs_overlay serves several Zynq targets (the
+# datalogger and the eye-diagram fixtures) whose daemons need different --source. Baking it
+# in here meant whichever variant was staged last won, and a canfd board could
+# boot with the eye source (or vice versa) with nothing saying so.
+#
+# P2.77's first cut read it from /etc/deepskopion-source. That could not work:
+# this rootfs is a PURE INITRAMFS — /init mounts proc, sys and dev and nothing
+# else, so every filesystem on the board is tmpfs and that file was erased on
+# every boot. It was in no overlay and written by nothing, so the canonical
+# product board (canfd) silently fell back to 'eye' on every single power
+# cycle.
+#
+# So the selection rides the KERNEL CMDLINE per target:
+# targets/<name>.yml sets ds_source= in linux.bootargs, it lands in the DT
+# chosen node, and it survives reboots because it is part of the image rather
+# than something a human types afterwards.
+#
+# Parse portably, same as S40network:27 — split on spaces and match a bare
+# token. NO `\b…` pattern: some BusyBox sed builds omit GNU word boundaries
+# and would fail silently, falling every board back to the default. That is
+# the same silent-fallback trap that caused earlier target confusion.
+SOURCE="$(tr ' ' '\n' < /proc/cmdline 2>/dev/null | sed -n 's/^ds_source=\([a-z]\{1,\}\)$/\1/p' | head -1)"
+MMIO_BASE="$(tr ' ' '\n' < /proc/cmdline 2>/dev/null | sed -n 's/^ds_mmio_base=\(0x[0-9a-fA-F]\{1,16\}\)$/\1/p' | head -1)"
+REGBANK_CLK_HZ="$(tr ' ' '\n' < /proc/cmdline 2>/dev/null | sed -n 's/^ds_clk_hz=\([1-9][0-9]\{0,9\}\)$/\1/p' | head -1)"
+MMIO_ARGS=""
+if [ -n "${MMIO_BASE}" ]; then
+    MMIO_ARGS="--mmio-base ${MMIO_BASE}"
+    export DS_MMIO_BASE="${MMIO_BASE}"
+fi
+CLK_ARGS=""
+if [ -n "${REGBANK_CLK_HZ}" ]; then
+    CLK_ARGS="--regbank-clk-hz ${REGBANK_CLK_HZ}"
+fi
+
+# DS-P2.280: the PL's DDR word width in bytes (the top's G_DDR_DATA_WIDTH / 8), declared per target in
+# linux.bootargs. The daemon consumes the PL's zero-pad flush words to that boundary as pad; without the token
+# it keeps the old walk, and says so in its log.
+RING_WORD_BYTES="$(tr ' ' '\n' < /proc/cmdline 2>/dev/null | sed -n 's/^ds_ring_word_bytes=\([1-9][0-9]\{0,3\}\)$/\1/p' | head -1)"
+RING_ARGS=""
+if [ -n "${RING_WORD_BYTES}" ]; then
+    RING_ARGS="--ring-word-bytes ${RING_WORD_BYTES}"
+fi
+
+# DS-P2.126: bootargs carrying ds_mss_fabric=1 make the boot STIM arm OR
+# EMIO_MUX_SEL bits [11:8]. Images that omit the token unset the variable
+# so a leaked parent environment cannot steer a Zybo/DE25 onto tied-off pins.
+MSS_FABRIC="$(tr ' ' '\n' < /proc/cmdline 2>/dev/null | sed -n 's/^ds_mss_fabric=\(1\)$/\1/p' | head -1)"
+if [ "${MSS_FABRIC}" = "1" ]; then
+    export DS_MSS_FABRIC=1
+else
+    unset DS_MSS_FABRIC
+fi
+
+# DS-T2.73: the overlay is shared across targets, so the clock is a per-target
+# kernel-cmdline property rather than an overlay constant.  This value drives
+# both HELO sample_clk_hz and conversion of the raw clk_sys cycle count.
+# DS-P2.155: DE25 now declares ds_clk_hz=100000000 in
+# targets/de25_datalogger.yml — clk_sys is the CLOCK2_50 x2
+# fabric-IOPLL product (10 ns/tick), so every target is at
+# 100 MHz and this token agrees with the RTL G_SYS_CLK_HZ and the DTB
+# deepskopion-clk node.  Zynq still omits the token and keeps the stream CLI's
+# 100 MHz default, so nothing here diverges any more.  A stale 50000000 would
+# stretch the entire EDGE_BATCH timeline by exactly 2x (raw ticks * 20 ns
+# instead of 10 ns), not only its sub-microsecond part.
+
+# Interactive override, for poking at a board without rebuilding an image.
+# Still tmpfs, still gone after a reboot — deliberately, because a persistent
+# hand-written override is indistinguishable from a mis-built image.
+SOURCE_FILE="/etc/deepskopion-source"
+if [ -r "${SOURCE_FILE}" ]; then
+    _override="$(tr -d ' \t\r\n' < "${SOURCE_FILE}" 2>/dev/null)"
+    [ -n "${_override}" ] && SOURCE="${_override}"
+fi
+
+# No ds_source= on the cmdline means an image built before DS-P1.18, or a
+# target that forgot to declare it. Say so — silently picking a default is how
+# a board ends up streaming the wrong thing while every log line looks normal.
+if [ -z "${SOURCE}" ]; then
+    SOURCE="eye"
+    echo "  ⚠ no ds_source= on the kernel cmdline — defaulting to '${SOURCE}'." >&2
+    echo "    Declare it in targets/<name>.yml linux.bootargs (DS-P1.18);" >&2
+    echo "    a datalogger board running --source eye finds no ring." >&2
+fi
+
+# DS-P2.76: bitstream-identity expectations. `rr hw bit-sha` cannot read a
+# Linux-running Zynq and /proc/device-tree/model is empty on this board, so the
+# design's own GIT_HASH register is the ONLY working confirm here. The daemon
+# checks it at boot, but only if an expectation exists — otherwise it reads the
+# bits and checks nothing. Drop a file to enable it:
+#   echo 'DS_EXPECTED_GIT_HASH=0x50d0d13b' > /etc/deepskopion-expect
+EXPECT_FILE="/etc/deepskopion-expect"
+if [ -r "${EXPECT_FILE}" ]; then
+    # shellcheck disable=SC1090
+    . "${EXPECT_FILE}"
+    [ -n "${DS_EXPECTED_GIT_HASH:-}" ] && export DS_EXPECTED_GIT_HASH
+    [ -n "${DS_EXPECTED_DAEMON_VERSION:-}" ] && export DS_EXPECTED_DAEMON_VERSION
+fi
+
+start() {
+    echo "Starting ${NAME}..."
+    [ -d "${DAEMON_DIR}" ] || { echo "  ${DAEMON_DIR} missing — daemon not staged?" >&2; exit 1; }
+    mkdir -p "$(dirname "${LOG_FILE}")" "$(dirname "${PID_FILE}")"
+    cd "${DAEMON_DIR}" || exit 1
+
+    # DS-P1.57 regression guard: assert the EFFECT, not that python3 exists on
+    # disk. MEASURED on silicon (boot21): the overlay staged a dynamically
+    # linked python3 with no ELF interpreter anywhere in the rootfs, and every
+    # step below silently swallowed its failure — arm_datalogger_defaults just
+    # logged and continued, and the backgrounded `python3 -m sw.stream` failed
+    # inside its own subshell where nothing was watching, so `echo $!` still
+    # reported a "successful" start. The daemon had, on the evidence, NEVER
+    # run on DE25. Fail LOUD and BEFORE either of those, instead.
+    if ! python3 -c "print(1)" >>"${LOG_FILE}" 2>&1; then
+        echo "  python3 self-test FAILED (python3 -c 'print(1)' did not run) —" >&2
+        echo "  see ${LOG_FILE}; refusing to start ${NAME} (DS-P1.57)" >&2
+        exit 1
+    fi
+
+    # DS-P2.77: arm datalogger CONFIG defaults BEFORE the daemon opens the ring.
+    # Order is load-bearing and guarded by test_arming_precedes_the_daemon_launch:
+    # arming re-runs a disable->enable calibration reset, which must not land
+    # underneath a live ring drain.
+    #
+    # Nothing configures the UART datalogger at power-on — config_control latches
+    # all-zeros out of reset, MEASURED on this board as DATALOGGER_CONFIG=0x00000000
+    # (2026-08-10). So device 12 is OFF, against lines that are 8N1, until this
+    # runs. Until DS-P2.77 the only thing that wrote it was the DEMO STIMULUS
+    # SCRIPT, which is not present on every rootfs — the wrong owner for a
+    # framing default.
+    #
+    # NB 0x6001 is NOT a power-on default, though this comment and the ticket
+    # both used to say so: it is what enable_datalogger(12) writes with extra=0.
+    # See sw/stream/arm_datalogger_defaults.py for the measurement. The "1206 stop
+    # errors in 10 s" that motivated all this was resolved separately as ring
+    # backfill replaying real history — DS-P3.136 / DS-P2.80, not a framing bug.
+    python3 -m sw.stream.arm_datalogger_defaults >> "${LOG_FILE}" 2>&1 \
+        || echo "  datalogger arming failed — see ${LOG_FILE}" >&2
+
+    # DS-T2.4 fix: shell-level fork so the daemon's stdout/stderr inherit
+    # the >>$LOG_FILE redirect. busybox start-stop-daemon --background
+    # closes the spawned child's stdio → invisible crashes.
+    # PYTHONUNBUFFERED=1 keeps lines unbuffered through the redirect.
+    # --source: 'eye' = the lean eye-diagram fixture, which has no PS-DDR ring and
+    # streams the freq×phase eye sweep as DOMAIN_EYE annotations to RouteWave's
+    # BathtubView; 'ddr' = the datalogger targets' PS-DDR datalogger ring.
+    echo "  source=${SOURCE}"
+    (PYTHONUNBUFFERED=1 python3 -m sw.stream \
+        --source "${SOURCE}" ${MMIO_ARGS} ${CLK_ARGS} ${RING_ARGS} \
+        --listen 0.0.0.0:7475 -v >> "${LOG_FILE}" 2>&1) &
+    echo $! > "${PID_FILE}"
+}
+
+stop() {
+    echo "Stopping ${NAME}..."
+    start-stop-daemon --stop --pidfile "${PID_FILE}" --retry 5
+    rm -f "${PID_FILE}"
+}
+
+case "$1" in
+    start)   start ;;
+    stop)    stop ;;
+    restart) stop; start ;;
+    *)       echo "usage: $0 {start|stop|restart}" >&2; exit 1 ;;
+esac
+
+exit 0

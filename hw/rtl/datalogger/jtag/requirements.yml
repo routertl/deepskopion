@@ -1,0 +1,154 @@
+# jtag_datalogger — Requirements catalog (contract-first per ROUTERTL convention)
+#
+# Passive IEEE-1149.1 (JTAG/TAP) datalogger (DS-P3.56, JTAG P1). Watches
+# TCK/TMS/TDI/TDO as INPUTS, mirrors the 16-state TAP FSM, captures the IR/DR
+# shift streams (TDI host->device, TDO device->host), and emits 32-bit zs_msg
+# messages on DOMAIN_JTAG (0x8, system_ids.yml). Complementary to:
+#   * hw/rtl/datalogger/jtag/jtag_datalogger_protocol.yml  (the HW word format)
+#   * deepskopion/system_ids.yml                     (the domain code)
+#
+# LIFECYCLE (DS-P3.90 Phase 1): jtag_datalogger is the INLINE-COMPLIANT reference
+# for the uniform lifecycle. It emits the symmetric pair via C_TypeEvent="100"
+# with C_EvEnabled=0x03 on the ConfigEnable rising edge (JTAG-REQ-2, tested) and
+# C_EvDisabled=0x00 on the falling edge, in the always-on two-process
+# (global-RST) domain. It deliberately does NOT use the shared datalogger_lifecycle
+# component — its emitter is staged through the message RAM and is proven
+# equivalent; refactoring it would add risk for no behavioural gain. See
+# docs/standards/datalogger_compliance_checklist.md §10 (L4).
+#
+# Each JTAG-REQ-N below is referenced by >=1 cocotb test in
+# hw/sim/cocotb/tests/datalogger/jtag/test_*.py via @requires(JTAG-REQ-N).
+# `rr sim coverage-map` enforces the mapping. Adversarial discipline: tests
+# attack the DUT with HARD-CODED expected values (ROUTERTL-002), never derived
+# from DUT output at runtime.
+
+ip: jtag_datalogger
+version: 0.2
+schema_version: 1
+
+port_contract:
+  slaves: []
+  masters: []
+  scalars:
+    - { name: JTAG_PINS,    dir: in,  width: "G_JTAG_PINS-1 downto 0" }   # [0]TCK [1]TMS [2]TDI [3]TDO
+    - { name: CONFIG,       dir: in,  width: "G_CONFIG_WIDTH-1 downto 0" }
+    - { name: TIMESTAMP,    dir: in,  width: "G_TIMESTAMP_WIDTH-1 downto 0" }
+    - { name: JTAG_MSG_OUT, dir: out, width: "C_DATALOGGER_MSG_WIDTH-1 downto 0" }
+    - { name: JTAG_MSG_VLD, dir: out, width: "1" }
+    - { name: JTAG_MSG_RDY, dir: in,  width: "1" }
+    - { name: JTAG_ERRORS,  dir: out, width: "G_ERROR_WIDTH-1 downto 0" }
+  clocks:
+    - { name: CLK }
+  resets:
+    - { name: RST, polarity: active_high }
+
+parameters:
+  - { name: G_JTAG_DEV_ID, default: 16 }
+  - { name: G_JTAG_PINS,   default: 4 }
+
+functional_contract:
+
+  - id: JTAG-REQ-1
+    kind: negative
+    desc: >-
+      Reset determinism: post-RST, JTAG_MSG_VLD stays low and NO message is
+      emitted until the datalogger is enabled (CONFIG device-id match + enable bit)
+      AND a TAP edge occurs.
+
+  - id: JTAG-REQ-2
+    kind: behavioral
+    desc: >-
+      Identity: every emitted message carries device_id = G_JTAG_DEV_ID in
+      bits[31:27] and domain DOMAIN_JTAG (0x8) is implied by the gather's
+      domain stamp; enabling emits one lifecycle event (event_code 0x03), and
+      disabling emits 0x00. Observed on `JTAG_MSG_OUT` / `JTAG_MSG_VLD`.
+
+  - id: JTAG-REQ-3
+    kind: behavioral
+    desc: >-
+      DR capture: a Shift-DR of K bits is bracketed by dr_shift_begin (0x30) and
+      dr_shift_end (0x40 | valid_bits); the shifted TDI bytes are emitted as
+      payload_tdi (type 001, LSB-first) on each completed byte. Observed on
+      `JTAG_MSG_OUT` / `JTAG_MSG_VLD`.
+    spec:
+      - doc: "IEEE Std 1149.1 (JTAG) Test Access Port and Boundary-Scan Architecture"
+        clause: "TAP controller: Shift-DR state"
+
+  - id: JTAG-REQ-4
+    kind: behavioral
+    desc: >-
+      IR capture: a Shift-IR is bracketed by ir_shift_begin (0x10) and
+      ir_shift_end (0x20 | valid_bits); the IR TDI bytes are emitted as
+      payload_tdi on `JTAG_MSG_OUT` / `JTAG_MSG_VLD`.
+    spec:
+      - doc: "IEEE Std 1149.1 (JTAG) Test Access Port and Boundary-Scan Architecture"
+        clause: "TAP controller: Shift-IR state"
+
+  - id: JTAG-REQ-5
+    kind: behavioral
+    desc: >-
+      Sub-byte length: for a partial (non-multiple-of-8) shift, the *_shift_end
+      event low nibble equals the count of valid bits in the final byte
+      (0 == the last byte was a full 8 bits).
+
+  - id: JTAG-REQ-6
+    kind: behavioral
+    desc: >-
+      TDO captured alongside TDI: each shifted byte produces a distinct
+      payload_tdi (002 master->device) AND payload_tdo (010 device->host)
+      message, so both lanes of the exchange are recorded on `JTAG_MSG_OUT` /
+      `JTAG_MSG_VLD`.
+
+  - id: JTAG-REQ-7
+    kind: behavioral
+    desc: >-
+      TAP reset: five TCK edges with TMS=1 from any state reach TEST-LOGIC-RESET
+      and emit a tap_reset event (event_code 0x0C) on `JTAG_MSG_OUT` /
+      `JTAG_MSG_VLD`.
+    spec:
+      - doc: "IEEE Std 1149.1 (JTAG) Test Access Port and Boundary-Scan Architecture"
+        clause: "TAP controller: Test-Logic-Reset entered by five rising TCK edges with TMS held high"
+
+  - id: JTAG-REQ-8
+    kind: negative
+    desc: >-
+      Disabled silence: while the enable bit is low, the datalogger emits NO
+      messages regardless of TAP activity on the pins.
+
+  - id: JTAG-REQ-9
+    kind: negative
+    desc: >-
+      No silent drop: a capture-FIFO overflow under sustained downstream
+      backpressure increments JTAG_ERRORS; lost messages are always counted,
+      never silently discarded.
+
+  # ── Per-datalogger reset / reconfiguration (DS-P3.90 Phase 2) ──────
+  - id: JTAG-REQ-10
+    kind: behavioral
+    desc: >-
+      Decode self-resets on disable (DS-P3.90 Phase 2). Unlike level/uart/i2c,
+      the jtag datalogger does NOT take config_control.CAPTURE_RST: all capture is
+      gated on ConfigEnable and the TAP FSM resyncs from the bus, and its
+      enable/disable lifecycle (ENABLED 0x03 / DISABLED 0x00, event type "100")
+      is computed from R.EnableQ inside the SAME ESA two-process block — so a
+      blunt decode reset would risk suppressing the inline DISABLED marker
+      (H.96). A disable -> re-enable therefore cleanly re-arms: ENABLED on
+      enable, DISABLED on disable, ENABLED again on re-enable, on `JTAG_MSG_OUT`
+      / `JTAG_MSG_VLD`. Honors the "don't generate non-necessary resets" rule.
+      Disable uses an explicit matching-id word (CONFIG=0 does not disable a
+      non-zero device-id, H.98). Verified by
+      test_jtag_datalogger.capture_rst_reconfig. See
+      docs/standards/datalogger_compliance_checklist.md §10.
+
+  # ── Verbose TAP-state stream (DS-T3.16) ──
+  - id: JTAG-REQ-11
+    kind: behavioral
+    desc: >-
+      Verbose tap_state stream. When CONFIG bit[2] (verbose_tap) is set, the
+      datalogger emits a tap_state message (type 0b011) on EVERY TAP-FSM transition
+      (not on self-loops), with payload[3:0] = the 4-bit code of the state just
+      entered (test_logic_reset=0x0 .. update_ir=0xF, matching
+      jtag_datalogger_protocol.yml tap_states / StateType'pos). With verbose_tap=0
+      no tap_state message is ever emitted. A known TMS trajectory therefore
+      produces an exact, deterministic tap_state code sequence. Verified by
+      test_jtag_datalogger.verbose_tap_trajectory and verbose_tap_off_no_state.

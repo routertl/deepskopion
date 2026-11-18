@@ -1,0 +1,1171 @@
+-- SPDX-FileCopyrightText: 2026 Daniel J. Mazure
+-- SPDX-License-Identifier: MIT
+--
+-- rr_rea_top — RouteRTL Embedded Analyzer top-level integration.
+--
+-- Vendor-neutral: takes JTAG TAP signals as ports rather than
+-- instantiating BSCANE2 / sld_virtual_jtag / etc. The Xilinx wrapper
+-- (rr_rea_jtag_xilinx7.vhd) is a separate thin shim that connects
+-- BSCANE2 to this top. In simulation, the cocotb testbench drives
+-- the TAP signals directly — zero vendor primitive needed.
+--
+-- Wiring:
+--   JTAG iface     ◄──► regbank          (reg-bus)
+--   regbank        ──── CDCs ────►       capture_fsm config inputs
+--   capture_fsm    ──── CDCs ────►       regbank status mirror
+--   capture_fsm    ──────────────►       dpram (port A: write)
+--   dpram (port B: read) ────────►       JTAG iface (when reg_addr_o in DPRAM window)
+--
+-- See SPEC.md and requirements.yml REA-REQ-300 for the contract.
+
+library ieee;
+    use ieee.std_logic_1164.all;
+    use ieee.numeric_std.all;
+
+library work;
+    use work.rr_rea_pkg.all;
+
+entity rr_rea_top is
+    generic (
+        G_SAMPLE_W    : positive := 12;
+        G_DEPTH       : positive := 4096;
+        G_TIMESTAMP_W : natural  := 32;
+        G_NUM_CHAN    : positive := 1;
+        G_TRIG_CONDS  : positive := 4;  -- v0.5 comparator-array slots (P3.647)
+        G_NUM_SOURCE  : positive := 1;  -- v0.5 write-side source bits (P2.837)
+
+        -- RTL-P3.931: which bridge drives the internal register bus.
+        --   "jtag"     — rr_rea_jtag_iface off the TAP ports (the default;
+        --                behaviour is byte-identical to the pre-P3.931 core).
+        --   "external" — the reg_*_i slave ports below, for a design that
+        --                already has a control bus (AXI4-Lite via
+        --                rr_rea_axi4lite, a soft-core, a debug bridge) or has
+        --                no spare BSCAN user chain.
+        -- The choice changes only the BRIDGE: regbank, CDC, capture FSM and
+        -- the v0.8 trust core are the same silicon either way (REA-REQ-900).
+        G_REG_IFACE   : string   := "jtag";
+        -- RTL-T2.119: G_BUILD_ID generic removed; rr_rea_regbank reads the
+        -- BUILD_ID (0xD4) source hash from rr_rea_build_id_pkg directly.
+
+        -- REA-P2.5: elaborate the axi_stream_window dump engine. OFF by default
+        -- so a JTAG-only (or any) bring-up build instantiates no burst engine and
+        -- the m_axis_* master below stays inert and unadvertised — FEATURES[20]
+        -- reads 0 (REA-REQ-913). A consumer selects the burst transport only when
+        -- FEATURES[20] reads 1, which happens iff this generic is true. Control
+        -- always stays on the register door (G_REG_IFACE); this engine only reads.
+        G_AXIS_WINDOW : boolean  := false;
+
+        -- REA-P2.7: storage-qualifier slots. 0 (the default) elaborates no
+        -- qualifier — the core is the v0.9 analyzer byte for byte
+        -- (REA-REQ-950). > 0 requires G_TIMESTAMP_W > 0, because a qualified
+        -- sample's index no longer says when it was taken (REA-REQ-957).
+        G_QUAL_CONDS  : natural  := 0;
+
+        -- REA-P3.7: multi-stage trigger sequencer depth, 0..4 (REA-REQ-601..607,
+        -- REA-REQ-967). 0 (the default) elaborates no sequencer — the
+        -- pre-P3.7 core byte for byte, TRIG_MODE bit[1] ignored. The SEQ
+        -- window holds four stages.
+        G_TRIG_STAGES : natural  := 0;
+        -- REA-P2.20: opt-in 50-bit JTAG DR with a constant-0 guard bit at the
+        -- TDO end, to discriminate the Arria 10 readback fault (RTL-P2.901).
+        -- false (the default) = the frozen 49-bit protocol. Only meaningful
+        -- with G_REG_IFACE = "jtag"; FEATURES[31] reads 1 iff both hold.
+        G_DR_GUARD    : boolean  := false
+    );
+    port (
+        -- ── Sample-clock domain ──────────────────────────────────
+        sample_clk_i : in  std_logic;
+        sample_rst_i : in  std_logic;
+        probe_i   : in  std_logic_vector(G_SAMPLE_W - 1 downto 0);
+
+        -- ── Write-side source (RTL-P2.837) ───────────────────────
+        -- ISSP-style JTAG-writable control bit(s) driven INTO the design —
+        -- the write counterpart to the read-only probe path. The host sets
+        -- a bit over JTAG (System Console / xsdb) to release a gated DUT
+        -- signal, clears it to re-gate. Presented HERE in the sample_clk_i
+        -- domain, having crossed from jtag_clk_i via rr_rea_sync_word (the
+        -- proven two-flop word synchronizer, REA-REQ-020/021) exactly like
+        -- every other config word — NEVER a bespoke single flop. Powers up
+        -- all-zeros (GSR init on the sync flops + regbank reset) so the
+        -- gated signal starts SAFE/inactive until explicitly written.
+        --
+        -- SDC: the jtag_clk_i → sample_clk_i crossing this port rides on is
+        -- asynchronous; constrain it like every REA crossing, with
+        -- set_max_delay -datapath_only at half the faster period (SPEC.md
+        -- "Clock-domain crossings", REA-P2.10), never an async clock group.
+        -- Wire source_o so that a bit = 0 holds the
+        -- DUT signal in its safe state (e.g. bist_start <= bist_start_i and
+        -- source_o(0)); the reset default then gates by construction.
+        source_o : out std_logic_vector(G_NUM_SOURCE - 1 downto 0);
+
+        -- ── External board-pin trigger (RTL-P3.266) ─────────────
+        -- Async package-pin input the user routes from a board pin (scope
+        -- trigger-out, another FPGA's trigger_o, a button). Synced inside
+        -- and folded into the fire decision per TRIG_MODE ext_en[3]/ext_and[8].
+        -- Defaults '0' so existing instantiations that don't drive it are
+        -- unaffected (internal-only trigger).
+        ext_trigger_i : in std_logic := '0';
+
+        -- ── Local trigger pulse (1-cycle on sample_clk_i) ─────────
+        -- Exposed so the design can route it to an LED / external
+        -- pin / cross-domain trigger crossbar (v0.2). Doubles as a
+        -- "Vivado optimizer anchor" — without an observable output
+        -- the whole REA hierarchy gets pruned in synthesis.
+        trigger_o : out std_logic;
+
+        -- ── JTAG TAP (jtag_clk_i domain) — driven by external wrapper
+        --    in synth, driven by testbench in sim ─────────────────
+        arst_i       : in  std_logic;
+        tck_i        : in  std_logic;
+        tdi_i        : in  std_logic;
+        tdo_o        : out std_logic;
+        capture_i    : in  std_logic;
+        shift_en_i   : in  std_logic;
+        update_i     : in  std_logic;
+        sel_i        : in  std_logic;
+
+        -- ── External register bus (RTL-P3.931) ───────────────────
+        -- Live ONLY when G_REG_IFACE = "external"; ignored otherwise
+        -- (REA-REQ-902), so an integrator who leaves them dangling or drives
+        -- them by accident cannot disturb a JTAG-controlled core. All default
+        -- so existing instantiations need no edit.
+        --
+        -- Same shape rr_rea_jtag_iface produces, because it IS the same bus:
+        -- present the address with reg_rd_en_i, read reg_rdata_o on the NEXT
+        -- cycle — the regbank's read data is REGISTERED (RTL-P1.96), and a
+        -- master that samples in the same cycle gets the PREVIOUS register.
+        reg_clk_i    : in  std_logic := '0';
+        reg_rst_i    : in  std_logic := '0';
+        reg_wr_en_i  : in  std_logic := '0';
+        reg_rd_en_i  : in  std_logic := '0';
+        reg_addr_i   : in  std_logic_vector(15 downto 0) := (others => '0');
+        reg_wdata_i  : in  std_logic_vector(31 downto 0) := (others => '0');
+        reg_rdata_o  : out std_logic_vector(31 downto 0);
+
+        -- ── AXI-Stream window dump master (REA-P2.5) ─────────────────
+        -- LIVE only when G_AXIS_WINDOW = true; otherwise tied inert
+        -- (tvalid = '0'). Runs in the register-bus clock domain (reg_clk_o —
+        -- the PS AXI clock under G_REG_IFACE = "external"). After STATUS.done
+        -- the engine bursts the packed window blob (SPEC.md "Window blob"),
+        -- tlast on the last beat. m_axis_tready_i defaults '1' so a build that
+        -- leaves it unconnected still streams (and existing instantiations that
+        -- omit these ports are unaffected).
+        m_axis_tdata_o  : out std_logic_vector(31 downto 0);
+        m_axis_tvalid_o : out std_logic;
+        m_axis_tready_i : in  std_logic := '1';
+        m_axis_tlast_o  : out std_logic
+    );
+end entity;
+
+architecture rtl of rr_rea_top is
+
+    constant C_PTR_W : positive := clog2(G_DEPTH);
+
+    -- ── Reg-bus wires (jtag_clk_i domain) ──────────────────────────
+    signal reg_clk_o    : std_logic;
+    signal reg_rst_o    : std_logic;
+    signal reg_wr_en_o  : std_logic;
+    signal reg_rd_en_o  : std_logic;
+    signal reg_addr_o   : std_logic_vector(15 downto 0);
+    signal reg_wdata_o  : std_logic_vector(31 downto 0);
+    signal reg_rdata_i  : std_logic_vector(31 downto 0);
+
+    -- ── Regbank → CDC → FSM config (jtag_clk_i → sample_clk_i) ──────
+    signal pretrig_jclk  : std_logic_vector(C_PTR_W - 1 downto 0);
+    signal posttrig_jclk : std_logic_vector(C_PTR_W - 1 downto 0);
+    signal trig_value_jclk : std_logic_vector(G_SAMPLE_W - 1 downto 0);
+    signal trig_mask_jclk  : std_logic_vector(G_SAMPLE_W - 1 downto 0);
+    signal arm_toggle_jclk   : std_logic;
+    signal reset_toggle_jclk : std_logic;
+    signal trig_mode_jclk    : std_logic_vector(31 downto 0);
+    signal chan_sel_jclk     : std_logic_vector(7 downto 0);
+    signal decim_ratio_jclk  : std_logic_vector(23 downto 0);
+    signal data_word_sel_jclk : std_logic_vector(7 downto 0);
+    signal data_plane_sel_jclk : std_logic;
+    signal decim_ratio_sclk  : std_logic_vector(23 downto 0);
+
+    -- ── Write-side source (RTL-P2.837): regbank → CDC → DUT port ──
+    signal source_jclk : std_logic_vector(G_NUM_SOURCE - 1 downto 0);
+    signal source_sclk : std_logic_vector(G_NUM_SOURCE - 1 downto 0);
+    signal probe_sclk  : std_logic_vector(G_SAMPLE_W - 1 downto 0);
+
+    signal pretrig_sclk    : std_logic_vector(C_PTR_W - 1 downto 0);
+    signal posttrig_sclk   : std_logic_vector(C_PTR_W - 1 downto 0);
+    signal trig_value_sclk : std_logic_vector(G_SAMPLE_W - 1 downto 0);
+    signal trig_mask_sclk  : std_logic_vector(G_SAMPLE_W - 1 downto 0);
+    -- Low 16 bits of TRIG_MODE crossed to sample_clk_i: [7:0] op byte
+    -- (P3.644/645) + the enable bits seq[1]/array[2]/ext_en[3], and [8] =
+    -- ext_and combine mode (RTL-P3.266). Widened from 8 → 16 to carry bit 8.
+    signal trig_mode_sclk  : std_logic_vector(15 downto 0);
+    signal ext_trig_sclk   : std_logic_vector(0 downto 0);  -- synced board pin
+    signal arm_pulse_sclk   : std_logic;
+    signal reset_pulse_sclk : std_logic;
+
+    -- ── v0.8 CAPTURE_EPOCH (REA-P2.2, REQ-807): sample-domain generation
+    --    counter, crossed to jtag_clk_i for the regbank. The host's anti-tear
+    --    anchor — increments on accepted arm / soft reset (and sweep abort /
+    --    accepted fill once P2.2p2-sweep / P2.3 land). ─────────────────────
+    signal capture_epoch_r    : std_logic_vector(31 downto 0) := (others => '0');
+    signal capture_epoch_jclk : std_logic_vector(31 downto 0);
+
+    -- ── v0.8 CRC sweep (REA-P2.2 increment 2): sample-plane engine reading
+    --    dpram port A after done. sweep_rst aborts it on arm/soft reset so
+    --    capture reclaims port A (REQ-803); the arbiter grants port A to the
+    --    sweep only while busy (which only happens after done). ────────────
+    -- REA-P3.2: the sweep engine + port-A arbiter + sample CRC latch +
+    -- publication FSM + epoch/invalidate + the fill FSM now live in
+    -- rr_rea_trust_core (formally provable with free control inputs). These
+    -- top-level signals are wires driven by that core; the reg-domain crc_valid
+    -- endpoint and the (mirror) timestamp plane hang off sweep_start/sweep_rst/
+    -- selftest_mode below.
+    signal sweep_rst        : std_logic;
+    signal sweep_start      : std_logic;
+    signal sweep_owns_a     : std_logic;
+    signal sweep_busy       : std_logic;
+    signal sweep_mem_dout   : std_logic_vector(G_SAMPLE_W - 1 downto 0);
+    signal dpram_addr_a     : std_logic_vector(C_PTR_W - 1 downto 0);
+    signal dpram_we_a       : std_logic;
+    signal dpram_din_a      : std_logic_vector(G_SAMPLE_W - 1 downto 0);
+    -- Publication (REA-P2.2 increment 3, REQ-808 torn-publish guard). The CRC
+    -- is latched + held; after a settle window (so the CRC word sync fully
+    -- lands in the jtag domain) a publish toggle flips and, only then, sets the
+    -- jtag-domain crc_valid. An arm/reset (epoch bump) during the settle
+    -- SUPPRESSES the publish; an arm/reset after it CLEARS crc_valid (invalidate
+    -- always wins). crc_valid therefore never rises for a stale/torn generation.
+    signal crc_sample_r        : std_logic_vector(31 downto 0);
+    signal crc_sample_jclk     : std_logic_vector(31 downto 0);
+    signal crc_ts_r            : std_logic_vector(31 downto 0) := (others => '0');
+    signal crc_ts_jclk         : std_logic_vector(31 downto 0);
+    signal ts_done_r           : std_logic := '0';  -- driven '1' when no ts plane
+    signal publish_toggle_r    : std_logic;
+    signal invalidate_toggle_r : std_logic;
+    signal publish_pulse_jclk    : std_logic;
+    signal invalidate_pulse_jclk : std_logic;
+    signal crc_valid_jr        : std_logic := '0';
+
+    -- ── v0.8 selftest fill (REA-P2.3): host writes an LFSR pattern into the
+    --    sample plane, then the sweep runs so the readback path can be
+    --    validated word-exact + by CRC before any real capture is trusted. ──
+    -- Fill FSM now lives inside rr_rea_trust_core (REA-P3.2); these wires are the
+    -- request/seed feed and the core-driven selftest status the top still needs.
+    signal fill_request   : std_logic;  -- SELFTEST_CTRL toggle → sample pulse
+    signal selftest_ctrl_jclk : std_logic;
+    signal selftest_seed_jclk : std_logic_vector(31 downto 0);
+    signal selftest_seed_sclk : std_logic_vector(31 downto 0);
+    signal fill_we        : std_logic;  -- core-driven (arbiter + test probe)
+    signal fill_busy      : std_logic;  -- core-driven (selftest_busy + test)
+    signal selftest_mode_r    : std_logic;
+    signal selftest_refused_r : std_logic;
+    signal selftest_busy_sclk : std_logic;
+    signal selftest_busy_jclk    : std_logic_vector(0 downto 0);
+    signal selftest_mode_jclk    : std_logic_vector(0 downto 0);
+    signal selftest_refused_jclk : std_logic_vector(0 downto 0);
+
+    -- ── Comparator-array config (RTL-P3.647): regbank → CDC → FSM ──
+    -- array_enable rides in trig_mode bit[2] (already CDC'd); only the
+    -- per-condition value/mask/op/valid arrays need their own sync.
+    signal cond_values_jclk : std_logic_vector(G_TRIG_CONDS * G_SAMPLE_W - 1 downto 0);
+    signal cond_masks_jclk  : std_logic_vector(G_TRIG_CONDS * G_SAMPLE_W - 1 downto 0);
+    signal cond_ops_jclk    : std_logic_vector(G_TRIG_CONDS * 4 - 1 downto 0);
+    signal cond_valid_jclk  : std_logic_vector(G_TRIG_CONDS - 1 downto 0);
+    signal cond_values_sclk : std_logic_vector(G_TRIG_CONDS * G_SAMPLE_W - 1 downto 0);
+    signal cond_masks_sclk  : std_logic_vector(G_TRIG_CONDS * G_SAMPLE_W - 1 downto 0);
+    signal cond_ops_sclk    : std_logic_vector(G_TRIG_CONDS * 4 - 1 downto 0);
+    signal cond_valid_sclk  : std_logic_vector(G_TRIG_CONDS - 1 downto 0);
+
+    -- ── REA-P2.7 storage qualifier (regbank → CDC → FSM, latched on arm) ──
+    constant C_QUAL_SLOTS : positive := max_nat(1, G_QUAL_CONDS);
+    signal qual_mode_jclk   : std_logic_vector(1 downto 0);
+    signal qual_values_jclk : std_logic_vector(C_QUAL_SLOTS * G_SAMPLE_W - 1 downto 0);
+    signal qual_masks_jclk  : std_logic_vector(C_QUAL_SLOTS * G_SAMPLE_W - 1 downto 0);
+    signal qual_ops_jclk    : std_logic_vector(C_QUAL_SLOTS * 4 - 1 downto 0);
+    signal qual_valid_jclk  : std_logic_vector(C_QUAL_SLOTS - 1 downto 0);
+    signal qual_mode_sclk   : std_logic_vector(1 downto 0);
+    signal qual_values_sclk : std_logic_vector(C_QUAL_SLOTS * G_SAMPLE_W - 1 downto 0);
+    signal qual_masks_sclk  : std_logic_vector(C_QUAL_SLOTS * G_SAMPLE_W - 1 downto 0);
+    signal qual_ops_sclk    : std_logic_vector(C_QUAL_SLOTS * 4 - 1 downto 0);
+    signal qual_valid_sclk  : std_logic_vector(C_QUAL_SLOTS - 1 downto 0);
+
+    -- REA-REQ-957: static range violations — every tool halts elaboration; a
+    -- vendor synth cannot downgrade them to a warning like the asserts below
+    -- (the RTL-P2.895 pattern).
+    constant C_QUAL_TIMESTAMP_GUARD : natural range 0 to 0 :=
+        boolean'pos(G_QUAL_CONDS > 0 and G_TIMESTAMP_W = 0);
+    constant C_QUAL_CONDS_GUARD : natural range 0 to 0 :=
+        boolean'pos(G_QUAL_CONDS > C_MAX_QUAL_CONDS);
+    -- REA-P3.7: the SEQ window (0x40..0x9F) holds C_MAX_TRIG_STAGES stages.
+    constant C_TRIG_STAGES_GUARD : natural range 0 to 0 :=
+        boolean'pos(G_TRIG_STAGES > C_MAX_TRIG_STAGES);
+
+    -- REA-P3.7: sequencer stage config, register domain -> sample domain.
+    -- A 0-stage build keeps one tied-off stage for the FSM's positive generic.
+    constant C_SEQ_STAGES : positive := max_nat(1, G_TRIG_STAGES);
+    signal seq_values_jclk : std_logic_vector(C_SEQ_STAGES * G_SAMPLE_W - 1 downto 0);
+    signal seq_masks_jclk  : std_logic_vector(C_SEQ_STAGES * G_SAMPLE_W - 1 downto 0);
+    signal seq_counts_jclk : std_logic_vector(C_SEQ_STAGES * C_SEQ_COUNT_W - 1 downto 0);
+    signal seq_values_sclk : std_logic_vector(C_SEQ_STAGES * G_SAMPLE_W - 1 downto 0);
+    signal seq_masks_sclk  : std_logic_vector(C_SEQ_STAGES * G_SAMPLE_W - 1 downto 0);
+    signal seq_counts_sclk : std_logic_vector(C_SEQ_STAGES * C_SEQ_COUNT_W - 1 downto 0);
+    signal seq_enable_sclk : std_logic;
+
+    -- ── FSM outputs (sample_clk_i domain) ──────────────────────────
+    signal armed_sclk     : std_logic;
+    signal triggered_sclk : std_logic;
+    signal done_sclk      : std_logic;
+    signal overflow_sclk  : std_logic;
+    signal trigger_out_sclk : std_logic;
+    signal trigger_sticky_r : std_logic := '0';
+    signal dpram_we_sclk    : std_logic;
+    signal dpram_addr_sclk  : std_logic_vector(C_PTR_W - 1 downto 0);
+    signal dpram_din_sclk   : std_logic_vector(G_SAMPLE_W - 1 downto 0);
+    signal wr_ptr_sclk      : std_logic_vector(C_PTR_W - 1 downto 0);
+    signal trig_ptr_sclk    : std_logic_vector(C_PTR_W - 1 downto 0);
+    signal start_ptr_sclk   : std_logic_vector(C_PTR_W - 1 downto 0);
+    -- RTL-T1.16: pre-trigger contiguity count (C_PTR_W+1 bits so a full
+    -- window, i.e. G_DEPTH itself, is representable).
+    signal pretrig_valid_sclk : std_logic_vector(C_PTR_W downto 0);
+
+    -- ── CDC: sample_clk_i → jtag_clk_i (status mirror) ───────────────
+    signal armed_jclk     : std_logic_vector(0 downto 0);
+    signal triggered_jclk : std_logic_vector(0 downto 0);
+    signal done_jclk      : std_logic_vector(0 downto 0);
+    signal overflow_jclk  : std_logic_vector(0 downto 0);
+    signal start_ptr_jclk : std_logic_vector(C_PTR_W - 1 downto 0);
+    signal pretrig_valid_jclk : std_logic_vector(C_PTR_W downto 0);
+    signal pretrig_valid_reg  : std_logic_vector(31 downto 0);
+
+    -- ── DPRAM read-port (jtag_clk_i domain) ────────────────────────
+    signal dpram_addr_b : std_logic_vector(C_PTR_W - 1 downto 0);
+    signal dpram_dout_b : std_logic_vector(G_SAMPLE_W - 1 downto 0);
+    constant C_TIMESTAMP_STORAGE_W : positive := max_nat(1, G_TIMESTAMP_W);
+    signal timestamp_dout_b : std_logic_vector(
+        C_TIMESTAMP_STORAGE_W - 1 downto 0);
+
+    -- ── reg_rdata_i mux: regbank vs dpram window ───────────────────
+    signal regbank_rdata : std_logic_vector(31 downto 0);
+    signal dpram_rdata   : std_logic_vector(31 downto 0);
+    signal in_dpram_window : std_logic;
+
+    -- ── REA-P2.5 AXI-Stream window dump engine ─────────────────────
+    -- The engine (elaborated iff G_AXIS_WINDOW) time-shares DPRAM port B with
+    -- the register read decode: while dumping it OWNS the read address
+    -- (axis_mem_rd = '1'). This is a local read-port arbiter, NOT a second
+    -- register-bus master — the host still controls the core through its one
+    -- register door (REA-REQ-901 stands). reg_dpram_addr_b is the address the
+    -- register window decode would drive; dpram_addr_b is the arbitrated result.
+    signal reg_dpram_addr_b : std_logic_vector(C_PTR_W - 1 downto 0);
+    signal axis_mem_addr    : std_logic_vector(C_PTR_W - 1 downto 0)
+        := (others => '0');
+    signal axis_mem_rd      : std_logic := '0';
+    -- capture_len = pretrig + posttrig + 1 (register-bus domain), the same
+    -- computation the regbank exposes at CAPTURE_LEN (0x1C).
+    signal capture_len_jclk : std_logic_vector(C_PTR_W downto 0);
+
+    function is_01(v : std_logic_vector) return boolean is
+    begin
+        for i in v'range loop
+            if v(i) /= '0' and v(i) /= '1' then
+                return false;
+            end if;
+        end loop;
+        return true;
+    end function;
+
+    -- Forward declarations of CDC entities are not strictly needed in
+    -- VHDL-93+ (entity instantiation works directly), but we keep
+    -- them here for clarity.
+    component rr_rea_sync_word is
+        generic (G_WIDTH : positive);
+        port (
+            dst_clk_i : in  std_logic;
+            din_i     : in  std_logic_vector(G_WIDTH - 1 downto 0);
+            dout_o    : out std_logic_vector(G_WIDTH - 1 downto 0)
+        );
+    end component;
+
+    component rr_rea_pulse_xfer is
+        port (
+            src_toggle_i : in  std_logic;
+            dst_clk_i    : in  std_logic;
+            dst_rst_i    : in  std_logic;
+            dst_pulse_o  : out std_logic
+        );
+    end component;
+
+    component rr_rea_rst_sync is
+        generic (G_STAGES : positive := 2);
+        port (
+            clk_i  : in  std_logic;
+            arst_i : in  std_logic;
+            srst_o : out std_logic
+        );
+    end component;
+
+    -- RTL-P3.1115: sample_rst_i deassertion synchronized into the sample_clk_i
+    -- domain (async-assert, sync-deassert). All sample-domain registers reset
+    -- from sample_rst_sync so the reset RELEASE meets recovery/removal — the raw
+    -- input is used ONLY to feed this synchronizer. Self-protecting: the IP no
+    -- longer relies on the consumer to clean up its reset deassertion.
+    signal sample_rst_sync : std_logic;
+
+begin
+
+    assert not (G_QUAL_CONDS > 0 and G_TIMESTAMP_W = 0)
+        report "rr_rea: G_QUAL_CONDS > 0 needs G_TIMESTAMP_W > 0 - a qualified "
+             & "sample's index no longer says when it was taken, so the "
+             & "timestamp plane is mandatory (REA-P2.7, REA-REQ-957)."
+        severity failure;
+    assert G_QUAL_CONDS <= C_MAX_QUAL_CONDS
+        report "rr_rea: G_QUAL_CONDS exceeds 15 - FEATURES[27:24] carries the "
+             & "slot count (REA-P2.7, REA-REQ-957)."
+        severity failure;
+    assert G_TRIG_STAGES <= C_MAX_TRIG_STAGES
+        report "rr_rea: G_TRIG_STAGES exceeds 4 - the SEQ register window "
+             & "(0x40..0x9F, 20 bytes per stage) holds four stages (REA-P3.7, "
+             & "REA-REQ-607)."
+        severity failure;
+
+    u_rst_sync : rr_rea_rst_sync
+        port map (clk_i => sample_clk_i, arst_i => sample_rst_i,
+                  srst_o => sample_rst_sync);
+
+    -- ── Register-bus bridge (RTL-P3.931) ─────────────────────────
+    -- Exactly ONE of these drives the bus. Two live masters on one register
+    -- bus is silent corruption, so the TAP decoder is not merely idled when
+    -- G_REG_IFACE = "external" — it is not instantiated at all, and tdo_o is
+    -- tied low (REA-REQ-901).
+    g_jtag_iface : if G_REG_IFACE = "jtag" generate
+        u_jtag : entity work.rr_rea_jtag_iface
+            generic map (
+                G_DR_GUARD => G_DR_GUARD
+            )
+            port map (
+                arst_i      => arst_i,
+                tck_i       => tck_i,
+                tdi_i       => tdi_i,
+                tdo_o       => tdo_o,
+                capture_i   => capture_i,
+                shift_en_i  => shift_en_i,
+                update_i    => update_i,
+                sel_i       => sel_i,
+                reg_clk_o   => reg_clk_o,
+                reg_rst_o   => reg_rst_o,
+                reg_wr_en_o => reg_wr_en_o,
+                reg_rd_en_o => reg_rd_en_o,
+                reg_addr_o  => reg_addr_o,
+                reg_wdata_o => reg_wdata_o,
+                reg_rdata_i => reg_rdata_i
+            );
+    end generate;
+
+    g_external_iface : if G_REG_IFACE /= "jtag" generate
+        reg_clk_o   <= reg_clk_i;
+        reg_rst_o   <= reg_rst_i;
+        reg_wr_en_o <= reg_wr_en_i;
+        reg_rd_en_o <= reg_rd_en_i;
+        reg_addr_o  <= reg_addr_i;
+        reg_wdata_o <= reg_wdata_i;
+        tdo_o       <= '0';
+    end generate;
+
+    -- The external read port always mirrors the internal bus, in both
+    -- configurations. Under "jtag" nothing is listening, and exposing the
+    -- value costs a wire, not a flop.
+    reg_rdata_o <= reg_rdata_i;
+
+    -- ── Register file ────────────────────────────────────────────
+    u_regbank : entity work.rr_rea_regbank
+        generic map (
+            G_SAMPLE_W    => G_SAMPLE_W,
+            G_DEPTH       => G_DEPTH,
+            G_TIMESTAMP_W => G_TIMESTAMP_W,
+            G_NUM_CHAN    => G_NUM_CHAN,
+            G_TRIG_CONDS  => G_TRIG_CONDS,
+            G_NUM_SOURCE  => G_NUM_SOURCE,
+            G_AXIS_WINDOW => G_AXIS_WINDOW,
+            G_QUAL_CONDS  => G_QUAL_CONDS,
+            G_TRIG_STAGES => G_TRIG_STAGES,
+            G_DR_GUARD    => G_DR_GUARD and G_REG_IFACE = "jtag"
+        )
+        port map (
+            jtag_clk_i => reg_clk_o,
+            jtag_rst_i => reg_rst_o,
+            wr_en_i    => reg_wr_en_o,
+            wr_addr_i  => reg_addr_o,
+            wr_data_i  => reg_wdata_o,
+            rd_addr_i  => reg_addr_o,
+            rd_data_o  => regbank_rdata,
+            armed_i     => armed_jclk(0),
+            triggered_i => triggered_jclk(0),
+            done_i      => done_jclk(0),
+            overflow_i  => overflow_jclk(0),
+            start_ptr_i => start_ptr_jclk,
+            pretrig_valid_i => pretrig_valid_reg,
+            -- v0.8 readback integrity (REA-P2.2). CRC values + crc_valid arrive
+            -- with the sweep (P2.2p2-sweep); selftest bits with fill (P2.3).
+            -- Wired to their inert defaults until then; the epoch counter is live.
+            crc_sample_i       => crc_sample_jclk,
+            crc_ts_i           => crc_ts_jclk,
+            capture_epoch_i    => capture_epoch_jclk,
+            crc_valid_i        => crc_valid_jr,
+            selftest_busy_i    => selftest_busy_jclk(0),
+            selftest_mode_i    => selftest_mode_jclk(0),
+            selftest_refused_i => selftest_refused_jclk(0),
+            pretrig_len_o  => pretrig_jclk,
+            posttrig_len_o => posttrig_jclk,
+            trig_value_o   => trig_value_jclk,
+            trig_mask_o    => trig_mask_jclk,
+            trig_mode_o    => trig_mode_jclk,
+            chan_sel_o     => chan_sel_jclk,
+            decim_ratio_o  => decim_ratio_jclk,
+            data_word_sel_o => data_word_sel_jclk,
+            data_plane_sel_o => data_plane_sel_jclk,
+            selftest_ctrl_o => selftest_ctrl_jclk,
+            selftest_seed_o => selftest_seed_jclk,
+            cond_values_o  => cond_values_jclk,
+            cond_masks_o   => cond_masks_jclk,
+            cond_ops_o     => cond_ops_jclk,
+            cond_valid_o   => cond_valid_jclk,
+            source_o       => source_jclk,
+            qual_mode_o    => qual_mode_jclk,
+            qual_values_o  => qual_values_jclk,
+            qual_masks_o   => qual_masks_jclk,
+            qual_ops_o     => qual_ops_jclk,
+            qual_valid_o   => qual_valid_jclk,
+            seq_values_o   => seq_values_jclk,
+            seq_masks_o    => seq_masks_jclk,
+            seq_counts_o   => seq_counts_jclk,
+            arm_toggle_o   => arm_toggle_jclk,
+            reset_toggle_o => reset_toggle_jclk
+        );
+
+    -- ── reg_rdata_i mux: dpram window vs regbank ───────────────────
+    -- dpram_window: addr in [0x0100 .. 0x0100 + DEPTH*4)
+    -- (each dpram cell occupies 4 bytes / 1 word in the JTAG map)
+    process (reg_addr_o)
+        variable in_window_v : boolean;
+    begin
+        in_dpram_window <= '0';
+        reg_dpram_addr_b <= (others => '0');
+
+        if is_01(reg_addr_o) then
+            in_window_v :=
+                unsigned(reg_addr_o) >= unsigned(C_ADDR_DATA_BASE) and
+                unsigned(reg_addr_o) < (unsigned(C_ADDR_DATA_BASE) +
+                                      to_unsigned(G_DEPTH * 4, 16));
+            if in_window_v then
+                in_dpram_window <= '1';
+                reg_dpram_addr_b <= std_logic_vector(resize(
+                    shift_right(unsigned(reg_addr_o) - unsigned(C_ADDR_DATA_BASE), 2),
+                    C_PTR_W));
+            end if;
+        else
+            in_dpram_window <= 'X';
+            reg_dpram_addr_b <= (others => 'X');
+        end if;
+    end process;
+
+    -- Local read-port arbiter: the dump engine owns port B while bursting, the
+    -- register window decode owns it otherwise. The engine (highest priority)
+    -- must NOT be pre-empted mid-burst: handing port B to a register DATA_BASE
+    -- read would steal the engine's own mid-cell read and corrupt the blob. So
+    -- DATA_BASE is UNDEFINED between STATUS.done and tlast — a DATA_BASE read
+    -- during a dump returns the cell the engine is walking, silently. The host
+    -- contract (one window consumer at a time: consume m_axis_*, or wait for
+    -- tlast before walking DATA_BASE) is SPEC "Dump-path transports" /
+    -- REA-REQ-916, not just this comment.
+    dpram_addr_b <= axis_mem_addr when axis_mem_rd = '1' else reg_dpram_addr_b;
+
+    -- RTL-P1.91: DATA_WORD_SEL pages a full-width cell through the frozen
+    -- one-address-per-cell DATA_BASE window. shift_right + resize naturally
+    -- zero-pads the final partial word and returns zero out of range.
+    -- DATA_PLANE_SEL (RTL-T2.123) picks the sample vs timestamp plane.
+    --
+    -- RTL-P1.96: the paging mux output is REGISTERED on reg_clk_o (tck_i) before
+    -- the DR capture_i — at wide G_SAMPLE_W this shift is a ~22:1 word mux over
+    -- the full sample width, the same class of comb cone that Quartus Pro
+    -- 26.1/Arria 10 miscompiled at the regbank read-mux (bit0=1 reads
+    -- captured as all-ones). DATA-window reads are therefore valid one
+    -- reg_clk_o edge after dpram_dout_b (two after the read command commits);
+    -- the two-scan read flow every host uses gives it several.
+    process (reg_clk_o)
+    begin
+        if rising_edge(reg_clk_o) then
+            if is_01(data_word_sel_jclk) then
+                if data_plane_sel_jclk = '0' then
+                    dpram_rdata <= std_logic_vector(resize(
+                        shift_right(
+                            unsigned(dpram_dout_b),
+                            to_integer(unsigned(data_word_sel_jclk)) *
+                                C_DATA_WORD_W),
+                        C_DATA_WORD_W));
+                elsif data_plane_sel_jclk = '1' then
+                    dpram_rdata <= std_logic_vector(resize(
+                        shift_right(
+                            unsigned(timestamp_dout_b),
+                            to_integer(unsigned(data_word_sel_jclk)) *
+                                C_DATA_WORD_W),
+                        C_DATA_WORD_W));
+                else
+                    dpram_rdata <= (others => 'X');
+                end if;
+            else
+                dpram_rdata <= (others => 'X');
+            end if;
+        end if;
+    end process;
+
+    reg_rdata_i <= dpram_rdata when in_dpram_window = '1' else regbank_rdata;
+
+    -- ── CDC: jtag_clk_i config words → sample_clk_i ──────────────────
+    u_cdc_pretrig : rr_rea_sync_word
+        generic map (G_WIDTH => C_PTR_W)
+        port map (dst_clk_i => sample_clk_i, din_i => pretrig_jclk,
+                  dout_o => pretrig_sclk);
+
+    u_cdc_posttrig : rr_rea_sync_word
+        generic map (G_WIDTH => C_PTR_W)
+        port map (dst_clk_i => sample_clk_i, din_i => posttrig_jclk,
+                  dout_o => posttrig_sclk);
+
+    u_cdc_trig_value : rr_rea_sync_word
+        generic map (G_WIDTH => G_SAMPLE_W)
+        port map (dst_clk_i => sample_clk_i, din_i => trig_value_jclk,
+                  dout_o => trig_value_sclk);
+
+    u_cdc_trig_mask : rr_rea_sync_word
+        generic map (G_WIDTH => G_SAMPLE_W)
+        port map (dst_clk_i => sample_clk_i, din_i => trig_mask_jclk,
+                  dout_o => trig_mask_sclk);
+
+    -- Comparator-op + enable-bits CDC: low 16 bits of TRIG_MODE carry
+    -- value_match[0]/seq_en[1]/array_en[2]/ext_en[3], the op nibble [7:4]
+    -- (RTL-P3.644/645/646), and ext_and[8] (RTL-P3.266). Quasi-static —
+    -- the host writes TRIG_MODE before pulsing arm.
+    u_cdc_trig_mode : rr_rea_sync_word
+        generic map (G_WIDTH => 16)
+        port map (dst_clk_i => sample_clk_i, din_i => trig_mode_jclk(15 downto 0),
+                  dout_o => trig_mode_sclk);
+
+    -- RTL-P3.266: external board-pin trigger, synced into the sample_clk_i
+    -- domain (the pin is fully asynchronous to sample_clk_i — the user routes
+    -- it from a package pin). A double-flop level synchronizer is correct for
+    -- a level / wide-pulse external trigger; sub-sample-period pulses are not
+    -- guaranteed to be seen (documented in SPEC).
+    u_cdc_ext_trig : rr_rea_sync_word
+        generic map (G_WIDTH => 1)
+        port map (dst_clk_i => sample_clk_i, din_i => (0 => ext_trigger_i),
+                  dout_o => ext_trig_sclk);
+
+    -- v0.3 decimation ratio CDC
+    u_cdc_decim : rr_rea_sync_word
+        generic map (G_WIDTH => 24)
+        port map (dst_clk_i => sample_clk_i, din_i => decim_ratio_jclk,
+                  dout_o => decim_ratio_sclk);
+
+    -- RTL-P3.647 comparator-array config CDC. Quasi-static (the host writes
+    -- all slots before pulsing arm; the FSM latches on the arm pulse), so the
+    -- per-bit double-flop sync — same as trig_value/mask — is sufficient.
+    u_cdc_cond_values : rr_rea_sync_word
+        generic map (G_WIDTH => G_TRIG_CONDS * G_SAMPLE_W)
+        port map (dst_clk_i => sample_clk_i, din_i => cond_values_jclk,
+                  dout_o => cond_values_sclk);
+    u_cdc_cond_masks : rr_rea_sync_word
+        generic map (G_WIDTH => G_TRIG_CONDS * G_SAMPLE_W)
+        port map (dst_clk_i => sample_clk_i, din_i => cond_masks_jclk,
+                  dout_o => cond_masks_sclk);
+    u_cdc_cond_ops : rr_rea_sync_word
+        generic map (G_WIDTH => G_TRIG_CONDS * 4)
+        port map (dst_clk_i => sample_clk_i, din_i => cond_ops_jclk,
+                  dout_o => cond_ops_sclk);
+    u_cdc_cond_valid : rr_rea_sync_word
+        generic map (G_WIDTH => G_TRIG_CONDS)
+        port map (dst_clk_i => sample_clk_i, din_i => cond_valid_jclk,
+                  dout_o => cond_valid_sclk);
+
+    -- REA-P2.7 storage-qualifier CDC (REA-REQ-959). Quasi-static arm-time
+    -- configuration like the cond_* arrays above: the host writes QUAL_* and
+    -- then pulses arm; the FSM latches on the arm pulse. Elaborated only when
+    -- a qualifier exists, so a G_QUAL_CONDS=0 core carries no extra flops.
+    g_qual_cdc : if G_QUAL_CONDS > 0 generate
+        u_cdc_qual_mode : rr_rea_sync_word
+            generic map (G_WIDTH => 2)
+            port map (dst_clk_i => sample_clk_i, din_i => qual_mode_jclk,
+                      dout_o => qual_mode_sclk);
+        u_cdc_qual_values : rr_rea_sync_word
+            generic map (G_WIDTH => C_QUAL_SLOTS * G_SAMPLE_W)
+            port map (dst_clk_i => sample_clk_i, din_i => qual_values_jclk,
+                      dout_o => qual_values_sclk);
+        u_cdc_qual_masks : rr_rea_sync_word
+            generic map (G_WIDTH => C_QUAL_SLOTS * G_SAMPLE_W)
+            port map (dst_clk_i => sample_clk_i, din_i => qual_masks_jclk,
+                      dout_o => qual_masks_sclk);
+        u_cdc_qual_ops : rr_rea_sync_word
+            generic map (G_WIDTH => C_QUAL_SLOTS * 4)
+            port map (dst_clk_i => sample_clk_i, din_i => qual_ops_jclk,
+                      dout_o => qual_ops_sclk);
+        u_cdc_qual_valid : rr_rea_sync_word
+            generic map (G_WIDTH => C_QUAL_SLOTS)
+            port map (dst_clk_i => sample_clk_i, din_i => qual_valid_jclk,
+                      dout_o => qual_valid_sclk);
+    end generate;
+
+    g_no_qual_cdc : if G_QUAL_CONDS = 0 generate
+        qual_mode_sclk   <= (others => '0');
+        qual_values_sclk <= (others => '0');
+        qual_masks_sclk  <= (others => '0');
+        qual_ops_sclk    <= (others => '0');
+        qual_valid_sclk  <= (others => '0');
+    end generate;
+
+    -- RTL-P2.837 write-side source CDC. The SOURCE register is quasi-static
+    -- (the host writes it, then it holds — same profile as trig_value/mask and
+    -- the cond_* arrays), so the per-bit two-flop rr_rea_sync_word is the right
+    -- and sufficient synchronizer. It is emphatically NOT a bespoke single flop:
+    -- a lone flop fanning out to multiple downstream gates can latch
+    -- inconsistent values before a metastable flop resolves, so every source
+    -- bit gets the proven ASYNC_REG double-flop (REA-REQ-020). The sync flops
+    -- init to 0 (GSR), so source_o holds the gated DUT signal SAFE until the
+    -- host writes SOURCE — matching the regbank reset default (no auto-release).
+    u_cdc_source : rr_rea_sync_word
+        generic map (G_WIDTH => G_NUM_SOURCE)
+        port map (dst_clk_i => sample_clk_i, din_i => source_jclk,
+                  dout_o => source_sclk);
+    source_o <= source_sclk;
+
+    probe_sclk <= probe_i;
+
+    -- ── CDC: jtag_clk_i pulse toggles → sample_clk_i pulses ─────────
+    u_cdc_arm : rr_rea_pulse_xfer
+        port map (
+            src_toggle_i => arm_toggle_jclk,
+            dst_clk_i => sample_clk_i, dst_rst_i => sample_rst_sync,
+            dst_pulse_o => arm_pulse_sclk
+        );
+
+    u_cdc_reset : rr_rea_pulse_xfer
+        port map (
+            src_toggle_i => reset_toggle_jclk,
+            dst_clk_i => sample_clk_i, dst_rst_i => sample_rst_sync,
+            dst_pulse_o => reset_pulse_sclk
+        );
+
+    -- ── Selftest fill request / seed CDC (REA-P2.3) ──────────────────
+    -- These produce the FREE control inputs the trust core consumes; the fill
+    -- FSM itself now lives INSIDE the core (REA-P3.2).
+    u_cdc_fill_req : rr_rea_pulse_xfer
+        port map (src_toggle_i => selftest_ctrl_jclk,
+                  dst_clk_i => sample_clk_i, dst_rst_i => sample_rst_sync,
+                  dst_pulse_o => fill_request);
+    u_cdc_seed : rr_rea_sync_word
+        generic map (G_WIDTH => 32)
+        port map (dst_clk_i => sample_clk_i, din_i => selftest_seed_jclk,
+                  dout_o => selftest_seed_sclk);
+
+    -- ── v0.8 trust core (REA-P3.2) ───────────────────────────────────
+    -- Sample-domain readback-integrity logic — CRC sweep + sample CRC latch +
+    -- snapshot/settle publication FSM + port-A single-owner arbiter +
+    -- CAPTURE_EPOCH + invalidate toggle + the selftest fill FSM — extracted so
+    -- its trust invariants (REQ-800/803/807/808/810/811, and REQ-850..854 via
+    -- the nested fill FSM) are FORMALLY PROVABLE with free control inputs (on the
+    -- full top they sit ~40-60 cycles behind BSCAN → any feasible-depth proof is
+    -- vacuous). Behaviour is byte-identical to the former in-top processes.
+    -- The reg-domain crc_valid endpoint + the (mirror) timestamp plane hang off
+    -- the exposed sweep_start / sweep_rst / selftest_mode control and the
+    -- ts_done_r status feed below.
+    u_trust_core : entity work.rr_rea_trust_core
+        generic map (G_SAMPLE_W => G_SAMPLE_W, G_DEPTH => G_DEPTH,
+                     G_PUB_SETTLE => 8)
+        port map (
+            sample_clk_i        => sample_clk_i,
+            sample_rst_i        => sample_rst_sync,
+            arm_pulse_i         => arm_pulse_sclk,
+            reset_pulse_i       => reset_pulse_sclk,
+            armed_i             => armed_sclk,
+            triggered_i         => triggered_sclk,
+            done_i              => done_sclk,
+            cap_we_i            => dpram_we_sclk,
+            cap_addr_i          => dpram_addr_sclk,
+            cap_din_i           => dpram_din_sclk,
+            fill_request_i      => fill_request,
+            selftest_seed_i     => selftest_seed_sclk,
+            sweep_mem_dout_i    => sweep_mem_dout,
+            ts_done_i           => ts_done_r,
+            dpram_we_a_o        => dpram_we_a,
+            dpram_addr_a_o      => dpram_addr_a,
+            dpram_din_a_o       => dpram_din_a,
+            sweep_start_o       => sweep_start,
+            sweep_rst_o         => sweep_rst,
+            sweep_busy_o        => sweep_busy,
+            sweep_owns_a_o      => sweep_owns_a,
+            crc_sample_o        => crc_sample_r,
+            sample_done_o       => open,
+            capture_epoch_o     => capture_epoch_r,
+            publish_toggle_o    => publish_toggle_r,
+            invalidate_toggle_o => invalidate_toggle_r,
+            pub_pending_o       => open,
+            pub_done_o          => open,
+            fill_we_o           => fill_we,
+            fill_busy_o         => fill_busy,
+            fill_done_o         => open,
+            fill_accept_o       => open,
+            selftest_mode_o     => selftest_mode_r,
+            selftest_refused_o  => selftest_refused_r
+        );
+
+    -- CAPTURE_EPOCH crossed sample_clk_i → jtag_clk_i (reg_clk_o) for regbank
+    -- readback. A word sync is adequate: the host reads it, brackets a window
+    -- read, and re-reads — a one-off skewed sample self-corrects on re-read.
+    u_cdc_epoch : rr_rea_sync_word
+        generic map (G_WIDTH => 32)
+        port map (dst_clk_i => reg_clk_o, din_i => capture_epoch_r,
+                  dout_o => capture_epoch_jclk);
+
+    -- selftest_busy = filling, or the sweep that a fill triggered (a normal
+    -- capture's sweep does not set it — selftest_mode gates that).
+    -- REA-P2.10 / REA-REQ-961: REGISTERED in sample_clk_i before it crosses to
+    -- the register clock. As a combinational OR of FSM state decodes it put
+    -- logic in front of u_cdc_st_busy's first stage (Vivado CDC-10), so a
+    -- glitch could be captured as a transient "not busy" mid-selftest.
+    p_st_busy_reg : process (sample_clk_i)
+    begin
+        if rising_edge(sample_clk_i) then
+            if sample_rst_sync = '1' then
+                selftest_busy_sclk <= '0';
+            else
+                selftest_busy_sclk <= fill_busy or (sweep_busy and selftest_mode_r);
+            end if;
+        end if;
+    end process;
+    u_cdc_st_busy : rr_rea_sync_word
+        generic map (G_WIDTH => 1)
+        port map (dst_clk_i => reg_clk_o, din_i(0) => selftest_busy_sclk,
+                  dout_o => selftest_busy_jclk);
+    u_cdc_st_mode : rr_rea_sync_word
+        generic map (G_WIDTH => 1)
+        port map (dst_clk_i => reg_clk_o, din_i(0) => selftest_mode_r,
+                  dout_o => selftest_mode_jclk);
+    u_cdc_st_refused : rr_rea_sync_word
+        generic map (G_WIDTH => 1)
+        port map (dst_clk_i => reg_clk_o, din_i(0) => selftest_refused_r,
+                  dout_o => selftest_refused_jclk);
+
+    u_cdc_crc_sample : rr_rea_sync_word
+        generic map (G_WIDTH => 32)
+        port map (dst_clk_i => reg_clk_o, din_i => crc_sample_r,
+                  dout_o => crc_sample_jclk);
+    u_cdc_crc_ts : rr_rea_sync_word
+        generic map (G_WIDTH => 32)
+        port map (dst_clk_i => reg_clk_o, din_i => crc_ts_r,
+                  dout_o => crc_ts_jclk);
+    u_cdc_publish : rr_rea_pulse_xfer
+        port map (src_toggle_i => publish_toggle_r,
+                  dst_clk_i => reg_clk_o, dst_rst_i => reg_rst_o,
+                  dst_pulse_o => publish_pulse_jclk);
+    u_cdc_invalidate : rr_rea_pulse_xfer
+        port map (src_toggle_i => invalidate_toggle_r,
+                  dst_clk_i => reg_clk_o, dst_rst_i => reg_rst_o,
+                  dst_pulse_o => invalidate_pulse_jclk);
+
+    -- jtag-domain crc_valid: set by the publish pulse, cleared by an invalidate
+    -- pulse. Invalidation wins on a same-cycle tie (checked first) — REQ-808.
+    process (reg_clk_o, reg_rst_o)
+    begin
+        if reg_rst_o = '1' then
+            crc_valid_jr <= '0';
+        elsif rising_edge(reg_clk_o) then
+            if invalidate_pulse_jclk = '1' then
+                crc_valid_jr <= '0';
+            elsif publish_pulse_jclk = '1' then
+                crc_valid_jr <= '1';
+            end if;
+        end if;
+    end process;
+
+    -- ── Capture FSM ──────────────────────────────────────────────
+    -- REA-P3.7 sequencer CDC (REA-REQ-959 profile). Quasi-static arm-time
+    -- configuration like the cond_* arrays: the host writes the SEQ window
+    -- while disarmed, then arms; the FSM latches it on the arm pulse. Each
+    -- first stage is driven straight from a regbank flop (REA-REQ-961).
+    -- Elaborated only when a sequencer exists, so a G_TRIG_STAGES = 0 core
+    -- carries no extra flops and ignores TRIG_MODE bit[1] (REA-REQ-967).
+    g_seq_cdc : if G_TRIG_STAGES > 0 generate
+        u_cdc_seq_values : rr_rea_sync_word
+            generic map (G_WIDTH => G_TRIG_STAGES * G_SAMPLE_W)
+            port map (dst_clk_i => sample_clk_i, din_i => seq_values_jclk,
+                      dout_o => seq_values_sclk);
+        u_cdc_seq_masks : rr_rea_sync_word
+            generic map (G_WIDTH => G_TRIG_STAGES * G_SAMPLE_W)
+            port map (dst_clk_i => sample_clk_i, din_i => seq_masks_jclk,
+                      dout_o => seq_masks_sclk);
+        u_cdc_seq_counts : rr_rea_sync_word
+            generic map (G_WIDTH => G_TRIG_STAGES * C_SEQ_COUNT_W)
+            port map (dst_clk_i => sample_clk_i, din_i => seq_counts_jclk,
+                      dout_o => seq_counts_sclk);
+        seq_enable_sclk <= trig_mode_sclk(C_TRIG_MODE_BIT_SEQ_EN);
+    end generate;
+
+    g_no_seq_cdc : if G_TRIG_STAGES = 0 generate
+        seq_values_sclk <= (others => '0');
+        seq_masks_sclk  <= (others => '0');
+        seq_counts_sclk <= (others => '0');
+        seq_enable_sclk <= '0';
+    end generate;
+
+    u_fsm : entity work.rr_rea_capture_fsm
+        generic map (G_SAMPLE_W => G_SAMPLE_W, G_DEPTH => G_DEPTH,
+                     G_TRIG_CONDS => G_TRIG_CONDS,
+                     G_QUAL_CONDS => G_QUAL_CONDS,
+                     G_TRIG_STAGES => C_SEQ_STAGES)
+        port map (
+            sample_clk_i    => sample_clk_i,
+            sample_rst_i    => sample_rst_sync,
+            probe_i      => probe_sclk,
+            arm_pulse_i     => arm_pulse_sclk,
+            reset_pulse_i   => reset_pulse_sclk,
+            pretrig_len_i  => pretrig_sclk,
+            posttrig_len_i => posttrig_sclk,
+            trig_value_i   => trig_value_sclk,
+            trig_mask_i    => trig_mask_sclk,
+            trig_mode_i    => trig_mode_sclk(7 downto 0),
+            decim_ratio_i  => decim_ratio_sclk,
+            -- RTL-P3.647: array_enable rides in trig_mode bit[2] (CDC'd above);
+            -- the per-condition arrays come from their own sync.
+            array_enable_i => trig_mode_sclk(C_TRIG_MODE_BIT_ARRAY_EN),
+            -- REA-P3.7: TRIG_MODE bit[1] enables the sequencer when one is
+            -- elaborated (it takes precedence over the array path).
+            seq_enable_i   => seq_enable_sclk,
+            seq_values_i   => seq_values_sclk,
+            seq_masks_i    => seq_masks_sclk,
+            seq_counts_i   => seq_counts_sclk,
+            cond_values_i  => cond_values_sclk,
+            cond_masks_i   => cond_masks_sclk,
+            cond_ops_i     => cond_ops_sclk,
+            cond_valid_i   => cond_valid_sclk,
+            -- RTL-P3.266: external board-pin trigger (synced) + its enable
+            -- (TRIG_MODE bit[3]) and OR/AND combine mode (bit[8]).
+            ext_trigger_i  => ext_trig_sclk(0),
+            ext_enable_i   => trig_mode_sclk(C_TRIG_MODE_BIT_EXT_EN),
+            ext_and_i      => trig_mode_sclk(C_TRIG_MODE_BIT_EXT_AND),
+            -- REA-P2.7 storage qualifier (QUAL_MODE {or, enable} + slots).
+            qual_enable_i  => qual_mode_sclk(C_QUAL_MODE_BIT_ENABLE),
+            qual_or_i      => qual_mode_sclk(C_QUAL_MODE_BIT_OR),
+            qual_values_i  => qual_values_sclk,
+            qual_masks_i   => qual_masks_sclk,
+            qual_ops_i     => qual_ops_sclk,
+            qual_valid_i   => qual_valid_sclk,
+            armed_o       => armed_sclk,
+            triggered_o   => triggered_sclk,
+            done_o        => done_sclk,
+            overflow_o    => overflow_sclk,
+            trigger_o => trigger_out_sclk,
+            dpram_we_o    => dpram_we_sclk,
+            dpram_addr_o  => dpram_addr_sclk,
+            dpram_din_o   => dpram_din_sclk,
+            wr_ptr_o    => wr_ptr_sclk,
+            trig_ptr_o  => trig_ptr_sclk,
+            start_ptr_o => start_ptr_sclk,
+            pretrig_valid_o => pretrig_valid_sclk
+        );
+
+    -- ── CDC: sample_clk_i status → jtag_clk_i ────────────────────────
+    u_cdc_armed : rr_rea_sync_word
+        generic map (G_WIDTH => 1)
+        port map (dst_clk_i => reg_clk_o,
+                  din_i(0) => armed_sclk,
+                  dout_o => armed_jclk);
+
+    u_cdc_triggered : rr_rea_sync_word
+        generic map (G_WIDTH => 1)
+        port map (dst_clk_i => reg_clk_o,
+                  din_i(0) => triggered_sclk,
+                  dout_o => triggered_jclk);
+
+    u_cdc_done : rr_rea_sync_word
+        generic map (G_WIDTH => 1)
+        port map (dst_clk_i => reg_clk_o,
+                  din_i(0) => done_sclk,
+                  dout_o => done_jclk);
+
+    u_cdc_overflow : rr_rea_sync_word
+        generic map (G_WIDTH => 1)
+        port map (dst_clk_i => reg_clk_o,
+                  din_i(0) => overflow_sclk,
+                  dout_o => overflow_jclk);
+
+    u_cdc_start_ptr : rr_rea_sync_word
+        generic map (G_WIDTH => C_PTR_W)
+        port map (dst_clk_i => reg_clk_o,
+                  din_i => start_ptr_sclk,
+                  dout_o => start_ptr_jclk);
+
+    -- RTL-T1.16: same double-flop word crossing as start_ptr — the value is
+    -- static once the trigger has fired, so a word sync is sound here.
+    u_cdc_pretrig_valid : rr_rea_sync_word
+        generic map (G_WIDTH => C_PTR_W + 1)
+        port map (dst_clk_i => reg_clk_o,
+                  din_i => pretrig_valid_sclk,
+                  dout_o => pretrig_valid_jclk);
+
+    pretrig_valid_reg <= std_logic_vector(
+        resize(unsigned(pretrig_valid_jclk), 32));
+
+    -- ── trigger_o: pulse the external port + maintain a sticky
+    --    flag flipped on each trigger so an LED can dance and the
+    --    Vivado optimizer can't prune the hierarchy. ─────────────
+    trigger_o <= trigger_sticky_r;
+    process (sample_clk_i, sample_rst_sync)
+    begin
+        if sample_rst_sync = '1' then
+            trigger_sticky_r <= '0';
+        elsif rising_edge(sample_clk_i) then
+            if trigger_out_sclk = '1' then
+                trigger_sticky_r <= not trigger_sticky_r;
+            end if;
+        end if;
+    end process;
+
+    -- ── Sample DPRAM ─────────────────────────────────────────────
+    u_dpram : entity work.rr_rea_dpram
+        generic map (G_WIDTH => G_SAMPLE_W, G_DEPTH => G_DEPTH)
+        port map (
+            clk_a_i  => sample_clk_i,
+            we_a_i   => dpram_we_a,      -- arbitrated: fill / capture writes, sweep read
+            addr_a_i => dpram_addr_a,    -- muxed: fill / capture ptr / sweep addr
+            din_a_i  => dpram_din_a,      -- muxed: fill pattern / capture data
+            dout_a_o => sweep_mem_dout,  -- port-A read → CRC sweep engine
+            clk_b_i  => reg_clk_o,
+            addr_b_i => dpram_addr_b,
+            dout_b_o => dpram_dout_b
+        );
+
+    -- RTL-T2.123: a free-running sample-clock counter is written through the
+    -- exact same WE/address pair as the sample plane. Each stored sample cell
+    -- therefore has one aligned timestamp, including across ring wrap and
+    -- decimation gaps. Soft capture_i reset preserves time continuity; only
+    -- sample_rst_i restarts the counter. G_TIMESTAMP_W=0 elaborates no plane.
+    g_timestamp_plane : if G_TIMESTAMP_W > 0 generate
+        -- REA-P2.11: the capture FSM stores a sample rea_store_lag cycles
+        -- after it arrives, so the counter starts that far behind (0 - lag,
+        -- modulo 2^W): a cell's timestamp is its sample's arrival cycle.
+        constant C_TS_RESET : unsigned(G_TIMESTAMP_W - 1 downto 0) :=
+            to_unsigned(0, G_TIMESTAMP_W) - rea_store_lag(G_QUAL_CONDS);
+        signal timestamp_r : unsigned(G_TIMESTAMP_W - 1 downto 0) :=
+            C_TS_RESET;
+        signal timestamp_dout : std_logic_vector(G_TIMESTAMP_W - 1 downto 0);
+        signal ts_owns_a   : std_logic;
+        signal ts_busy     : std_logic;
+        signal ts_crc_done : std_logic;
+        signal ts_crc_o    : std_logic_vector(31 downto 0);
+        signal ts_mem_addr : std_logic_vector(C_PTR_W - 1 downto 0);
+        signal ts_mem_dout : std_logic_vector(G_TIMESTAMP_W - 1 downto 0);
+        signal ts_we_a     : std_logic;
+        signal ts_addr_a   : std_logic_vector(C_PTR_W - 1 downto 0);
+    begin
+        process (sample_clk_i, sample_rst_sync)
+        begin
+            if sample_rst_sync = '1' then
+                timestamp_r <= C_TS_RESET;
+            elsif rising_edge(sample_clk_i) then
+                timestamp_r <= timestamp_r + 1;
+            end if;
+        end process;
+
+        -- Port-A arbiter/mux for the timestamp plane (mirrors the sample plane).
+        -- The plane is NEVER written during a selftest fill (REQ-854) — its din
+        -- stays the free-running counter and we stays low.
+        ts_owns_a <= ts_busy;
+        ts_addr_a <= ts_mem_addr when ts_owns_a = '1' else dpram_addr_sclk;
+        ts_we_a   <= '0' when (ts_owns_a = '1' or selftest_mode_r = '1')
+                     else dpram_we_sclk;
+
+        u_timestamp_dpram : entity work.rr_rea_dpram
+            generic map (G_WIDTH => G_TIMESTAMP_W, G_DEPTH => G_DEPTH)
+            port map (
+                clk_a_i  => sample_clk_i,
+                we_a_i   => ts_we_a,
+                addr_a_i => ts_addr_a,
+                din_a_i  => std_logic_vector(timestamp_r),
+                dout_a_o => ts_mem_dout,   -- port-A read → timestamp CRC sweep
+                clk_b_i  => reg_clk_o,
+                addr_b_i => dpram_addr_b,
+                dout_b_o => timestamp_dout
+            );
+        timestamp_dout_b <= timestamp_dout;
+
+        u_ts_crc_sweep : entity work.rr_rea_crc_sweep
+            generic map (G_SAMPLE_W => G_TIMESTAMP_W, G_DEPTH => G_DEPTH)
+            port map (
+                sample_clk_i => sample_clk_i,
+                sample_rst_i => sweep_rst,
+                start_i      => sweep_start,
+                mem_dout_i   => ts_mem_dout,
+                mem_addr_o   => ts_mem_addr,
+                mem_rd_en_o  => open,
+                busy_o       => ts_busy,
+                crc_done_o   => ts_crc_done,
+                crc_o        => ts_crc_o
+            );
+
+        -- Timestamp-plane CRC latch + done flag (feeds the arch-level pub FSM).
+        process (sample_clk_i, sweep_rst)
+        begin
+            if sweep_rst = '1' then
+                crc_ts_r  <= (others => '0');
+                ts_done_r <= '0';
+            elsif rising_edge(sample_clk_i) then
+                if ts_crc_done = '1' then
+                    crc_ts_r  <= ts_crc_o;
+                    ts_done_r <= '1';
+                end if;
+            end if;
+        end process;
+    end generate;
+
+    g_no_timestamp_plane : if G_TIMESTAMP_W = 0 generate
+        timestamp_dout_b <= (others => '0');
+        crc_ts_r  <= (others => '0');  -- no plane → CRC_TS reads 0 (REQ-804)
+        ts_done_r <= '1';              -- publication gates on the sample plane only
+    end generate;
+
+    -- ── REA-P2.5 AXI-Stream window dump engine ─────────────────────
+    -- capture_len = pretrig + posttrig + 1, in the register-bus domain (both
+    -- config words are regbank outputs on reg_clk_o). Matches CAPTURE_LEN (0x1C).
+    capture_len_jclk <= std_logic_vector(
+        resize(unsigned(pretrig_jclk), C_PTR_W + 1) +
+        resize(unsigned(posttrig_jclk), C_PTR_W + 1) + 1);
+
+    g_axis_dump : if G_AXIS_WINDOW generate
+        u_axis : entity work.rr_rea_axis_window
+            generic map (
+                G_SAMPLE_W    => G_SAMPLE_W,
+                G_DEPTH       => G_DEPTH,
+                G_TIMESTAMP_W => G_TIMESTAMP_W
+            )
+            port map (
+                clk_i         => reg_clk_o,
+                rst_i         => reg_rst_o,
+                done_i        => done_jclk(0),
+                start_ptr_i   => start_ptr_jclk,
+                capture_len_i => capture_len_jclk,
+                mem_addr_o    => axis_mem_addr,
+                mem_rd_o      => axis_mem_rd,
+                sample_dout_i => dpram_dout_b,
+                ts_dout_i     => timestamp_dout_b,
+                m_tdata_o     => m_axis_tdata_o,
+                m_tvalid_o    => m_axis_tvalid_o,
+                m_tready_i    => m_axis_tready_i,
+                m_tlast_o     => m_axis_tlast_o
+            );
+    end generate;
+
+    g_no_axis_dump : if not G_AXIS_WINDOW generate
+        -- No burst engine: the master is inert and port B is never contended.
+        axis_mem_addr   <= (others => '0');
+        axis_mem_rd     <= '0';
+        m_axis_tdata_o  <= (others => '0');
+        m_axis_tvalid_o <= '0';
+        m_axis_tlast_o  <= '0';
+    end generate;
+
+end architecture;

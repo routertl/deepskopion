@@ -1,0 +1,48 @@
+{"ts_start": 7028000230909, "ts_end": 7028000230909, "channel_id": 2, "kind": "edge", "text": "edge word=0x10db7b32", "is_error": false, "_channel_name": "edge"}
+{"ts_start": 7028000230909, "ts_end": 7028000230909, "channel_id": 3, "kind": "edge", "text": "edge word=0x18db7b38", "is_error": false, "_channel_name": "edge"}
+{"ts_start": 7028000230909, "ts_end": 7028000230909, "channel_id": 1, "kind": "edge", "text": "edge word=0x08db7b3e", "is_error": false, "_channel_name": "edge"}
+{"ts_start": 7028054683069, "ts_end": 7028104683069, "channel_id": 100, "kind": "uart_byte", "text": "0x58 'X'", "is_error": false, "_channel_name": "uart_byte"}
+{"ts_start": 7028055724669, "ts_end": 7028105724669, "channel_id": 100, "kind": "uart_byte", "text": "0x08", "is_error": false, "_channel_name": "uart_byte"}
+{"ts_start": 7028056766269, "ts_end": 7028106766269, "channel_id": 100, "kind": "uart_byte", "text": "0x3E '>'", "is_error": false, "_channel_name": "uart_byte"}
+{"ts_start": 7028057859889, "ts_end": 7028107859889, "channel_id": 100, "kind": "uart_byte", "text": "0xDB", "is_error": false, "_channel_name": "uart_byte"}
+{"ts_start": 7028058849409, "ts_end": 7028108849409, "channel_id": 100, "kind": "uart_byte", "text": "0x61 'a'", "is_error": false, "_channel_name": "uart_byte"}
+{"ts_start": 7028059917109, "ts_end": 7028109917109, "channel_id": 100, "kind": "uart_byte", "text": "0x98", "is_error": false, "_channel_name": "uart_byte"}
+{"ts_start": 7028061036829, "ts_end": 7028111036829, "channel_id": 100, "kind": "uart_byte", "text": "0xF0", "is_error": false, "_channel_name": "uart_byte"}
+{"ts_start": 7028062026349, "ts_end": 7028112026349, "channel_id": 100, "kind": "uart_byte", "text": "0xD0", "is_error": false, "_channel_name": "uart_byte"}
+{"ts_start": 7028063067889, "ts_end": 7028113067889, "channel_id": 100, "kind": "uart_byte", "text": "0xD9", "is_error": false, "_channel_name": "uart_byte"}
+{"ts_start": 7028064083449, "ts_end": 7028114083449, "channel_id": 100, "kind": "uart_byte", "text": "0xA8", "is_error": false, "_channel_name": "uart_byte"}
+{"ts_start": 7028065098949, "ts_end": 7028115098949, "channel_id": 100, "kind": "uart_byte", "text": "0x52 'R'", "is_error": false, "_channel_name": "uart_byte"}
+{"ts_start": 7028066192749, "ts_end": 7028116192749, "channel_id": 100, "kind": "uart_byte", "text": "0xD8", "is_error": false, "_channel_name": "uart_byte"}
+{"ts_start": 7035035739259, "ts_end": 7035085739259, "channel_id": 101, "kind": "i2c_start", "text": "START", "is_error": false, "_channel_name": "i2c_frame"}
+{"ts_start": 7035035763319, "ts_end": 7035085763319, "channel_id": 101, "kind": "i2c_byte", "text": "0xA0 ACK", "is_error": false, "_channel_name": "i2c_frame"}
+{"ts_start": 7035035786479, "ts_end": 7035085786479, "channel_id": 101, "kind": "i2c_byte", "text": "0x00 ACK", "is_error": false, "_channel_name": "i2c_frame"}
+{"ts_start": 7035035826259, "ts_end": 7035085826259, "channel_id": 101, "kind": "i2c_repeated_start", "text": "REP-START", "is_error": false, "_channel_name": "i2c_frame"}
+{"ts_start": 7035035850379, "ts_end": 7035085850379, "channel_id": 101, "kind": "i2c_byte", "text": "0xA1 ACK", "is_error": false, "_channel_name": "i2c_frame"}
+{"ts_start": 7035035873539, "ts_end": 7035085873539, "channel_id": 101, "kind": "i2c_byte", "text": "0xD5 ACK", "is_error": false, "_channel_name": "i2c_frame"}
+{"ts_start": 7035035896699, "ts_end": 7035085896699, "channel_id": 101, "kind": "i2c_byte", "text": "0x09 ACK", "is_error": false, "_channel_name": "i2c_frame"}
+{"ts_start": 7035035919859, "ts_end": 7035085919859, "channel_id": 101, "kind": "i2c_byte", "text": "0xC0 ACK", "is_error": false, "_channel_name": "i2c_frame"}
+{"ts_start": 7035035943079, "ts_end": 7035085943079, "channel_id": 101, "kind": "i2c_byte", "text": "0xDE NACK", "is_error": true, "_channel_name": "i2c_frame"}
+{"ts_start": 7035035947279, "ts_end": 7035085947279, "channel_id": 101, "kind": "i2c_stop", "text": "STOP", "is_error": false, "_channel_name": "i2c_frame"}
+{"ts_start": 7035236605999, "ts_end": 7035286605999, "channel_id": 101, "kind": "i2c_start", "text": "START", "is_error": false, "_channel_name": "i2c_frame"}
+{"ts_start": 7035236630119, "ts_end": 7035286630119, "channel_id": 101, "kind": "i2c_byte", "text": "0xA0 ACK", "is_error": false, "_channel_name": "i2c_frame"}
+{"ts_start": 7041108986979, "ts_end": 7041158986979, "channel_id": 102, "kind": "spi_event", "text": "CS\u2193", "is_error": false, "_channel_name": "qspi_xact"}
+{"ts_start": 7041109002219, "ts_end": 7041159002219, "channel_id": 102, "kind": "spi_mosi", "text": "MOSI 0x9F", "is_error": false, "_channel_name": "qspi_xact"}
+{"ts_start": 7041109002279, "ts_end": 7041159002279, "channel_id": 102, "kind": "spi_miso", "text": "MISO 0x12", "is_error": false, "_channel_name": "qspi_xact"}
+{"ts_start": 7041109014519, "ts_end": 7041159014519, "channel_id": 102, "kind": "spi_mosi", "text": "MOSI 0x00", "is_error": false, "_channel_name": "qspi_xact"}
+{"ts_start": 7041109014579, "ts_end": 7041159014579, "channel_id": 102, "kind": "spi_miso", "text": "MISO 0x34", "is_error": false, "_channel_name": "qspi_xact"}
+{"ts_start": 7041109026819, "ts_end": 7041159026819, "channel_id": 102, "kind": "spi_mosi", "text": "MOSI 0x0F", "is_error": false, "_channel_name": "qspi_xact"}
+{"ts_start": 7041109026879, "ts_end": 7041159026879, "channel_id": 102, "kind": "spi_miso", "text": "MISO 0x56", "is_error": false, "_channel_name": "qspi_xact"}
+{"ts_start": 7041109039119, "ts_end": 7041159039119, "channel_id": 102, "kind": "spi_mosi", "text": "MOSI 0xF0", "is_error": false, "_channel_name": "qspi_xact"}
+{"ts_start": 7041109039179, "ts_end": 7041159039179, "channel_id": 102, "kind": "spi_miso", "text": "MISO 0x78", "is_error": false, "_channel_name": "qspi_xact"}
+{"ts_start": 7041109078059, "ts_end": 7041159078059, "channel_id": 102, "kind": "spi_event", "text": "CS\u2191", "is_error": false, "_channel_name": "qspi_xact"}
+{"ts_start": 7041309327519, "ts_end": 7041359327519, "channel_id": 102, "kind": "spi_event", "text": "CS\u2193", "is_error": false, "_channel_name": "qspi_xact"}
+{"ts_start": 7041309341919, "ts_end": 7041359341919, "channel_id": 102, "kind": "spi_mosi", "text": "MOSI 0x9F", "is_error": false, "_channel_name": "qspi_xact"}
+{"ts_start": 7047100207961, "ts_end": 7047100207961, "channel_id": 3, "kind": "edge", "text": "edge word=0x19918208", "is_error": false, "_channel_name": "edge"}
+{"ts_start": 7047100207961, "ts_end": 7047100207961, "channel_id": 1, "kind": "edge", "text": "edge word=0x0991820e", "is_error": false, "_channel_name": "edge"}
+{"ts_start": 7047100207961, "ts_end": 7047100207961, "channel_id": 2, "kind": "edge", "text": "edge word=0x11918214", "is_error": false, "_channel_name": "edge"}
+{"ts_start": 7047168657279, "ts_end": 7047168657279, "channel_id": 1, "kind": "edge", "text": "edge word=0x0855b354", "is_error": false, "_channel_name": "edge"}
+{"ts_start": 7047168657279, "ts_end": 7047168657279, "channel_id": 1, "kind": "edge", "text": "edge word=0x0955b444", "is_error": false, "_channel_name": "edge"}
+{"ts_start": 7047168657279, "ts_end": 7047168657279, "channel_id": 1, "kind": "edge", "text": "edge word=0x0855b528", "is_error": false, "_channel_name": "edge"}
+{"ts_start": 7047168657279, "ts_end": 7047168657279, "channel_id": 1, "kind": "edge", "text": "edge word=0x0955b612", "is_error": false, "_channel_name": "edge"}
+{"ts_start": 7047168657279, "ts_end": 7047168657279, "channel_id": 1, "kind": "edge", "text": "edge word=0x0855b65a", "is_error": false, "_channel_name": "edge"}
+{"ts_start": 7047168657279, "ts_end": 7047168657279, "channel_id": 1, "kind": "edge", "text": "edge word=0x0955b744", "is_error": false, "_channel_name": "edge"}

@@ -1,0 +1,279 @@
+# stimulus — Requirements catalog (contract-first per ROUTERTL convention)
+#
+# Each STIM-REQ-N is referenced by >=1 cocotb test across the one-test-per-
+# file suite in hw/sim/cocotb/tests/stimulus/ (test_stimulus_uart_frame.py,
+# test_stimulus_uart_idle.py, test_stimulus_uart_drop_write.py,
+# test_stimulus_i2c_ack.py, test_stimulus_i2c_nack.py, test_stimulus_spi.py,
+# test_stimulus_edge_period.py, test_stimulus_edge_disabled.py,
+# test_stimulus_edge_muxsel.py — split out of the original single-file
+# test_stimulus_gen_loop.py, DS-P2.100 landing-review Finding A; one test
+# per file because ANY second @cocotb.test() sharing an nvc session hangs
+# nvc, independent of protocol grouping) via @requires("STIM-REQ-N"). `rr
+# sim coverage-map` enforces the mapping.
+#
+# DS-P2.100 / DS-D.38 option a: these REQs prove the fabric-side stimulus
+# generator produces PROTOCOL-CORRECT traffic that the existing responders
+# (i2c_injector/spi_injector) and datalogger decode understand — retiring the
+# DS-P2.95 "regbank-engaged but idle" trap. v1 scope is deliberately narrow
+# (one transaction/frame per DATA write, no clock stretching, no NACK
+# handling) — a self-test stimulus source, not a general-purpose driver.
+
+ip: stimulus
+hdl_file: ds_stimulus_gen.vhd
+version: 0.3
+
+# DS-P2.187: `ip: stimulus` names no entity, so contract-check failed with
+# no-matching-hdl and never compared a port. The IP's top (ip.yml
+# hdl.top_module) is ds_stimulus_gen; hdl_file pins it. Port shape below was
+# scaffolded from that entity (rr ip contract init) and reviewed: the
+# scaffold listed I2C_CLK_DIV / SPI_CLK_DIV as clocks; they are 32-bit
+# divider inputs, declared as scalars.
+port_contract:
+  slaves:
+    []
+  masters:
+    - { name: SPI, protocol: spi }
+  scalars:
+    - { name: UART_CONTROL, dir: in, width: "31 downto 0" }
+    - { name: UART_BAUD_DIV, dir: in, width: "31 downto 0" }
+    - { name: UART_DATA, dir: in, width: "31 downto 0" }
+    - { name: UART_DATA_VLD, dir: in, width: "1" }
+    - { name: UART_TX_O, dir: out, width: "1" }
+    - { name: I2C_CONTROL, dir: in, width: "31 downto 0" }
+    - { name: I2C_CLK_DIV, dir: in, width: "31 downto 0" }
+    - { name: I2C_DATA, dir: in, width: "31 downto 0" }
+    - { name: I2C_DATA_VLD, dir: in, width: "1" }
+    - { name: I2C_SCL_O, dir: out, width: "1" }
+    - { name: I2C_SCL_T, dir: out, width: "1" }
+    - { name: I2C_SDA_O, dir: out, width: "1" }
+    - { name: I2C_SDA_T, dir: out, width: "1" }
+    - { name: SPI_CONTROL, dir: in, width: "31 downto 0" }
+    - { name: SPI_CLK_DIV, dir: in, width: "31 downto 0" }
+    - { name: SPI_DATA, dir: in, width: "31 downto 0" }
+    - { name: SPI_DATA_VLD, dir: in, width: "1" }
+    - { name: EDGE_CONTROL, dir: in, width: "31 downto 0" }
+    - { name: EDGE_O, dir: out, width: "1" }
+  clocks:
+    - { name: CLK }
+  resets:
+    - { name: RST, polarity: active_high }
+
+parameters:
+  - { name: G_CLK_HZ, type: positive, default: "100_000_000" }
+
+functional_contract:
+
+  # ── UART TX generator ────────────────────────────────────────────────
+  - id: STIM-REQ-1
+    kind: behavioral
+    desc: >-
+      With CONTROL[0]=1 and UART_DATA written while idle, UART_TX_O emits
+      a correct 8N1 LSB-first frame (start=0, 8 data bits matching the
+      written byte, stop=1) at the configured BAUD_DIV bit period.
+      Observed at `SRC_UART_TX`: hw/sim/tb_stimulus_gen_loop.vhd:145 wires UART_TX_O to stim_uart_tx_w,
+      :182 feeds it to ds_emio_mux UART0_TX, and ds_emio_mux.vhd:149 gives
+      SRC_UART_TX = UART0_TX when EMIO_MUX_SEL(1) = '1' (the tests set it,
+      _stim_common.py:80).
+
+  - id: STIM-REQ-13
+    kind: behavioral
+    desc: >-
+      Break pattern. With CONTROL[0]=1 and CONTROL[1]=1, a UART_DATA write while
+      idle sends DATA[15:0] breaks (0 = 1): each holds UART_TX_O low for
+      CONTROL[15:8] bit-times (0 = 1), then high for one bit-time, at the
+      configured BAUD_DIV; the line idles high afterwards. With CONTROL[1]=0 the
+      generator sends 8N1 frames exactly as before. Purpose: with 13 or more low
+      bit-times no UART format fits, so an autoSync calibration of the UART
+      datalogger fails and reports CALIBRATION_TIMEOUT on silicon.
+      Observed at the UART datalogger's `UART_IN` on the Zybo core seam
+      (tb_stimulus_core_seam_zybo.vhd, G_STIM_DRIVES_EMIO true): UART_TX_O =>
+      stim_uart_tx_w (deepskopion_core.vhd:1782); emio_uart_tx_w = stim_uart_tx_w
+      when STIM_UART_CONTROL(0) = '1' (:928, :931); uart0_tx_w = emio_uart_tx_w
+      when EMIO_MUX_SEL(9) = '0' (:947); ds_emio_mux SRC_UART_TX = UART0_TX when
+      EMIO_MUX_SEL(1) = '1' (ds_emio_mux.vhd:149) => src_uart_tx_w (:1052);
+      board_pin(JB0) = src_uart_tx_w (:1081) = capture_pin(36) (:1157,
+      datalogger_config_pkg.vhd:102); UART_IN = mappedUART(0), its glitch-filtered
+      copy (datalogger_gather.vhd:372, :389).
+
+  - id: STIM-REQ-2
+    kind: behavioral
+    desc: >-
+      With CONTROL[0]=0 (disabled), UART_TX_O idles high regardless of any
+      pending DATA write — the disabled generator never drives a frame.
+      Observed at `SRC_UART_TX`, the same path as STIM-REQ-1 (hw/sim/tb_stimulus_gen_loop.vhd:145,
+      :182; ds_emio_mux.vhd:149, EMIO_MUX_SEL(1) = '1').
+
+  # ── I2C master generator ─────────────────────────────────────────────
+  - id: STIM-REQ-3
+    kind: behavioral
+    desc: >-
+      With CONTROL[0]=1, CONTROL[7:1]=target address and I2C_DATA written
+      while idle, the generator emits START, the 7-bit address + W(0),
+      releases SDA for the address-ACK slot, shifts out the DATA byte
+      MSB-first, releases SDA for the data-ACK slot, then STOP — a
+      complete, protocol-correct I2C write transaction on the open-drain
+      bus.
+      Observed on the open-drain bus `I2C0_BUS_SDA` / `I2C0_BUS_SCL`:
+      hw/sim/tb_stimulus_gen_loop.vhd:150-153 wire I2C_SCL_O/T and I2C_SDA_O/T to ds_emio_mux
+      I2C0_SCL_O/T and I2C0_SDA_O/T (:183-186); ds_emio_mux.vhd:120-124 drive
+      the bus low iff a driver pulls low (T = '0' and O = '0'), else high, so
+      the bus equals the generator's drive wherever the target does not pull
+      SDA low (the ACK slots); no mux bit gates it.
+
+  - id: STIM-REQ-4
+    kind: behavioral
+    desc: >-
+      A full STIM-REQ-3 transaction against an ENABLED i2c_injector
+      (matching address) is ACKed by the responder (SDA driven low by the
+      injector on `I2C0_BUS_SDA` during both ACK slots) and the byte the generator sent is
+      NOT interpreted as a read response — i.e. the responder's own FIFO
+      state is unaffected by a master WRITE.
+
+  - id: STIM-REQ-9
+    kind: behavioral
+    desc: >-
+      INPUT DOMAIN. `STIM_I2C_CONTROL`[9:8] advertises byte_count-1 in the range
+      0..3 and `STIM_I2C_DATA` packs that many bytes little-endian (the first wire
+      byte in [7:0]). One DATA register write with address 0x50, count 3 and
+      I2C_DATA=0x003ECDAB emits exactly START, address+W, AB, CD, 3E, STOP;
+      the address and every data byte have one intervening released ACK slot.
+
+  - id: STIM-REQ-10
+    kind: negative
+    desc: >-
+      A multi-byte I2C DATA register write NEVER inserts STOP/START between
+      packed bytes and NEVER repeats the address. Restoring the historical
+      one-byte-then-STOP behavior must fail the shared transaction oracle.
+
+  # ── SPI master generator ─────────────────────────────────────────────
+  - id: STIM-REQ-5
+    kind: behavioral
+    desc: >-
+      With CONTROL[0]=1 and SPI_DATA written while idle, the generator
+      asserts SS_O low, shifts SPI_DATA out on MOSI_O MSB-first across 8
+      SCLK_O rising edges (mode 0: CPOL=0/CPHA=0), then releases SS_O —
+      a complete, protocol-correct SPI transfer frame.
+      Observed at `SPI0_BUS_SCLK`, `SPI0_BUS_MOSI` and `SPI0_CS_GPIO`:
+      hw/sim/tb_stimulus_gen_loop.vhd:158-160 wire SPI_SCLK_O, SPI_MOSI_O and SPI_SS_O; ds_emio_mux.vhd:127-129
+      pass SCLK and MOSI to the bus unconditionally, and hw/sim/tb_stimulus_gen_loop.vhd:165 gives
+      SPI0_CS_GPIO = SPI_SS_O.
+
+  - id: STIM-REQ-6
+    kind: behavioral
+    desc: >-
+      A full STIM-REQ-5 transfer against an ENABLED spi_injector preloaded
+      with a response byte drives that byte back on the resolved
+      `SPI0_BUS_MISO` line while CS is asserted (spi0_cs_gpio_w low) — the
+      generator's CS framing is compatible with the responder's CS_N
+      source (the EMIO-GPIO leg, not the native SPI0_SS_O — DS-T2.16).
+
+  # ── Edge/pulse source ────────────────────────────────────────────────
+  - id: STIM-REQ-7
+    kind: behavioral
+    desc: >-
+      With EDGE_CONTROL[0]=1, `SRC_EDGE_OUT`/`CAPTURE_EDGE0` free-runs as a 50% duty toggle whose
+      half-period (in clk_sys cycles) matches EDGE_CONTROL[19:4]; with
+      EDGE_CONTROL[0]=0, EDGE_O stays low regardless of prior state.
+
+  - id: STIM-REQ-11
+    kind: behavioral
+    desc: >-
+      With EDGE_CONTROL[1:0]=11, EDGE_O emits the finite canonical vector
+      (10000 ns,1), (10200 ns,0), (10520 ns,1), (10800 ns,0), then holds
+      low. Every transition is on the advertised sample-clock grid at both
+      supported 50 MHz Intel and 100 MHz Xilinx clocks.
+      Observed at `CAPTURE_EDGE0`: hw/sim/tb_stimulus_gen_loop.vhd:162 wires EDGE_O to stim_edge_w and
+      :166 gives CAPTURE_EDGE0 = stim_edge_w when STIM_EDGE_SEL = '1' (the test
+      sets it).
+
+  - id: STIM-REQ-12
+    kind: negative
+    desc: >-
+      Finite canonical EDGE mode NEVER emits a fifth transition and NEVER
+      substitutes a free-running periodic tail. A changed level, interval,
+      missing transition, or extra transition must fail the shared CaptureCase
+      and Xilinx edge-to-DDR baseline binding.
+
+  # ── EMIO_MUX_SEL self-test tap (deepskopion_core integration) ────────
+  - id: STIM-REQ-8
+    kind: invariant
+    desc: >-
+      The v1 write-strobe idiom NEVER queues more than one pending
+      transaction: a DATA write that lands while the corresponding
+      generator is mid-frame/mid-transaction is dropped (ignored), not
+      buffered or glitched onto the output mid-frame.
+
+  # ── Core-seam requirements (hw/sim/cocotb/tests/stimulus/core_seam/) ──
+  # These prove the regbank -> deepskopion_core -> ds_stimulus_gen wiring
+  # ITSELF against the REAL tich.deepskopion_core (tb_stimulus_core_seam.
+  # vhd), not just ds_stimulus_gen in isolation against
+  # tb_stimulus_gen_loop.vhd (which the STIM-REQ-N ids above cover). DS-
+  # P2.100 landing-review (fourth pass) Finding 5: these were referenced
+  # by @requires() before this revision but absent from this catalog, so
+  # `rr sim coverage-map` never saw the only tests that compile
+  # deepskopion_core.
+  - id: STIM-SEAM-REQ-1
+    kind: behavioral
+    desc: >-
+      The regbank -> C_INDEX_STIM_EDGE_CONTROL unpack -> ds_stimulus_gen
+      -> DE25-top-mirrored loopback -> ds_emio_mux EMIO_MUX_SEL bit[7]
+      priority chain reaches deepskopion_core's `PROBE_CAPTURE_EDGE0` tap (internal capture_pin(42))
+      when bit[7]=1, and is gated OFF (does not leak through) when bit[7]=0.
+
+  - id: STIM-SEAM-REQ-2
+    kind: behavioral
+    desc: >-
+      The regbank -> C_INDEX_STIM_UART_* unpack -> ds_stimulus_gen UART TX
+      -> DE25-top-mirrored loopback (stim_uart_tx_o -> emio_uart_tx_i)
+      reaches deepskopion_core's `PROBE_CAPTURE_UART36` tap (internal capture_pin(36)) as a correct
+      8N1 frame, end to end through the real regbank on the real core.
+
+  - id: STIM-SEAM-REQ-3
+    kind: behavioral
+    desc: >-
+      The regbank -> C_INDEX_STIM_I2C_* unpack (including the
+      stim_i2c_data_vld_w write-strobe tap) -> ds_stimulus_gen I2C master
+      -> DE25-top-mirrored loopback reaches deepskopion_core's own
+      `PROBE_CAPTURE_I2C_SCL`/`PROBE_CAPTURE_I2C_SDA` taps (internal capture_pin(12)/(13)) as a real START condition, end to end
+      through the real regbank on the real core.
+
+  - id: STIM-SEAM-REQ-4
+    kind: behavioral
+    desc: >-
+      The regbank -> C_INDEX_STIM_SPI_* unpack -> ds_stimulus_gen SPI
+      master -> DE25-top-mirrored loopback reaches deepskopion_core's
+      `PROBE_CAPTURE_SPI_CS` tap (internal capture_pin(20)) via the REAL GPIO-CS decode chain
+      (spi0_cs_gpio_w <= gpio_o_w(0) when gpio_t_w(0)='0' else '1',
+      deepskopion_core.vhd:981 — DS-T2.16/STIM-REQ-6's actual silicon CS
+      source), asserting for the duration of the transfer — not just the
+      dead native SPI0_SS_O.
+
+  # DS-P1.90: the Zynq wiring (deepskopion_top.vhd, G_STIM_DRIVES_EMIO true),
+  # where the emio_* legs come from the PS EMIO and stim_*_o has no top-level
+  # consumer. Proven against tb_stimulus_core_seam_zybo.vhd.
+  - id: STIM-SEAM-REQ-5
+    kind: behavioral
+    desc: >-
+      With G_STIM_DRIVES_EMIO true, while a protocol's STIM_*_CONTROL bit[0]
+      is set the generator drives that protocol's EMIO legs inside the core
+      (UART TX; I2C SCL/SDA output and tristate; SPI SCLK, MOSI, SS and the
+      GPIO chip-select), and the PS EMIO level on those legs does not reach
+      the capture pins.
+
+  - id: STIM-SEAM-REQ-6
+    kind: behavioral
+    desc: >-
+      With G_STIM_DRIVES_EMIO true and a protocol's STIM_*_CONTROL bit[0]
+      clear, that protocol's capture pins follow the PS EMIO legs exactly as
+      before DS-P1.90, including after the bit has been set and cleared
+      again.
+
+  - id: STIM-SEAM-REQ-7
+    kind: behavioral
+    desc: >-
+      With G_STIM_DRIVES_EMIO true, the finite canonical edge vector
+      (STIM_EDGE_CONTROL 0x3, EMIO_MUX_SEL bit[7]) reaches deepskopion_core's
+      `PROBE_CAPTURE_EDGE0` tap (internal capture_pin(42))
+      with the levels 1,0,1,0 and the inter-transition deltas 200, 320 and
+      280 ns of de_c0_stimulus_contract.EDGE_TRANSITIONS, and no periodic
+      tail.

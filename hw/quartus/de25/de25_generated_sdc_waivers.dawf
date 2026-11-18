@@ -1,0 +1,134 @@
+# SPDX-FileCopyrightText: 2026 Daniel J. Mazure
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+#
+# DS-T1.20 — Design Assistant waivers for the 22 TMC-20025 "Ignored or
+# Overridden Constraints" rows of the DE25 signoff STA.
+#
+# Every row comes from an SDC this project does not author: the HPS EMIF and
+# fabric IOPLL SDCs that Quartus generates from ip/, and the RouteRTL board
+# file boards/de25-standard/master.sdc. Each waiver states why ignoring that
+# row changes no timing path on THIS topology. The proof is a read-only STA
+# query on the routed DE25 netlist (docs/DS-T1.20-de25-generated-sdc-evidence.md).
+#
+# Each waiver matches one exact SDC file:line plus the exact reason that
+# TimeQuest reports. It does not match a whole file or a wildcard. If an IP
+# regeneration moves a line, or a new ignored constraint appears, that row is
+# NOT waived and hw/quartus/de25/ds_drc_evidence_impl.tcl fails the build.
+#
+# hw/quartus/de25/de25_project_options.tcl stages this file into the Quartus
+# project directory and registers it as DESIGN_ASSISTANT_WAIVER_FILE.
+
+# EMIF line 308: set_false_path -from [get_clocks <inst>_lane_<n>_byte_rx_gated]
+# for lanes 0..6. Each byte_rx_gated clock targets one hard IO96B byte-lane node
+# with fanout 0, and report_timing -from that clock finds no paths. The DDR4
+# EMIF is HPS-owned and its read capture is calibrated in hard logic, so no
+# fabric register is clocked by these clocks.
+::drc::add_waiver \
+	-description {DS-T1.20: HPS IO96B EMIF lane_<n>_byte_rx_gated clocks have fanout 0 (no fabric register); the false path cuts no path on this topology.} \
+	-rule_id {TMC-20025} \
+	-query_string {Location == 'emif_io96b_hps_emif_io96b_hps_411_hvwmgyq_emif_0_ddr4comp_emif_io96b_ddr4comp_411_6ixyy2i.sdc:308' && Reason == 'Exception is invalid (covers no paths)'} \
+	-stages {{Timing Signoff}} \
+	-tag {DS-T1.20} \
+	-owner {deepskopion} \
+	-no_warn
+
+# EMIF line 322: set_false_path -from [get_clocks <inst>_DDR4_DQS[n]_nff] for
+# DQS 0..3. Each _nff clock targets one hard byte-lane dqsn register with fanout
+# 0, and report_timing -from that clock finds no paths.
+::drc::add_waiver \
+	-description {DS-T1.20: HPS IO96B EMIF DDR4_DQS[n]_nff clocks have fanout 0 (hard byte-lane node only); the false path cuts no path on this topology.} \
+	-rule_id {TMC-20025} \
+	-query_string {Location == 'emif_io96b_hps_emif_io96b_hps_411_hvwmgyq_emif_0_ddr4comp_emif_io96b_ddr4comp_411_6ixyy2i.sdc:322' && Reason == 'Exception is invalid (covers no paths)'} \
+	-stages {{Timing Signoff}} \
+	-tag {DS-T1.20} \
+	-owner {deepskopion} \
+	-no_warn
+
+# EMIF line 270: set_false_path -to [get_ports DDR4_DQS[n]], DQS 0..3. The same
+# SDC at line 400 applies set_false_path -to [get_keepers {DDR4_DQS_n[0..3]
+# DDR4_DQS[0..3]}] (the wclk pin list), which TimeQuest reports as Complete.
+# Every path that line 270 names is therefore already cut.
+::drc::add_waiver \
+	-description {DS-T1.20: -to DDR4_DQS[n] is fully covered by the same EMIF SDC line 400 false path -to all DQS/DQS_n keepers (Complete); no path changes.} \
+	-rule_id {TMC-20025} \
+	-query_string {Location == 'emif_io96b_hps_emif_io96b_hps_411_hvwmgyq_emif_0_ddr4comp_emif_io96b_ddr4comp_411_6ixyy2i.sdc:270' && Reason == 'Exception is fully overridden'} \
+	-stages {{Timing Signoff}} \
+	-tag {DS-T1.20} \
+	-owner {deepskopion} \
+	-no_warn
+
+# EMIF line 271: set_false_path -from [get_ports DDR4_DQS[n]], DQS 0..3. The
+# same SDC at line 404 applies set_false_path -from [get_keepers
+# {DDR4_DQS_n[0..3] DDR4_DQS[0..3]}] (the rclk pin list), which TimeQuest
+# reports as Complete.
+::drc::add_waiver \
+	-description {DS-T1.20: -from DDR4_DQS[n] is fully covered by the same EMIF SDC line 404 false path -from all DQS/DQS_n keepers (Complete); no path changes.} \
+	-rule_id {TMC-20025} \
+	-query_string {Location == 'emif_io96b_hps_emif_io96b_hps_411_hvwmgyq_emif_0_ddr4comp_emif_io96b_ddr4comp_411_6ixyy2i.sdc:271' && Reason == 'Exception is fully overridden'} \
+	-stages {{Timing Signoff}} \
+	-tag {DS-T1.20} \
+	-owner {deepskopion} \
+	-no_warn
+
+# EMIF line 419: set_false_path -from [get_keepers DDR4_RESET_n]. DDR4_RESET_n
+# is an output-only port (get_port_info: output 1, input 0), so no path starts
+# there. Line 418 cuts the -to side, which TimeQuest reports as Complete.
+::drc::add_waiver \
+	-description {DS-T1.20: DDR4_RESET_n is an output-only port, so a -from false path cuts nothing; the -to cut at line 418 is Complete.} \
+	-rule_id {TMC-20025} \
+	-query_string {Location == 'emif_io96b_hps_emif_io96b_hps_411_hvwmgyq_emif_0_ddr4comp_emif_io96b_ddr4comp_411_6ixyy2i.sdc:419' && Reason == 'Exception is invalid (covers no paths)'} \
+	-stages {{Timing Signoff}} \
+	-tag {DS-T1.20} \
+	-owner {deepskopion} \
+	-no_warn
+
+# IOPLL line 226: set_false_path -through <inst>|tennm_ph2_iopll|reset.
+# deepskopion_de25_top ties the PLL reset to '0' (u_fabric_pll rst => '0'), so
+# the reset pin has 0 fan-in in the timing netlist and no path passes through it.
+::drc::add_waiver \
+	-description {DS-T1.20: fabric IOPLL reset is tied to constant 0 in deepskopion_de25_top (0 fan-in); the -through false path cuts no path.} \
+	-rule_id {TMC-20025} \
+	-query_string {Location == 'de25_fabric_pll_altera_iopll_2100_k3rqvda.sdc:226' && Reason == 'Exception is invalid (covers no paths)'} \
+	-stages {{Timing Signoff}} \
+	-tag {DS-T1.20} \
+	-owner {deepskopion} \
+	-no_warn
+
+# master.sdc line 36 (RouteRTL board file): create_clock CLOCK2_50 20.000 ns.
+# The IOPLL SDC is read first and already puts u_fabric_pll|de25_fabric_pll_refclk
+# on port CLOCK2_50 with the same 20.000 ns period, so the dropped board clock
+# is an exact duplicate and no path loses its clock. RTL-P2.1680 (routertl) owns
+# the board-file guard. When it lands this row goes away and this waiver
+# matches nothing.
+::drc::add_waiver \
+	-description {DS-T1.20: CLOCK2_50 already carries the IOPLL refclk at the same 20.000 ns period; the dropped board create_clock is a duplicate. Board-file fix: RTL-P2.1680.} \
+	-rule_id {TMC-20025} \
+	-query_string {Location == 'master.sdc:36' && Reason == 'Assignment contains errors and will not be analyzed. Verify that the assignment is entered correctly.'} \
+	-stages {{Timing Signoff}} \
+	-tag {DS-T1.20} \
+	-owner {deepskopion} \
+	-no_warn
+
+# Reset-release IP line 32: set_clock_groups -asynchronous -group internal_clk.
+# internal_clk is the clock that line 30 of the same generated SDC puts on the
+# SDM user-reset register (auto_fab...|sdm_gpo_out_user_reset~internal_ctrl_clock.reg).
+# Design Assistant reports this row as "covers no paths" on the DS-P1.80 image
+# (queue job 6bb84e3bdf9a). STA contradicts that: the constraint is applied and
+# is the only cut on internal_clk -> u_reset|init_sync_r[0] (2 setup, 2 hold).
+# With every clock group removed and only default_jtag.sdc:27 re-applied, those
+# 4 paths become timed; with only this line re-applied, they are cut again
+# (docs/DS-T1.20-de25-generated-sdc-evidence.md, query q3). init_sync_r[0] is
+# the first stage of the DS-P1.80 reset synchronizer, so an untimed asynchronous
+# source into it is the intended shape. The waiver silences the report row
+# only; the constraint stays in force. The waiver is provisional (DS-P3.194):
+# ds_drc_evidence_impl.tcl lists this Location and Reason in
+# ds_provisional_tmc_20025 and fails the build once a report no longer lists the
+# row, so the waiver and that entry are removed together.
+::drc::add_waiver \
+	-description {DS-T1.20: internal_clk clock group is applied and is the only cut on internal_clk -> u_reset|init_sync_r[0] (DS-P1.80 synchronizer first stage, intended async); Design Assistant 'covers no paths' contradicts STA (proof q3). Re-check: DS-P3.194.} \
+	-rule_id {TMC-20025} \
+	-query_string {Location == 'altera_s10_user_rst_clkgate_fm.sdc:32' && Reason == 'Exception is invalid (covers no paths)'} \
+	-stages {{Timing Signoff}} \
+	-tag {DS-T1.20} \
+	-owner {deepskopion} \
+	-no_warn

@@ -1,0 +1,58 @@
+# timestamp_sync — Requirements catalog (contract-first per ROUTERTL convention)
+#
+# Periodic timestamp-tick emitter — fires a TS_MSG whenever the upper
+# slice of TIMESTAMP changes (configurable bit position via
+# G_TIMESTAMP_BIT). Used by datalogger_gather to mark wall-clock anchors
+# in the BURST output stream.
+#
+# LIFECYCLE EXEMPTION (DS-P3.90 Phase 1): timestamp_sync is EXEMPT from the
+# uniform ENABLED/DISABLED lifecycle frame. It is an infrastructure heartbeat,
+# and its payload already uses event type "100" with a low byte spanning
+# {0x00,0x40,0x80,0xC0} — so a DISABLED=0x00 frame would collide. The heartbeat
+# cadence itself IS the liveness signal (it only ticks while enabled). See
+# docs/standards/datalogger_compliance_checklist.md §10 (L5).
+#
+# Each TS-REQ-N below is referenced by ≥1 cocotb test in
+# hw/sim/cocotb/tests/datalogger/infra/test_timestamp_sync.py via @requires().
+#
+# v0.1 SCOPE: one provable REQ (reset determinism). Follow-on
+# (DS-P3.<a>) will add the tick-slice REQs: TS-REQ-1 (emit on slice
+# change), TS-REQ-2 (no emit on sub-slice changes), TS-REQ-3
+# (timestamp field in message matches TIMESTAMP[15:0] at fire cycle).
+
+ip: timestamp_sync
+version: 0.1
+schema_version: 1
+
+port_contract:
+  slaves: []
+  masters: []
+  scalars:
+    - { name: CONFIG,     dir: in,  width: "G_CONFIG_WIDTH - 1 downto 0" }
+    - { name: TIMESTAMP,  dir: in,  width: "G_TIMESTAMP_WIDTH - 1 downto 0" }
+    - { name: TS_MSG_OUT, dir: out, width: "C_DATALOGGER_MSG_WIDTH - 1 downto 0" }
+    - { name: TS_MSG_VLD, dir: out, width: "1" }
+    - { name: TS_MSG_RDY, dir: in,  width: "1" }
+    - { name: TS_ERRORS,  dir: out, width: "G_TS_ERROR_WIDTH - 1 downto 0" }
+  clocks:
+    - { name: CLK }
+  resets:
+    - { name: RST, polarity: active_high }
+
+parameters:
+  - { name: G_TS_ID_WIDTH,     default: 5 }
+  - { name: G_TS_DEV_ID,       default: 28 }
+  - { name: G_TIMESTAMP_WIDTH, default: 32 }
+  - { name: G_CONFIG_WIDTH,    default: 16 }
+  - { name: G_TIMESTAMP_BIT,   default: 14 }
+  - { name: G_TIMESTAMP_SLICE, default: 18 }
+  - { name: G_TS_ERROR_WIDTH,  default: 1 }
+
+functional_contract:
+  - id: TS-REQ-50
+    kind: behavioral
+    desc: >-
+      On RST='1' (active high), `TS_MSG_VLD` is held low. After
+      RST de-assert with `TIMESTAMP` held steady (no slice-bit
+      transitions), the module remains quiescent — no spurious
+      message emission during the post-reset idle window.

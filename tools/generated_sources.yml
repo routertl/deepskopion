@@ -1,0 +1,79 @@
+# DS-X2 (DS-P1.31) — generated-source reconstruction contract.
+#
+# `tools/generated_source_contract.py` consumes this file.  Keep the output
+# inventory here (rather than duplicating it in tests) so a new generated file
+# cannot silently fall outside the clean-room and drift checks.
+schema_version: 1
+
+tracked_families:
+  datalogger:
+    producer: tools/datalogger-builder/datalogger_gather_gen.py
+    outputs:
+      - path: hw/rtl/pkg/datalogger_config_pkg.vhd
+        candidate: pkg/datalogger_config_pkg.vhd
+      - path: hw/rtl/datalogger/infra/datalogger_gather/datalogger_gather.vhd
+        candidate: rtl/datalogger_gather.vhd
+      - path: hw/rtl/regbank/config_schema.hex
+        candidate: regbank/config_schema.hex
+
+  regbank-schema:
+    producer: tools/regen_regbank.sh
+    outputs:
+      - path: hw/rtl/regbank/regbank_schema.bin
+        candidate: regbank/regbank_schema.bin
+      - path: hw/rtl/regbank/regbank_schema.hex
+        candidate: regbank/regbank_schema.hex
+
+  regbank-rtl:
+    producer: tools/regen_regbank.sh
+    outputs:
+      - path: hw/rtl/pkg/system_regbank_pkg.vhd
+        candidate: pkg/system_regbank_pkg.vhd
+      - path: hw/rtl/regbank/system_regbank.vhd
+        candidate: regbank/system_regbank.vhd
+
+# These fields describe the build invocation, not the generated design.  A
+# clean clone is allowed to choose new values, but an incremental synth -> impl
+# -> bitstream sequence must preserve the first values (the regbank wrapper's
+# substance-aware install does that).  Drift comparison masks ONLY these lines.
+#
+# DS-P2.231: rom_info_pkg.vhd is no longer tracked (it is a runtime output,
+# below), so these rules no longer excuse git dirt. They are kept for the one
+# job that remains: the stage stamp, so a second queued stage of the same
+# build reinstalls the first stage's values instead of a new date.
+volatile_lines:
+  hw/rtl/pkg/rom_info_pkg.vhd:
+    - field: generated_at
+      pattern: '^-- File created @.*$'
+    - field: git_hash
+      pattern: '^\s*constant C_GIT_HASH\s*:.*$'
+    - field: system_version_dirty_bit
+      pattern: '^\s*constant C_SYSTEM_VERSION\s*:.*$'
+    - field: build_date
+      pattern: '^\s*constant C_BUILD_DATE\s*:.*$'
+  build/zybo_datalogger/project/deepskopion.gen/sources_1/bd/deepskopion_bd/hdl/deepskopion_bd_wrapper.vhd:
+    - field: vivado_generated_at
+      pattern: '^--Date\s*:.*$'
+
+runtime_families:
+  # DS-P2.231: build metadata (git hash, system version, build date, regbank
+  # word counts). Written by tools/regen_regbank.sh: the pre_build
+  # regbank-regen hook (full regeneration) and the pre_sim rom-info-sim hook
+  # (--rom-info-only). Gitignored, so a build leaves the clone clean.
+  rom-info:
+    hook: regbank-regen
+    outputs:
+      - hw/rtl/pkg/rom_info_pkg.vhd
+
+  rea-build-id:
+    hook: rr_rea_build_id
+    outputs:
+      - generated/rr_rea_build_id_pkg.vhd
+
+  block-design:
+    tcl_hook: hw/bd/deepskopion_bd.tcl
+    # Vivado owns these files, so they remain untracked.  Their presence after
+    # `rr project run --from-clean` proves the TCL recipe actually executed.
+    outputs:
+      - build/zybo_datalogger/project/deepskopion.srcs/sources_1/bd/deepskopion_bd/deepskopion_bd.bd
+      - build/zybo_datalogger/project/deepskopion.gen/sources_1/bd/deepskopion_bd/hdl/deepskopion_bd_wrapper.vhd

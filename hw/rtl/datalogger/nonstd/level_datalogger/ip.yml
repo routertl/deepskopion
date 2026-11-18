@@ -1,0 +1,43 @@
+# level_datalogger — Multi-line static-level datalogger
+#
+# Captures the static logic level (HIGH / LOW) on a vector of input
+# pins (C_LEVEL_INJ_PINS wide). Sibling to edge_datalogger under the
+# nonstd/ family — non-protocol dataloggers used for general-purpose
+# logic-analyzer / level-state observation.
+#
+# Last landing in the DS-P2.33 → DS-P3.22 contract-first sweep. See
+# docs/standards/datalogger_compliance_checklist.md section 8b.
+
+ip:
+  name: level_datalogger
+  library: tich
+  language: vhdl
+  description: |
+    Multi-line level-state datalogger. Observes the static level on
+    C_LEVEL_INJ_PINS-wide vector and emits a message when the
+    observed state changes (per CONFIG semantics). Companion to
+    edge_datalogger for non-protocol logic-analyzer-class capture.
+
+hdl:
+  top_module: level_datalogger
+  top_sim:    level_datalogger
+
+paths:
+  sources: .
+
+synthesis:
+  mode: rtl
+  sources:
+    - level_datalogger.vhd
+
+build:
+  simulation:
+    sources: []
+    test_dir: ../../../../sim/cocotb/tests/datalogger/nonstd/level_datalogger
+    simulator: nvc
+    waves:
+      formats: [fst]
+
+requirements: requirements.yml
+
+ips: []

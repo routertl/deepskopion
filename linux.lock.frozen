@@ -1,0 +1,69 @@
+# Frozen Linux build lock — the known-good provenance reference.
+#
+# Written by tools/freeze_linux_lock.py, which strips the project-root
+# prefix so no tracked file names the bench it was built on (DS-P1.27 /
+# DS-X1). Refresh with that tool, never `cp out/linux.lock` — a raw copy
+# re-imports absolute build-tree paths and the pre-commit guard will
+# refuse the commit. Diff with `tools/freeze_linux_lock.py --check`.
+#
+# `rr linux lock --diff` compares the RAW live lock, so it reports
+# build.kernel_initramfs_source as drift on every machine (the kernel
+# .config records it absolute). That one delta is the machine prefix,
+# not an input change; --check is prefix-blind and is the real answer.
+version: 3
+generated_at: '2026-06-20T11:31:58+00:00'
+git:
+  project: 8ad5b9d7be3e5ac4e4e2e4eefe080b0e1764af92
+  routertl: cecedd2b664234711ff9546563b789843252091e
+sources:
+  u-boot-xlnx:
+    url: https://github.com/Xilinx/u-boot-xlnx
+    branch: master
+    commit: a87a5c15c1c359ecd75133e63c3bf76cab19d127
+  linux-xlnx:
+    url: https://github.com/Xilinx/linux-xlnx
+    branch: xlnx_rebase_v6.6_LTS
+    commit: f5fffda2f301003724f1f54691fd44983137a56c
+build:
+  first_stage: xilinx-fsbl
+  first_stage_source: project.yml linux.first_stage
+  uboot_device_tree: zynq-zc706
+  uboot_defconfig: xilinx_zynq_virt_defconfig
+  uboot_config_patches:
+  - CONFIG_OF_EMBED=y
+  - CONFIG_OF_BOARD=n
+  kernel_defconfig: xilinx_zynq_defconfig
+  kernel_config_fragments:
+  - sw/linux/out/initramfs.config-fragment
+  - sw/linux/out/kernel_ctucanfd.config-fragment
+  - sw/linux/out/kernel_emio.config-fragment
+  kernel_initramfs_source: sw/linux/out/rootfs sw/linux/out/initramfs_devices.list
+  board_preset_sha: 07a63c5394432186a42fd7d69134079e96cd1511
+  ps7_hooks_shas:
+  - path: hw/bd/ds_hp2_off.tcl
+    sha: 9cdd218bd569a939e14d468482d049926c96dafd
+  - path: hw/bd/ds_irq_f2p_on.tcl
+    sha: 24c48fe9b60e340d4fcde8b0481f3fc231551495
+  - path: hw/bd/ds_emio_uart_i2c_spi.tcl
+    sha: b291e086450a1be177e809915820b0b244ba4251
+  - path: hw/bd/ds_emio_can.tcl
+    sha: 5f51f51438010e431184a38c4ee17370069639be
+artefacts:
+  fsbl.elf:
+    sha256: a5d379fdda1e1d6522d1a26d60c7173040eca0611340d0f65803186f239ea699
+    size: 654160
+  u-boot.elf:
+    sha256: 15eda5d11ad4dda20152aaa93fa62164a7f2f331ce9aeb42b2c9158d8dc90ac4
+    size: 8820028
+  uImage:
+    sha256: 400932d88ccc2271aa51537c62f3dd748d4985c518be7d2383bf2bd84708030e
+    size: 24305632
+  system.dtb:
+    sha256: 79ff29344209875489c5501fc408f2be0ee6e01dd1d67d6dc0e6562e8512541d
+    size: 12090
+  BOOT.bin:
+    sha256: 5ee9b3508f5406c0236370c3236a4bbe145446f7d8315b143ced83ec25209303
+    size: 5271100
+  bitstream/deepskopion.bit:
+    sha256: 13e2eb62a42895a9f3454fd1d58b825fdf7998c303581b96dad37b47bdd7f310
+    size: 4045675

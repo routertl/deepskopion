@@ -1,0 +1,746 @@
+{
+  "contract": "wave_stream_v1",
+  "contract_revision": "2.8.2",
+  "protocol_version": "wave_stream_v1",
+  "digest_schema": "wave_stream_digest_v1",
+  "compatibility_policy": {
+    "unknown_tag": "SKIP the frame and keep the session alive. Never ERR, never close. A tag this build does not know is a producer speaking a newer revision, not a corrupt stream.",
+    "tag_registry": "APPEND-ONLY. A tag number, once published in TAGS, is frozen to its meaning forever; it may never be reused or renumbered. Adding a tag is NOT a breaking change (see unknown_tag) \u2014 renumbering one is, and it is the change no consumer can detect. This is the D.14 rule.",
+    "unknown_key": "IGNORE it. Adding an optional map key to an existing frame is additive and non-breaking. A consumer MUST NOT fail on a key it does not know, so the required-key set below is the whole of what a consumer may rely on.",
+    "unknown_enum_member": "FALL BACK to the documented default for that field (channel `type` -> Signal, `role` -> Wire, `radix` -> Hexadecimal). This is what RouteWave already does, so a producer that invents a member gets SILENT fallback -- which is why unregistered members are a contract violation on the PRODUCER side even though they are survivable on the consumer side.",
+    "unknown_kind": "RENDER it generically. Annotation `kind` is a free-form producer string; a consumer groups and filters on it but never interprets it. A kind REGISTERED in ANNOTATION_PAYLOAD below must carry its registered role keys \u2014 that key set is the cross-repo contract.",
+    "body_schema": "SKIP the frame. A frame that carries its own body-schema string (DIGEST) versions its body independently of the wire tag; a consumer that does not implement the body revision skips that frame only.",
+    "version_mismatch": "FATAL, and the only fatal incompatibility. A HELO.ver whose value this side does not implement ends the session: answer ERR {code: VERSION_MISMATCH} and close. Guessing at an unknown wire version is how a green session stops meaning what it says."
+  },
+  "tags": {
+    "0": {
+      "name": "HELO",
+      "direction": "p2c",
+      "payload": {
+        "req": {
+          "ver": "str",
+          "producer": "str",
+          "sample_clk_hz": "uint",
+          "channels": "list",
+          "channel_total_bits": "uint"
+        },
+        "opt": {
+          "sample_width": "uint"
+        }
+      }
+    },
+    "1": {
+      "name": "HELO_OK",
+      "direction": "c2p",
+      "payload": {
+        "req": {},
+        "opt": {
+          "consumer": "str",
+          "max_rate_hint_hz": "uint"
+        }
+      }
+    },
+    "2": {
+      "name": "SAMPLES",
+      "direction": "p2c",
+      "payload": {
+        "req": {
+          "seq": "uint",
+          "samples": "list"
+        },
+        "opt": {}
+      }
+    },
+    "3": {
+      "name": "RATE_HINT",
+      "direction": "c2p",
+      "payload": {
+        "req": {
+          "max_rate_hz": "uint"
+        },
+        "opt": {}
+      }
+    },
+    "4": {
+      "name": "EOF",
+      "direction": "both",
+      "payload": {
+        "req": {
+          "reason": "str"
+        },
+        "opt": {}
+      }
+    },
+    "5": {
+      "name": "ERR",
+      "direction": "both",
+      "payload": {
+        "req": {
+          "code": "str",
+          "message": "str"
+        },
+        "opt": {}
+      }
+    },
+    "6": {
+      "name": "ANNOTATIONS",
+      "direction": "p2c",
+      "payload": {
+        "req": {
+          "seq": "uint",
+          "annotations": "list"
+        },
+        "opt": {}
+      }
+    },
+    "7": {
+      "name": "EDGE_EVENTS",
+      "direction": "p2c",
+      "payload": {
+        "req": {
+          "seq": "uint"
+        },
+        "opt": {
+          "clk_mhz": "uint",
+          "anchor_ticks": "uint",
+          "anchor_ns": "uint",
+          "datalogger_id": "uint",
+          "batch": "bin",
+          "words": "list"
+        }
+      }
+    },
+    "8": {
+      "name": "CONTROL",
+      "direction": "c2p",
+      "payload": {
+        "req": {
+          "op": "str",
+          "datalogger_id": "uint",
+          "cfg_word": "uint"
+        },
+        "opt": {}
+      }
+    },
+    "9": {
+      "name": "SYNC",
+      "direction": "p2c",
+      "payload": {
+        "req": {
+          "live": "bool"
+        },
+        "opt": {}
+      }
+    },
+    "10": {
+      "name": "CONTROL_ACK",
+      "direction": "p2c",
+      "payload": {
+        "req": {
+          "datalogger_id": "uint",
+          "applied_cfg_word": "uint",
+          "ok": "bool"
+        },
+        "opt": {
+          "reason": "str"
+        }
+      }
+    },
+    "11": {
+      "name": "STATS",
+      "direction": "p2c",
+      "payload": {
+        "req": {
+          "seq": "uint",
+          "daemon_ver": "str",
+          "proto_stats": "map"
+        },
+        "opt": {
+          "rtl_git_hash": "str",
+          "rtl_build_date": "str",
+          "ring_bytes": "uint",
+          "ring_used_bytes": "uint",
+          "ddr_backpressure_cnt": "uint",
+          "ring_alarm": "map",
+          "proto_decode_errs": "map",
+          "fifo_overflows": "uint",
+          "fifo_high_watermark": "uint",
+          "arb_grants": "uint?",
+          "heartbeat": "uint",
+          "clk_ddr_ticks": "uint",
+          "ddr_reset_status": "uint"
+        }
+      }
+    },
+    "12": {
+      "name": "DIGEST",
+      "direction": "p2c",
+      "payload": {
+        "req": {
+          "seq": "uint",
+          "schema": "str",
+          "window_s": "num",
+          "protocols": "map",
+          "recent": "list",
+          "verdict": "map"
+        },
+        "opt": {}
+      }
+    }
+  },
+  "err_codes": [
+    "FRAME_DECODE",
+    "VERSION_MISMATCH",
+    "CHANNEL_OVERFLOW",
+    "ANNOTATION_REF",
+    "TRANSPORT_LOST",
+    "INTERNAL"
+  ],
+  "channel": {
+    "spec": {
+      "req": {
+        "id": "uint",
+        "name": "str",
+        "width": "uint"
+      },
+      "opt": {
+        "type": "str",
+        "role": "str",
+        "radix": "str",
+        "enum_map": "map",
+        "synthetic": "bool"
+      }
+    },
+    "types": [
+      "Signal",
+      "Analog",
+      "HandshakeCounter",
+      "HandshakeHeader"
+    ],
+    "roles": [
+      "Wire",
+      "Register",
+      "Parameter",
+      "String"
+    ],
+    "radixes": [
+      "Hexadecimal",
+      "DecimalUnsigned",
+      "DecimalSigned",
+      "Binary",
+      "Ascii",
+      "Enum"
+    ],
+    "defaults": {
+      "type": "Signal",
+      "role": "Wire",
+      "radix": "Hexadecimal"
+    }
+  },
+  "sample": {
+    "req": {
+      "ts": "uint",
+      "value": "any"
+    },
+    "opt": {}
+  },
+  "annotation": {
+    "req": {
+      "ts_start": "uint",
+      "ts_end": "uint",
+      "channel_id": "uint",
+      "kind": "str",
+      "text": "str"
+    },
+    "opt": {
+      "payload": "map",
+      "color": "str",
+      "is_error": "bool",
+      "event_id": "str",
+      "text_res": "map",
+      "value": "str",
+      "mask": "str",
+      "op": "uint"
+    }
+  },
+  "annotation_text_res": {
+    "req": {
+      "long": "str",
+      "short": "str"
+    },
+    "opt": {}
+  },
+  "text_short_max": 32,
+  "edge_anchor_reach_us": 32768,
+  "edge_lane_ids": {
+    "min": 0,
+    "max": 31,
+    "keyed_by": "EDGE_EVENTS words[] bits [31:27] (device_id)",
+    "width": 0
+  },
+  "annotation_payload": {
+    "can_ack_error": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "can_ack_observed": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "can_control": {
+      "req": {
+        "ide": "bool",
+        "rtr": "bool",
+        "dlc": "uint"
+      },
+      "opt": {}
+    },
+    "can_crc": {
+      "req": {
+        "crc_byte": "uint"
+      },
+      "opt": {}
+    },
+    "can_crc_error": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "can_data": {
+      "req": {
+        "data": "uint"
+      },
+      "opt": {}
+    },
+    "can_disabled": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "can_enabled": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "can_form_error": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "can_frame_begin": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "can_frame_end": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "can_id": {
+      "req": {
+        "id_byte": "uint"
+      },
+      "opt": {}
+    },
+    "can_overflow_error": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "can_overload_marker": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "can_stuff_count_error": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "can_stuff_error": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "edge_maxfreq": {
+      "req": {
+        "channel": "uint",
+        "min_interval_ticks": "uint",
+        "freq_hz": "num?"
+      },
+      "opt": {}
+    },
+    "error_run": {
+      "req": {
+        "run_of": "str",
+        "count": "uint",
+        "ongoing": "bool"
+      },
+      "opt": {}
+    },
+    "eye_closed": {
+      "req": {
+        "freq_sel": "uint",
+        "phase_sel": "uint",
+        "freq_hz": "uint",
+        "bit_count": "uint"
+      },
+      "opt": {
+        "err_count": "uint",
+        "locked": "bool",
+        "phase_ps": "int",
+        "phase_ui": "num"
+      }
+    },
+    "eye_point": {
+      "req": {
+        "freq_sel": "uint",
+        "phase_sel": "uint",
+        "freq_hz": "uint",
+        "err_count": "uint",
+        "bit_count": "uint",
+        "locked": "bool"
+      },
+      "opt": {
+        "ber": "num",
+        "phase_ps": "int",
+        "phase_ui": "num"
+      }
+    },
+    "eye_summary": {
+      "req": {
+        "max_freq_hz": "uint",
+        "ber_threshold": "num",
+        "eye_margin_ui": "num",
+        "curve": "list"
+      },
+      "opt": {}
+    },
+    "i2c_byte": {
+      "req": {
+        "data": "uint",
+        "ack": "bool"
+      },
+      "opt": {}
+    },
+    "i2c_disabled": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "i2c_enabled": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "i2c_glitch_error": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "i2c_repeated_start": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "i2c_repeated_start_error": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "i2c_start": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "i2c_stop": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "i2c_stop_error": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "i2c_stretch_error": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "jtag_disabled": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "jtag_dr_begin": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "jtag_dr_end": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {
+        "bits": "uint"
+      }
+    },
+    "jtag_enabled": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "jtag_ir_begin": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "jtag_ir_end": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {
+        "bits": "uint"
+      }
+    },
+    "jtag_tap_reset": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "jtag_tap_state": {
+      "req": {
+        "tap_state": "uint",
+        "state": "str"
+      },
+      "opt": {}
+    },
+    "jtag_tdi": {
+      "req": {
+        "tdi": "uint"
+      },
+      "opt": {}
+    },
+    "jtag_tdo": {
+      "req": {
+        "tdo": "uint"
+      },
+      "opt": {}
+    },
+    "loss": {
+      "req": {
+        "loss_stage": "str",
+        "lost_count": "uint",
+        "domain": "str",
+        "in_band": "bool"
+      },
+      "opt": {
+        "provenance_code": "uint",
+        "datalogger_id": "uint"
+      }
+    },
+    "spi_event": {
+      "req": {
+        "event": "str"
+      },
+      "opt": {}
+    },
+    "spi_miso": {
+      "req": {
+        "miso": "uint"
+      },
+      "opt": {}
+    },
+    "spi_mosi": {
+      "req": {
+        "mosi": "uint"
+      },
+      "opt": {}
+    },
+    "uart_byte": {
+      "req": {
+        "byte": "uint"
+      },
+      "opt": {
+        "ascii": "str",
+        "nine_bit": "bool"
+      }
+    },
+    "uart_calibration_done": {
+      "req": {
+        "status": "str"
+      },
+      "opt": {}
+    },
+    "uart_calibration_timeout": {
+      "req": {
+        "status": "str"
+      },
+      "opt": {}
+    },
+    "uart_config": {
+      "req": {
+        "config": "uint"
+      },
+      "opt": {}
+    },
+    "uart_disabled": {
+      "req": {
+        "status": "str"
+      },
+      "opt": {}
+    },
+    "uart_enabled": {
+      "req": {
+        "status": "str"
+      },
+      "opt": {}
+    },
+    "uart_parity_error": {
+      "req": {
+        "status": "str"
+      },
+      "opt": {}
+    },
+    "uart_start_error": {
+      "req": {
+        "status": "str"
+      },
+      "opt": {}
+    },
+    "uart_stop_error": {
+      "req": {
+        "status": "str"
+      },
+      "opt": {}
+    }
+  },
+  "registered_protocols": [
+    "can",
+    "edge",
+    "i2c",
+    "jtag",
+    "spi",
+    "uart"
+  ],
+  "protocol_events": {
+    "can": [
+      "ack_error",
+      "ack_observed",
+      "crc_error",
+      "disabled",
+      "enabled",
+      "form_error",
+      "frame_begin",
+      "frame_end",
+      "overflow_error",
+      "overload_marker",
+      "stuff_count_error",
+      "stuff_error"
+    ],
+    "i2c": [
+      "disabled",
+      "enabled",
+      "glitch_error",
+      "repeated_start",
+      "repeated_start_error",
+      "start",
+      "stop",
+      "stop_error",
+      "stretch_error"
+    ],
+    "jtag": [
+      "disabled",
+      "dr_shift_begin",
+      "dr_shift_end",
+      "enabled",
+      "ir_shift_begin",
+      "ir_shift_end",
+      "overflow_error",
+      "tap_reset"
+    ],
+    "spi": [
+      "cs_down",
+      "cs_down_new_pol_h",
+      "cs_down_new_pol_l",
+      "cs_up",
+      "cs_up_incomplete",
+      "start",
+      "stop",
+      "timeout"
+    ],
+    "uart": [
+      "calibration_done",
+      "calibration_timeout",
+      "disabled",
+      "enabled",
+      "parity_error",
+      "start_error",
+      "stop_error"
+    ]
+  },
+  "loss_stages": [
+    "internal_fifo_overflow",
+    "arbiter_drop",
+    "ring_full",
+    "decode_error"
+  ],
+  "verdict_statuses": [
+    "OK",
+    "WARN",
+    "CRITICAL"
+  ],
+  "time_units": {
+    "ANNOTATIONS.annotations[].ts_end": "ns since HELO",
+    "ANNOTATIONS.annotations[].ts_start": "ns since HELO",
+    "ANNOTATIONS.payload[edge_maxfreq].freq_hz": "Hz, null for the re-armed / no-edge sentinel",
+    "ANNOTATIONS.payload[edge_maxfreq].min_interval_ticks": "ticks of the edge clock (a half-period, a duration)",
+    "ANNOTATIONS.payload[eye_closed].freq_hz": "Hz",
+    "ANNOTATIONS.payload[eye_closed].phase_ps": "ps offset from the nominal phase, not a position",
+    "ANNOTATIONS.payload[eye_point].freq_hz": "Hz",
+    "ANNOTATIONS.payload[eye_point].phase_ps": "ps offset from the nominal phase, not a position",
+    "ANNOTATIONS.payload[eye_summary].curve[].eye_width_ps": "ps, the open-eye width (a duration, not a position)",
+    "ANNOTATIONS.payload[eye_summary].curve[].freq_hz": "Hz",
+    "ANNOTATIONS.payload[eye_summary].max_freq_hz": "Hz",
+    "DIGEST.recent[].ts": "ns since HELO",
+    "DIGEST.window_s": "s",
+    "EDGE_EVENTS.anchor_ns": "ns (the producer's absolute epoch)",
+    "EDGE_EVENTS.anchor_ticks": "ticks of the edge clock",
+    "EDGE_EVENTS.clk_mhz": "MHz",
+    "HELO.sample_clk_hz": "Hz (the edge clock, when given)",
+    "HELO_OK.max_rate_hint_hz": "Hz",
+    "RATE_HINT.max_rate_hz": "Hz",
+    "SAMPLES.samples[].ts": "ns since HELO",
+    "STATS.clk_ddr_ticks": "ticks of the DDR clock (a counter)"
+  }
+}

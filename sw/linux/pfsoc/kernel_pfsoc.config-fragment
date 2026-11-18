@@ -1,0 +1,34 @@
+# PF-L0 (DS-P2.125): built-in drivers the PolarFire SoC datalogger image needs
+# before an initramfs can load modules. Mirrors sw/linux/de25/kernel_de25.config
+# -fragment, minus the CTU CAN FD block: pfsoc_datalogger is CAN-free by default
+# (DS-P2.121 — no ctucanfd dt nodes in this target), so the ctucanfd symbols are
+# deliberately absent rather than shipped inert.
+#
+# The two load-bearing symbols:
+#   * CONFIG_UIO_PDRV_GENIRQ — the target bootargs pass
+#     `uio_pdrv_genirq.of_id=generic-uio`, and DdrRingDataSource mmaps the ring +
+#     regbank through /dev/uioN. Without this the daemon starts, finds no
+#     /dev/uio*, and the ring is unreadable — the SKIP-shaped silent failure
+#     DS-X5 forbids.
+#   * CONFIG_MACB — the MPFS on-SoC Ethernet is a Cadence GEM (macb). Without it
+#     eth0 never appears, S40network's `ip link set eth0 up` fails, and a
+#     hands-off boot never reaches the network the ds_ip= address is for.
+CONFIG_DEVMEM=y
+CONFIG_UIO=y
+CONFIG_UIO_PDRV_GENIRQ=y
+CONFIG_MACB=y
+# DS-P2.150: NO CONFIG_SERIAL_8250_NR_UARTS override. The Discovery Kit's console
+# is the physical FlashPro5 UART at serial@20106000, which the stock DTB aliases
+# `serial4` -> /dev/ttyS4. The 8250 driver only creates lines 0..NR_UARTS-1 and
+# the base defconfig ships NR_UARTS=4, so line 4 (ttyS4) is REJECTED and the
+# console is silent. DS-P2.148 tried to raise NR_UARTS to 8 so ttyS4 registers,
+# but that mapping needs a 19 MiB kernel reflash the bench cannot stage (card in
+# J17, no host reader) and was never proven on silicon. Instead the target's DTB
+# re-aliases serial0 -> serial@20106000 and boots console=ttyS0 (see
+# targets/pfsoc_datalogger.yml dt_nodes + bootargs) — line 0 exists under the
+# stock NR_UARTS=4, so NO override is needed and the committed kernel config
+# matches the deployed on-card Image. This mapping reached a root shell on a PLAIN
+# cold boot (DS-P2.150, docs/evidence/pf-l0/DS-P2.150/).
+# The generated initramfs source is necessarily an absolute build path. Do not
+# embed .config in the public kernel image and turn that path into board data.
+# CONFIG_IKCONFIG is not set

@@ -1,0 +1,19 @@
+# uart_pkg — the UART helper package, as a dependency manifest
+#
+# DS-P2.137: see hw/rtl/pkg_ip/datalogger/ip.yml. The uart datalogger's RTL
+# says `use tich.uart_pkg.all`; under `rr sim run --ip` that package exists
+# only if a manifest in the closure declares it.
+
+name: uart_pkg
+description: |
+  UART framing helpers shared by the uart datalogger blocks.
+
+hdl:
+  language: vhdl
+  library: tich
+
+build:
+  synthesis:
+    mode: rtl
+    sources:
+      - ../../pkg/uart_pkg.vhd

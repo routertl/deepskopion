@@ -1,0 +1,69 @@
+# datalogger_lifecycle — Requirements catalog (contract-first per ROUTERTL convention)
+#
+# Uniform per-datalogger lifecycle emitter (DS-P3.90 Phase 1). Every datalogger
+# instantiates one, pinned to its G_DEV_ID, in the ALWAYS-ON (global RST)
+# domain — NOT gated by the per-datalogger CAPTURE_RST decode reset. It emits a
+# symmetric pair of status frames on the per-device ENABLE edge so the consumer
+# learns, in-band and on the data timeline, exactly when each channel armed or
+# disarmed. Decoupling it from CAPTURE_RST is what lets a datalogger adopt CAPTURE_RST
+# on its decode core without losing the DISABLED marker (DS-T2.31 / H.96).
+#
+# Each SL-REQ-N is referenced by >=1 cocotb test in
+# hw/sim/cocotb/tests/datalogger/infra/datalogger_lifecycle/test_datalogger_lifecycle.py.
+
+ip: datalogger_lifecycle
+version: 0.1
+schema_version: 1
+
+port_contract:
+  slaves: []
+  masters: []
+  scalars:
+    - { name: CONFIG_EN, dir: in,  width: "std_logic" }
+    - { name: TIMESTAMP, dir: in,  width: "G_TS_WIDTH-1 downto 0" }
+    - { name: MSG_OUT,   dir: out, width: "C_DATALOGGER_MSG_WIDTH-1 downto 0" }
+    - { name: MSG_VLD,   dir: out, width: "std_logic" }
+  clocks:
+    - { name: CLK }
+  resets:
+    - { name: RST, polarity: active_high }   # GLOBAL reset (always-on domain)
+
+parameters:
+  - { name: G_DEV_ID,        default: 0 }
+  - { name: G_DEV_ID_WIDTH,  default: 5 }
+  - { name: G_TYPE,          default: "100" }    # event-type field
+  - { name: G_TS_WIDTH,      default: 16 }
+  - { name: G_CODE_ENABLED,  default: "0x03" }
+  - { name: G_CODE_DISABLED, default: "0x00" }
+
+functional_contract:
+  - id: SL-REQ-1
+    kind: behavioral
+    desc: >-
+      On the RISING edge of CONFIG_EN the block emits exactly one frame with
+      `MSG_VLD` high for one cycle and `MSG_OUT` = DEV_ID & G_TYPE & TIMESTAMP &
+      G_CODE_ENABLED. On the FALLING edge it emits exactly one frame with
+      G_CODE_DISABLED. The pair is symmetric: every DISABLED has a preceding
+      ENABLED for the same device. Verified by
+      test_datalogger_lifecycle.lifecycle_enable_disable.
+
+  - id: SL-REQ-2
+    kind: behavioral
+    desc: >-
+      While CONFIG_EN is steady (either level) MSG_VLD stays low — no spurious
+      lifecycle frames between edges.
+
+  - id: SL-REQ-3
+    kind: behavioral
+    desc: >-
+      The emitter lives in the global-RST domain: RST='1' clears the edge
+      memory, so the first ENABLE after a global reset still produces an
+      ENABLED frame. It is independent of any per-datalogger CAPTURE_RST, so a decode
+      reset never suppresses a DISABLED frame.
+
+  - id: SL-REQ-4
+    kind: behavioral   # structural/elaboration check; validator REQ_KINDS=behavioral/negative (RTL field-feedback to widen)
+    desc: >-
+      The assembled frame width (G_DEV_ID_WIDTH + |G_TYPE| + G_TS_WIDTH +
+      |G_CODE|) MUST equal C_DATALOGGER_MSG_WIDTH; a mis-sized generic fails
+      elaboration (assert in the architecture).

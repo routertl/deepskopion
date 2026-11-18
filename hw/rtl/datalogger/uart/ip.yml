@@ -1,0 +1,83 @@
+# uart_datalogger — Auto-calibrating UART line datalogger IP
+#
+# Pilot for the contract-first datalogger convention (DS-P2.33). Sibling
+# files:
+#   - ip.yml             (this) — routertl IP manifest
+#   - requirements.yml          — structural + functional contract
+#                                  (port_contract + functional REQs)
+#   - uart_datalogger_protocol.yml — HW message word format (existing)
+#   - UART_DATALOGGER_PROTOCOL.md  — interface narrative
+#   - UART_DATALOGGER_FEATURES.md  — roadmap
+#
+# In-project IP (no namespace / version yet) — promote to publishable
+# once the registry strategy lands.
+
+ip:
+  name: uart_datalogger
+  library: tich
+  language: vhdl
+  description: |
+    Blind-discovery UART datalogger with auto-calibration for baud rate,
+    data bits (5-9), parity (none/even/odd), and stop bits (1/2).
+    Emits 32-bit framed messages per zs_msg_header_t convention.
+    Reference implementation for the deepskopion datalogger compliance
+    checklist (docs/standards/datalogger_compliance_checklist.md).
+
+hdl:
+  top_module: uart_datalogger
+  top_sim:    uart_datalogger
+
+paths:
+  sources: .
+
+synthesis:
+  mode: rtl
+  sources:
+    - uart_baudrate_gen.vhd
+    - uart_frame_gen.vhd
+    - uart_playback.vhd
+    - uart_stop_finder.vhd
+    - uart_datalogger.vhd
+
+build:
+  simulation:
+    sources: []                # falls back to synthesis.sources
+    test_dir: ../../../sim/cocotb/tests/datalogger/uart
+    simulator: nvc
+    waves:
+      formats: [fst]
+    # DS-P2.137: the smoke test addresses its CONFIG write to dev-id 23
+    # (uart_datalogger_test_utils.GENERICS, applied only by its main()); the
+    # RTL default is 28, so under --ip the datalogger never enables and
+    # calibration times out. Declare the generic where --ip reads it.
+    tests:
+      test_uart_datalogger_smoke:
+        generics:
+          G_UART_DEV_ID: 23
+
+requirements: requirements.yml
+
+# DS-P2.137: the standalone `rr sim run --ip` compile set is exactly this
+# manifest's declared closure — the tests' CUSTOM_LIBRARIES (which is what a
+# project-mode run compiles) is never consulted. Every unit the uart RTL
+# references must be reachable from here:
+#   tich.datalogger_pkg / datalogger_config_pkg, tich.uart_pkg,
+#   tich.config_control, tich.datalogger_lifecycle, tich.fifo_sync -> local
+#   manifests (`path:`), each declaring its own closure;
+#   open-logic/olo_base_fifo_sync (library olo, behind fifo_sync),
+#   tich.edge_detector, tich.ram_dual_port -> ip.lock packages.
+dependencies:
+  deepskopion/datalogger_pkg: {path: ../../pkg_ip/datalogger}
+  deepskopion/uart_pkg: {path: ../../pkg_ip/uart}
+  deepskopion/config_control: {path: ../infra/config_control}
+  deepskopion/datalogger_lifecycle: {path: ../infra/datalogger_lifecycle}
+  deepskopion/fifo_sync: {path: ../../fifo}
+  # rr composes a local manifest's SOURCES but not its registry
+  # `dependencies:` (fifo's olo ref is not followed), so the olo FIFO the
+  # fifo_sync boundary wraps is named here too.
+  open-logic/olo_base_fifo_sync: "^4.4.1"
+  routertl/edge_detector: local
+  routertl/ram_dual_port: local
+
+ips:
+  - ../../fifo/ip.yml

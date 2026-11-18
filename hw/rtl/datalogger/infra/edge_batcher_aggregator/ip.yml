@@ -1,0 +1,46 @@
+# edge_batcher_aggregator — per-channel demux + N edge_batchers + arb
+#
+# Wraps G_NUM_CHANNELS edge_batcher instances, demuxes incoming
+# edge_event words by device_id (EV_WORD[31:27]), and arbitrates the
+# resulting per-channel batch outputs into a zs_msg_framer's IN_*
+# interface (matching the framer's variable-payload port set from
+# DS-P2.47 Phase B2 step 1). Constant msg_type=0x0601, msg_class=DATA,
+# flags=0 stamped on every emitted EDGE_BATCH frame.
+#
+# DS-P2.47 Phase B2 step 2 — block only; top-level wiring is step 3.
+
+ip:
+  name: edge_batcher_aggregator
+  library: tich
+  language: vhdl
+  description: |
+    Many-channel EDGE_BATCH aggregator: demux on datalogger_id +
+    G_NUM_CHANNELS per-channel edge_batchers + fixed-priority arb into
+    zs_msg_framer's variable-payload IN_* interface. Single ack per
+    upstream event; FR_VALID rises when any batcher has closed a batch
+    (capacity / overflow / timer flush).
+
+hdl:
+  top_module: edge_batcher_aggregator
+  top_sim:    edge_batcher_aggregator
+
+paths:
+  sources: .
+
+synthesis:
+  mode: rtl
+  sources:
+    - edge_batcher_aggregator.vhd
+
+build:
+  simulation:
+    sources: []
+    test_dir: ../../../../sim/cocotb/tests/datalogger/infra/edge_batcher_aggregator
+    simulator: nvc
+    waves:
+      formats: [fst]
+
+requirements: requirements.yml
+
+ips:
+  - ../edge_batcher/ip.yml

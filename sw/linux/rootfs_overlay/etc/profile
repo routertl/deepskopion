@@ -1,0 +1,3 @@
+# /etc/profile — system-wide environment for login shells (DS-P3.162).
+# Matches BR2_SYSTEM_DEFAULT_PATH from buildroot defconfigs.
+export PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin"

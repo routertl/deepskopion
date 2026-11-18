@@ -1,0 +1,37 @@
+# deepskopion system memory map for `rr linux` generation.
+#
+# Exposes the two PL-side resources the sw/stream/ daemon needs at runtime:
+#   * system_regs — register bank with telemetry counters + ring locator
+#     (RING_BASE_LOW/HIGH/BYTES/WRITE_PTR slots used by DdrRingDataSource)
+#   * ddr_ring    — PS-DDR window the framer DMAs zs_msg frames into; the
+#     daemon mmaps this region read-only and walks it per the
+#     common_header.md spec.
+#
+# `rr linux gen` produces:
+#   * Device-tree overlay (.dts) → UIO node per device
+#   * C UIO header (system_regs.h with REG_*_OFFSET macros, ring constants)
+#   * Python UIO bindings (system_regs.py) consumed by sw/stream/regbank.py
+#
+# After editing, run:  rr linux sync --dry-run     (preview)
+#                     rr linux sync               (regenerate sw/linux/gen)
+
+version: "1.0.0"
+target: zynq-7000
+
+devices:
+  # System register bank — Zynq M_AXI_GP0 first peripheral slot
+  # (default convention; verify against BD before flashing if customised).
+  - name: system_regs
+    base_addr: 0x43C00000
+    span:      0x10000           # 64 KB — covers regbank's RW + RO + telemetry windows
+    compatible: generic-uio
+    regbank_ref: ../../project_regbank.yml
+
+  # PS-DDR ring buffer — populated by rr-ddr-stream u_ddr_burst, drained by
+  # DdrRingDataSource. Base + span mirror deepskopion_top.vhd generics:
+  #   G_DDR_BASE_ADDR = 0x10000000
+  #   G_DDR_WIN_WIDTH = 28 → 2^28 = 256 MB
+  - name: ddr_ring
+    base_addr: 0x10000000
+    span:      0x10000000        # 256 MB
+    compatible: generic-uio

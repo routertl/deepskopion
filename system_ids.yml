@@ -1,0 +1,132 @@
+# =============================================================================
+# system_ids.yml — Canonical ID registry  (SINGLE SOURCE OF TRUTH)
+# =============================================================================
+# Owns the deepskopion id-space *contract*: the protocol-class DOMAIN map and
+# the structural constraints. This is the one place a domain code is defined.
+#
+# It GENERATES (do-not-hand-edit the outputs):
+#   RTL  ->  C_DOMAIN_* constants  +  datalogger_gather's domain-dispatch
+#            (replacing the hand-kept _domain_map in datalogger_gather_gen.py and
+#             the hardcoded X"6" EDGE test in deepskopion_top.vhd)
+#   SW   ->  sw/stream/zs_msg.py  DOMAIN_*  +  the domain<->channel map
+#   LINT ->  a drift-check (pre-commit) so registry / RTL / SW can never
+#            silently diverge — mirrors the project_regbank.yml discipline
+#            (project_regbank.yml -> regen_regbank.sh -> RTL + SW + drift-check).
+#
+# DESIGN (agreed 2026-06-02, see DS-T3.6 / DS-P3.57):
+#   * DOMAINS are GLOBALLY STABLE. A protocol class always maps to the same
+#     4-bit code across every product flavour, so SW decoders, RouteWave, and
+#     SAVED CAPTURES stay portable, and the identity is provenance-meaningful.
+#     New protocols APPEND; codes are NEVER reused or reassigned.
+#   * DEVICE_IDs are PER-FLAVOUR (instance-specific, "random depending on
+#     product config"). They live in the per-product instance config
+#     (tools/datalogger-builder/config/datalogger_config.yml); a flavour may pick ANY
+#     free id. They are NOT defined here — only validated against `constraints`.
+#   * DECLARED + VALIDATED, never build-time auto-allocated (stability for
+#     decoders, cross-build diffs, and provenance).
+# =============================================================================
+
+version: "1.0"
+
+# -----------------------------------------------------------------------------
+# Structural constraints (validated by the id-lint across every flavour config)
+# -----------------------------------------------------------------------------
+constraints:
+  domain_width: 4              # zs_msg msg_type[11:8]  -> 0x0..0xF
+  device_id_width: 5           # 32-bit datalogger message [31:27]  -> 0..31
+  max_datalogger_id: 31
+  reserved_device_ids: [0]     # DS-T2.9: CONFIG=0 (idle/clear) == "disable id 0",
+                               # so a live datalogger at id 0 is silently disabled.
+
+# -----------------------------------------------------------------------------
+# DOMAIN registry — protocol-class -> 4-bit code. GLOBALLY STABLE. APPEND ONLY.
+# -----------------------------------------------------------------------------
+# `code`     : the canonical 4-bit domain (immutable once assigned)
+# `status`   : active | planned | reserved
+# `rtl_const`: the generated VHDL constant name (C_DOMAIN_<NAME>)
+# `sw_const` : the generated Python constant name (DOMAIN_<NAME>)
+domains:
+  sys:   { code: 0x0, status: active,  description: "System / heartbeat / timestamp / control" }
+  uart:  { code: 0x1, status: active,  description: "UART (auto-baud)" }
+  i2c:   { code: 0x2, status: active,  description: "I2C" }
+  spi:   { code: 0x3, status: active,  description: "SPI (via qspi_datalogger 4-pin mode)" }
+  i2s:   { code: 0x4, status: planned, description: "I2S audio" }
+  qspi:  { code: 0x5, status: active,  description: "Quad-SPI / Dual-SPI" }
+  edge:  { code: 0x6, status: active,  description: "Raw edge / logic-analyzer capture" }
+  trig:  { code: 0x7, status: active,  description: "Trigger / cross-datalogger events" }
+  jtag:  { code: 0x8, status: planned, description: "JTAG / IEEE-1149.1 TAP (DS-P3.56)" }
+  # --- next free codes 0x9..0xF — reserve names early to keep them STABLE: ---
+  mdio:    { code: 0x9, status: reserved, description: "MDIO / MII management" }
+  can:     { code: 0xA, status: active,   description: "CAN / CAN-FD (DS-P3.100)" }
+  onewire: { code: 0xB, status: reserved, description: "1-Wire" }
+  lin:     { code: 0xC, status: reserved, description: "LIN" }
+  eye:     { code: 0xD, status: active,   description: "PMOD eye-scan / BERT — (freq,phase,BER) bathtub points (DS-P2.66)" }
+  # 0xE..0xF unallocated
+
+# -----------------------------------------------------------------------------
+# SEVERITY registry — zs_msg msg_type[15:12] -> 4-bit code. APPEND ONLY.
+# Single-sources the previously hand-kept C_ZS_SEV_* (zs_msg_pkg.vhd) + SEV_*
+# (zs_msg.py) so the two copies can never drift (DS-P3.70). Codes are immutable.
+# -----------------------------------------------------------------------------
+severity:
+  info:    { code: 0x0, status: active, description: "Informational / normal event" }
+  warn:    { code: 0x1, status: active, description: "Warning (e.g. FIFO almost-full pressure)" }
+  error:   { code: 0x2, status: active, description: "Error / data-loss event (see error_events)" }
+  debug:   { code: 0x3, status: active, description: "Debug / diagnostic" }
+  control: { code: 0x4, status: active, description: "Control / housekeeping" }
+
+# -----------------------------------------------------------------------------
+# ERROR-EVENT registry — cross-domain loss-PROVENANCE codes carried in
+# zs_msg event_id[7:0] alongside severity=error + the source domain (DS-P3.70).
+# RESERVED to event_id range 0xF0..0xFF so they NEVER collide with per-protocol
+# event/status codes (which live in 0x00..0xEF per-domain, e.g. UART
+# parity_error=0x02). GLOBALLY STABLE, APPEND ONLY — provenance must stay
+# portable across captures + flavours, exactly like domains.
+#
+# A loss message is therefore self-describing: (severity=error | domain=<which
+# datalogger> | event_id=<which stage failed>), payload = lost_count where known.
+# -----------------------------------------------------------------------------
+error_events:
+  internal_fifo_overflow:
+    code: 0xF0
+    status: active
+    description: >
+      A datalogger's internal capture/batch FIFO overflowed UPSTREAM of the gather —
+      data lost before a frame could be formed. Only the fabric-rate dataloggers
+      (edge, high-rate qspi/i2s) can hit this; rate-limited UART/I2C/SPI cannot.
+      Invisible to DROP_CNT (arbiter backpressure) and DDR_BACKPRESSURE_CNT (ring
+      full). Payload carries lost_count. First driver: edge_datalogger (DS-P3.24).
+  arbiter_drop:
+    code: 0xF1
+    status: reserved
+    description: >
+      A formed frame was rejected at the gather/arbiter (VLD && !RDY). Also
+      counted out-of-band by DROP_CNT_* (DS-T2.22 mech A); reserved for an
+      optional in-band mirror.
+  ring_full:
+    code: 0xF2
+    status: reserved
+    description: >
+      The DDR ring is full (consumer fell behind). PRIMARILY out-of-band via
+      DDR_BACKPRESSURE_CNT (DS-T2.22 mech B) — an in-band frame cannot traverse a
+      full ring, by construction — reserved here only for taxonomy completeness.
+  decode_error:
+    code: 0xF3
+    status: reserved
+    description: >
+      Generic decode/data-quality error (parity/framing). Per-protocol decoders
+      keep their own in-domain status codes today (e.g. UART status 0x02); this
+      shared code is reserved for a unified cross-protocol roll-up.
+  # 0xF4..0xFF reserved for future loss-provenance stages.
+
+# -----------------------------------------------------------------------------
+# Per-flavour device_id allocations live OUTSIDE this file (instance config).
+# The id-lint reads these + the active per-flavour `domains` and validates:
+#   - every instance's protocol exists in `domains`
+#   - device_ids are unique within a flavour, not in reserved_device_ids,
+#     and <= max_datalogger_id
+#   - generated RTL (C_DOMAIN_*, gather dispatch) and SW (zs_msg.py DOMAIN_*)
+#     match this registry byte-for-byte (drift-check)
+# -----------------------------------------------------------------------------
+flavour_configs:
+  - tools/datalogger-builder/config/datalogger_config.yml   # zybo-z7-20-poc

@@ -1,0 +1,307 @@
+# datalogger_gather — Requirements catalog (contract-first per ROUTERTL convention)
+#
+# Aggregator that instantiates per-protocol datalogger entities (I2C, UART,
+# SPI, EDGE in the PoC), routes each through a per-protocol 1st-layer
+# arbiter (gated on > 1 instance), into the top-level burst arbiter,
+# and exposes DOUT_{DATA,VALID} + PROTO_COUNTERS to the consumer.
+#
+# Auto-generated entity body lives at datalogger_gather.vhd (template:
+# tools/datalogger-builder/templates/datalogger_gather.vhd.j2). Hand-authored
+# markdown sketch at docs/hardware/datalogger_gather_contract.md.
+#
+# Post-D.4 (single-tier): the stream-tier path was collapsed; ZS framer
+# downstream is the single stamping authority.
+#
+# Each SGA-REQ-N below is referenced by ≥1 cocotb test in
+# hw/sim/cocotb/tests/datalogger/infra/datalogger_gather/test_datalogger_gather.py
+# via @requires(). Adversarial-by-default; surfaced DUT defects file as
+# T-tier (file-don't-fix). Bug-finding-is-success: a green-bar run with
+# zero defects is a yellow flag, not victory.
+
+ip: datalogger_gather
+version: 1.0
+schema_version: 1
+
+port_contract:
+  slaves: []
+  masters: []
+  scalars:
+    - { name: CAPTURE_PINS,       dir: in,  width: "C_NUM_DATALOGGER_PINS-1 downto 0" }
+    - { name: CONFIG,           dir: in,  width: "C_DATALOGGER_CONFIG_WIDTH-1 downto 0" }
+    - { name: TIMESTAMP,        dir: in,  width: "C_TIMESTAMP_WIDTH-1 downto 0" }
+    # DS-P2.139: the RTL split the old DOUT_DATA into DOUT_PAYLOAD plus the
+    # decoded DOUT_DATALOGGER_ID / DOUT_MSG_TYPE side-band; the edge telemetry
+    # taps were added later (DS-P3.117). The contract names the real ports.
+    - { name: DOUT_PAYLOAD,       dir: out, width: "C_DATALOGGER_MSG_WIDTH-1 downto 0" }
+    - { name: DOUT_DATALOGGER_ID, dir: out, width: "7 downto 0" }
+    - { name: DOUT_MSG_TYPE,      dir: out, width: "15 downto 0" }
+    - { name: DOUT_VALID, dir: out, width: "1" }
+    - { name: DOUT_REQ,        dir: in,  width: "1" }
+    - { name: FIFO_CSR,   dir: out, width: "t_fifoCsr" }
+    - { name: PROTO_COUNTERS,   dir: out, width: "t_protoCounterArray(0 to C_NUM_PROTO_COUNTERS-1)" }
+    - { name: EDGE_ERR_CNTS,      dir: out, width: "C_EDGE_DATALOGGERS*32-1 downto 0" }
+    - { name: EDGE_MAX_IVALS,     dir: out, width: "C_EDGE_DATALOGGERS*C_EDGE_MAXFREQ_WIDTH-1 downto 0" }
+    - { name: EDGE_MAX_NEW,       dir: out, width: "C_EDGE_DATALOGGERS-1 downto 0" }
+    # DS-P1.104 (DS-D.53): the default mix carries the CAN datalogger, so the
+    # generated gather exposes its per-instance debug bus (DS-P3.107).
+    - { name: CAN_DBG_BUSSES,     dir: out, width: "C_CAN_DATALOGGERS*32-1 downto 0" }
+  clocks:
+    - { name: CLK }
+  resets:
+    - { name: RST, polarity: active_high }
+
+parameters:
+  - { name: G_SYS_CLK, default: 100000000 }
+
+functional_contract:
+
+  # ── Structural ────────────────────────────────────────────────────────────
+  - id: SGA-REQ-1
+    kind: behavioral
+    desc: >-
+      Each GEN_<PROTO>_BLOCK is instantiated only when
+      C_<PROTO>_DATALOGGERS > 0. With C_NUM_ARB_INPUTS == 0 (no active
+      burst-tier protocols), the top-level burst arbiter is also
+      generate-gated. This codifies the DS-P2.35 defence pattern —
+      null-range generics into the arbiter must never reach Vivado's
+      elaborator.
+
+  # ── Reset / quiescence ───────────────────────────────────────────────────
+  - id: SGA-REQ-2
+    kind: behavioral
+    desc: >-
+      Under RST='1' (active-high), DOUT_VALID stays low; all
+      PROTO_COUNTERS slots read zero; FIFO_CSR.fifoStatus
+      reports empty/non-full. After RST drops with CAPTURE_PINS at
+      bus-idle levels (all-high for I2C/UART/SPI, all-zero for
+      EDGE), no spurious DOUT_VALID pulses fire.
+
+  # ── Single-source routing ────────────────────────────────────────────────
+  - id: SGA-REQ-3
+    kind: behavioral
+    desc: >-
+      Drive one protocol's `CAPTURE_PINS` with a known traffic pattern
+      that produces N protocol-level events. Assert exactly N
+      `DOUT_VALID` handshakes appear, in arrival order, and
+      the per-protocol device_id field in the message payload
+      (`DOUT_PAYLOAD` bits [31:27]) matches the driven
+      instance. Cross-check `DOUT_DATALOGGER_ID` carries the
+      same value for tagged-tuple consistency (DS-P3.29).
+      DS-P3.32: `test_datalogger_gather_i2c.py` realises this at the PROTOCOL
+      layer — a real I2C master (`I2cMasterDriver`) + `i2c_slave` BFM drive an
+      actual write transaction onto the I2C0 pins; the gather routes START +
+      addr/data bytes + STOP to `DOUT_DATALOGGER_ID=4`, recovered byte-exact via
+      `vip.datalogger.i2c.I2cMsgDecoder`. (Prior SGA-REQ-3 coverage drove EDGE
+      synthetic edges only; I2C decode through the gather was untested.)
+      DS-P3.97: `test_datalogger_gather_uart.py` does the same for UART — a real
+      `UartSource` serial burst on the UART0 pin auto-baud-calibrates and routes
+      byte-exact to `DOUT_DATALOGGER_ID=12` (passive monitor, no slave). DS-P3.98:
+      `test_datalogger_gather_spi.py` does the same for SPI — a real `SpiMaster` BFM
+      transaction on the SPI0 pins routes the MOSI octets byte-exact to
+      `DOUT_DATALOGGER_ID=8` (qspi_datalogger 2-wire mode).
+      DS-P3.32 (final arm): `test_datalogger_gather_edge.py` lifts this to the
+      MULTI-SOURCE case the single-instance protocol harnesses cannot — four
+      EDGE channels (ids 1/2/3/6, lines 42..45) driven CONCURRENTLY with distinct
+      pulse trains; each routes to its own `DOUT_DATALOGGER_ID` with the exact
+      rising/falling polarity sequence. It found AND fixed DS-T2.45: enabling an
+      EDGE channel on a statically-LOW line injected 2 phantom falling-edge frames
+      because the per-line `glitch_filter` reset its output to a hard '1' (idle-
+      HIGH assumption) — its startup '1'->'0' convergence on an idle-low line was
+      captured as real edges. Fixed by tracking the line through reset
+      (`filt_r <= sync_r`). `test_edge_enable_emits_no_phantom_edges` is the
+      end-to-end regression guard (was expect_fail; a real pass since the fix).
+      DS-P3.99: `test_datalogger_gather_jtag.py` completes the family — a real
+      IEEE-1149.1 TAP sequence (cocotb TapMaster on TCK/TMS/TDI/TDO, pins
+      24..27) drives DR and IR shifts through the gather; the begin/end events
+      and the TDI/TDO shift bytes route byte-exact to `DOUT_DATALOGGER_ID=16`. JTAG
+      routed clean (no defect); its idle-LOW TCK would have shared the EDGE
+      startup hazard but is already covered by the DS-T2.45 glitch_filter fix.
+
+  # ── Multi-source fairness ────────────────────────────────────────────────
+  - id: SGA-REQ-4
+    kind: behavioral
+    desc: >-
+      Drive all four burst-tier protocols (I2C×2, UART×2, SPI×1,
+      EDGE×4) simultaneously with steady-state traffic. Over a long
+      enough window, each protocol's messages appear on
+      `DOUT_VALID` in round-robin order (proven by the parent
+      arbiter contract; SGA-REQ-4 just asserts the chain preserves
+      the order at the gather output too). v1 attacker covers the
+      EDGE-group 4-way concurrent case; cross-protocol (I2C + UART +
+      SPI + EDGE) is a follow-on with the same shape.
+
+  # ── Back-pressure ────────────────────────────────────────────────────────
+  - id: SGA-REQ-5
+    kind: behavioral
+    desc: >-
+      Drop DOUT_REQ → DOUT_VALID falls within 1 cycle; no
+      in-flight message is lost (the per-protocol FIFO chain holds
+      the data). After DOUT_REQ rises again, the held data drains
+      in the same order it would have had without the stall.
+
+  # ── DS-P3.29 metadata anchor (pre-shipped RED) ───────────────────────────
+  - id: SGA-REQ-6
+    kind: behavioral
+    desc: >-
+      Post DS-P3.29 (landed 2026-05-17): the tagged-tuple chain
+      carries (datalogger_id, msg_type) alongside each event payload.
+      Drive a protocol instance and assert `DOUT_DATALOGGER_ID`
+      equals the driving device's ID (= `DOUT_PAYLOAD`[31:27]
+      for edge_datalogger) and `DOUT_MSG_TYPE` carries the
+      domain-encoded type bits non-zero under traffic. Reset-only
+      smoke is insufficient — must observe under driven traffic.
+
+  # ── Telemetry counters ───────────────────────────────────────────────────
+  - id: SGA-REQ-7
+    kind: behavioral
+    desc: >-
+      `PROTO_COUNTERS`(C_PROTO_IDX_<PROTO>).pkt_cnt (exposed as
+      `PROTO_PKT_CNT_FLAT` slices in tb_datalogger_gather) increments
+      once per accepted per-protocol handshake (req && ack), summed
+      across instances. err_cnt (`PROTO_ERR_CNT_FLAT`) increments
+      once per cycle where any per-protocol-error signal is
+      non-zero. Counters wrap on 32-bit overflow; no saturation.
+      Idle: both stay at zero indefinitely. Under K driven events
+      on protocol P, PROTO_PKT_CNT[P] == K and other protocols'
+      counters stay at zero (no cross-protocol leak).
+
+  # ── FIFO overflow signalling ────────────────────────────────────────────
+  - id: SGA-REQ-8
+    kind: behavioral
+    desc: >-
+      Hold DOUT_REQ low while every protocol generates traffic.
+      Eventually some per-protocol FIFO fills →
+      FIFO_CSR.fifoStatus.full rises. Per-protocol Ack drops
+      → producer (datalogger entity) sees back-pressure. No data
+      reordering across protocols; no silent overwrite within a
+      protocol's FIFO.
+
+  # ── CONFIG bus propagation ──────────────────────────────────────────────
+  - id: SGA-REQ-9
+    kind: behavioral
+    desc: >-
+      Per-instance `CONFIG` word slices propagate to each datalogger
+      instance's config_control. Verified at the gather level by
+      changing one slice (deviceId=N, enable_code=0) and observing
+      the per-protocol datalogger behavioural change — only that
+      device's events on `DOUT_VALID` stop; siblings keep
+      firing unchanged (no cross-talk from the unrelated CONFIG
+      transition).
+
+  # ── TIMESTAMP propagation ───────────────────────────────────────────────
+  - id: SGA-REQ-10
+    kind: behavioral
+    desc: >-
+      Each datalogger instance receives the same TIMESTAMP bus from
+      the gather entity. Drive TIMESTAMP to a known value and
+      assert that per-protocol payloads emitted on DOUT
+      contain that timestamp's bit pattern in the per-protocol
+      timestamp slice positions (per per-protocol message format).
+
+  # ── Per-protocol NON-EDGE tag correctness (contract-first) ───────────────
+  # The pre-existing SGA-REQ-3/6 assert the [31:27]=device_id arrangement but
+  # (a) SGA-REQ-6 silently scopes it "for edge_datalogger", and (b) every test
+  # that exercises them drives EDGE only — so the I2C/UART/SPI tag path had
+  # ZERO coverage. These REQs make the per-protocol tag/domain invariant
+  # EXPLICIT and falsifiable for the non-EDGE protocols, and they pass GREEN:
+  # every datalogger embeds its own device_id at its FINAL MSG_OUT stage
+  # (i2c_datalogger.vhd:421 `C_DEVICE_ID & ...`, uart_frame_gen.vhd:423
+  # `C_UART_DEV_ID_UNS & ...`, qspi_datalogger.vhd:335, edge_datalogger.vhd:209),
+  # so the gather's <proto>Messages(i)(31:27) extraction is correct for all
+  # four protocols.
+  # HISTORY: DS-T2.19 alleged a tagging bug (i2c/uart not embedding device_id
+  # in [31:27]) — it was FALSIFIED by this sim (I2C->id=4, SPI->id=8) and
+  # closed not-a-bug. The mis-read came from inspecting an intermediate
+  # message stage, not the final MSG_OUT prepend. The on-hardware "id=8 for
+  # I2C/UART" was a cache + commit-lag stale-read artifact (Haz.59), not a tag
+  # defect. These REQs are the GREEN regression lock for the correct behaviour.
+
+  - id: SGA-REQ-11
+    kind: behavioral
+    desc: >-
+      I2C TAG CORRECTNESS. Enable the I2C0 datalogger (CONFIG
+      device_id=C_I2C0_ID=4, enable=1) and drive a minimal I2C
+      transaction on CAPTURE_PINS[C_I2C0_SDA=13]/[C_I2C0_SCL=12]
+      (START + one address byte + STOP). For every resulting
+      DOUT_VALID handshake, assert DOUT_DATALOGGER_ID == 4
+      AND DOUT_MSG_TYPE domain nibble [11:8] == C_ZS_DOMAIN_I2C
+      (2). No EDGE traffic present. GREEN — locks the I2C tag path.
+
+  - id: SGA-REQ-12
+    kind: behavioral
+    desc: >-
+      UART TAG CORRECTNESS. Enable the UART0 datalogger (CONFIG
+      device_id=C_UART0_ID=12, enable=1) and drive UART bytes on
+      CAPTURE_PINS[C_UART0_TX=36] at a datalogger-detectable baud. For every
+      DOUT_VALID handshake, assert DOUT_DATALOGGER_ID == 12
+      AND DOUT_MSG_TYPE domain [11:8] == C_ZS_DOMAIN_UART (1). No
+      EDGE traffic. PARKED @undetermined pending DS-T3.4 — a hand-rolled
+      bit-bang never reaches the uart datalogger's CALIBRATION_DONE, so the
+      gather emits no UART burst; needs a calibrating UartSource BFM.
+
+  - id: SGA-REQ-13
+    kind: behavioral
+    desc: >-
+      SPI TAG CORRECTNESS. Enable the SPI0/qspi datalogger (CONFIG
+      device_id=C_SPI0_ID=8, enable=1) and drive a CS-framed SPI byte on
+      CAPTURE_PINS[C_SPI0_CS=20]/[C_SPI0_SCLK=23]/[C_SPI0_MOSI=21]. Assert
+      DOUT_DATALOGGER_ID == 8 AND DOUT_MSG_TYPE domain [11:8] ==
+      C_ZS_DOMAIN_SPI (3). GREEN — locks the SPI/qspi tag path.
+
+  # ── Cross-protocol concurrency through the TOP arbiter (DS-P3.31) ─────────
+  # The SGA-REQ-3/4/6/10 traffic tests drive EDGE only; SGA-REQ-11/12/13 drive
+  # one non-EDGE protocol in isolation. So the top burst arbiter's behaviour
+  # with MULTIPLE protocol groups presenting valids at once had zero coverage.
+  # SGA-REQ-4's own text flags this: "cross-protocol (I2C + UART + SPI + EDGE)
+  # is a follow-on with the same shape"; SGA-REQ-8 wants "EVERY protocol
+  # generating traffic". test_datalogger_gather_crossproto.py drives EDGE+I2C+SPI
+  # concurrently and is the SGA-REQ-4/8 cross-protocol realisation (tag
+  # consistency across domains, no-drop-vs-solo, backpressure-to-FULL, and an
+  # EDGE-flood starvation attack on top-arbiter fairness — all GREEN).
+
+  - id: SGA-REQ-14
+    kind: behavioral
+    desc: >-
+      UNIFORM ENABLE/DISABLE LIFECYCLE across channels. DS-P3.90 made the
+      per-datalogger enable/disable marker (ENABLED 0x03 / DISABLED 0x00) a
+      uniform in-band frame so a host doing passive multi-channel capture can
+      observe each datalogger being armed/disarmed. Enable then disable each
+      ACTIVE datalogger in isolation; assert the gather emits exactly one frame on
+      the enable edge and one on the disable edge, tagged with that datalogger's
+      device_id. GREEN since DS-T2.43 wired tich.datalogger_lifecycle into
+      edge_datalogger — all four active channels now emit the marker (i2c/uart via
+      the shared emitter, qspi via C_EVENT_START/STOP, jtag via C_EvEnabled,
+      edge via the shared emitter as of DS-T2.43). Was a RED expect_fail anchor
+      until then, because edge_datalogger emitted NEITHER frame.
+
+  # NOTE (DS-P3.95 reverted): the in-band SEV_ERROR edge-overflow loss frame is
+  # NOT emitted by the gather. It is emitted at deepskopion_top by
+  # error_event_emitter (DS-P3.70 piece 3), which watches the aggregate
+  # ERR_CNT_EDGE and coalesces a SEV_ERROR|EDGE|0xF0 frame straight to the
+  # framer (top priority). A gather-side injector was tried (SGA-REQ-15) and
+  # reverted: its domain=EDGE frame is classified into the edge_batcher in the
+  # full design, so it was redundant + polluting. See DS-T3.18 for per-channel
+  # attribution of the emitter's loss frame.
+
+# ── Adversarial attack vectors (filing-target list) ───────────────────────
+#
+# Documentation only (schema does not accept extra top-level keys).
+#
+#   pin-noise-then-traffic:  drive CAPTURE_PINS with glitches (sub-debounce
+#                            pulses) before real traffic — no spurious
+#                            events emitted (covers SGA-REQ-3, 7).
+#   simultaneous-burst:      all four protocols produce a message in the
+#                            same cycle — burst arbiter serialises with
+#                            zero drops (covers SGA-REQ-4).
+#   stalled-then-flood:      DOUT_REQ=0 for 500 cycles while all four
+#                            protocols stream → DOUT_REQ=1 → drain in
+#                            order; no overflow, no overwrite (covers
+#                            SGA-REQ-5, 8).
+#   reset-mid-traffic:       RST mid-stream — DOUT_VALID drops,
+#                            counters zero, next traffic starts cleanly
+#                            (covers SGA-REQ-2, 7).
+#   parameter-config-sweep:  CONFIG bit-by-bit walk per instance — each
+#                            instance honours its slice independently,
+#                            no cross-talk (covers SGA-REQ-9).
+#   per-source-tag:          v1 RED — exists to flip green at DS-P3.29
+#                            (covers SGA-REQ-6).

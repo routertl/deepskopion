@@ -1,0 +1,23 @@
+# DS-P1.60 — every key where disco_mss.cfg differs from the vendored reference
+# (reference/MPFS_DISCOVERY_KIT_MSS.cfg, f09b6e0). Anything not listed here must
+# equal the reference; the guard test fails on an undeclared or stale delta.
+MODULE_NAME:
+  reference: MPFS_DISCOVERY_KIT_MSS
+  ours: disco_mss
+  why: component name instantiated by hw/libero/pfsoc/pfsoc_mss_subsys.tcl (u_mss).
+MMUART_1:
+  reference: MSSIO_B2
+  ours: FABRIC
+  why: DS-P2.126 self-test UART — Linux drives MMUART1 (ttyS1, 0x20100000) into the logger source select.
+CAN_0:
+  reference: UNUSED
+  ours: FABRIC
+  why: DS-P2.126 self-test CAN — CAN_0 TX/RX reach the CAN logger through the fabric.
+CAN_0_TX_EBL_N:
+  reference: UNUSED
+  ours: FABRIC
+  why: follows CAN_0 to the fabric (the configurator routes the enable with its bus).
+FIC_1_AXI4_INITIATOR_USED:
+  reference: "true"
+  ours: "false"
+  why: the top only uses FIC1 as the ring-DMA TARGET; an unwired initiator would leave undriven inputs (SmartDesign DRC error).

@@ -1,0 +1,12 @@
+# DS-P2.287: targets with no tracked targets/<t>.routertl.lock, because rr cannot give them a lock that
+# covers their own HDL. Each entry quotes what rr does and names the routertl ticket whose fix removes it.
+# tools/tests/test_lock_layout_ds_p2_287.py runs the real `rr lock` for each entry and fails once rr writes a
+# lock that hashes the target's top source, so no entry outlives its fix.
+exemptions:
+- target: pfsoc_mss
+  # routertl before 89606b9a (the 5.5.0 RC wheel 19e7b26 included): rr refuses the lock.
+  refusal: "Refusing to write an incomplete lockfile — 1 required field(s) unresolved: sources is empty (no files resolved)"
+  # routertl 89606b9a on (RTL-P2.2357 fix): rr writes the lock with sources: [], and its hardware.top_wrapper
+  # hw/pfsoc/pf_mss_top_wrapper.v is not hashed (RTL-P2.2358); `rr lock --check` passed after that file changed (2026-11-13).
+  hollow: "declares no HDL sources (auto_sources: false, no sources.syn/sim/ip/tcl)"
+  ticket: RTL-P2.2358

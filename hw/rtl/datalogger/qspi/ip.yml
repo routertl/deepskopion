@@ -1,0 +1,49 @@
+# qspi_datalogger — Canonical SPI / Dual-SPI / Quad-SPI line datalogger IP
+#
+# Single entity covers all three configurations via G_QSPI_PINS:
+#   - G_QSPI_PINS=4  → SPI       (SCLK, CSn, MOSI, MISO)
+#   - G_QSPI_PINS=5  → Dual-SPI  (SCLK, CSn, IO0, IO1)  [historical Dual layout]
+#   - G_QSPI_PINS=6  → Quad-SPI  (SCLK, CSn, IO0..IO3)
+#
+# There is no separate spi_datalogger entity. The datalogger-builder
+# protocols.yml maps `SPI:` to this entity with G_QSPI_PINS=4.
+#
+# Mirrors the uart_datalogger contract-first pattern (DS-P2.33 / SNIF.1)
+# and i2c_datalogger (DS-P3.18 / SNIF.2). See
+# docs/standards/datalogger_compliance_checklist.md section 8b for R1..R8.
+
+ip:
+  name: qspi_datalogger
+  library: tich
+  language: vhdl
+  description: |
+    Canonical SPI / Dual-SPI / Quad-SPI line datalogger. Decodes
+    command + address + data phases, dummy-cycle handling,
+    mode-bit decode (Quad mode). Emits 32-bit framed events +
+    payload messages per the HW word format documented in
+    qspi_datalogger_protocol.yml. Single entity scales from 4-pin
+    SPI to 6-pin Quad via G_QSPI_PINS.
+
+hdl:
+  top_module: qspi_datalogger
+  top_sim:    qspi_datalogger
+
+paths:
+  sources: .
+
+synthesis:
+  mode: rtl
+  sources:
+    - qspi_datalogger.vhd
+
+build:
+  simulation:
+    sources: []                # falls back to synthesis.sources
+    test_dir: ../../../sim/cocotb/tests/datalogger/qspi
+    simulator: nvc
+    waves:
+      formats: [fst]
+
+requirements: requirements.yml
+
+ips: []

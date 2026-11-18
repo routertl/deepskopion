@@ -1,0 +1,48 @@
+# stimulus/ — fabric-side stimulus generator (DS-P2.100, DS-D.38 option a).
+#
+# ds_stimulus_gen replaces the DS-P2.95 tied-off DE25 EMIO seam
+# (deepskopion_de25_top.vhd's constant-tied emio_uart_tx_i /
+# emio_i2c_*_i / emio_spi_*_i ports) with a real, regbank-driven master:
+# a UART transmitter, an I2C master, an SPI master, and a free-running
+# edge/pulse source. Drives the same core inputs ds_emio_mux captures and
+# the i2c_injector/spi_injector responders answer — retiring the
+# "regbank-engaged but idle" trap (DS-P2.95).
+
+ip:
+  name: stimulus
+  library: tich
+  language: vhdl
+  description: |
+    Fabric-generated UART/I2C/SPI/edge stimulus for the DE25 EMIO
+    self-validation loop. Design-honest: every byte on the bus
+    originates in fabric from a regbank write, not from an external
+    bus or a real HPS peripheral.
+
+hdl:
+  top_module: ds_stimulus_gen
+
+paths:
+  sources: .
+
+synthesis:
+  mode: rtl
+  sources:
+    - ds_stimulus_gen.vhd
+
+requirements: requirements.yml
+
+build:
+  simulation:
+    # DS-P2.100 landing-review (fourth pass) Finding 5: the core-seam tests
+    # (the only ones that compile deepskopion_core, and the only ones
+    # exercising STIM-SEAM-REQ-1..4) must be in coverage-map's reach.
+    # build.simulation.test_dir takes one path and coverage-map walks it
+    # recursively, so DS-P2.100 widened it to the whole cocotb tree. That
+    # made every other IP's @requires tag a stimulus "orphan" (143 at
+    # DS-P2.187), which buries a real orphan. DS-P2.187 moved the seam
+    # tests to stimulus/core_seam/ so this one directory holds exactly the
+    # stimulus suite.
+    test_dir: ../../sim/cocotb/tests/stimulus
+    simulator: nvc
+    waves:
+      formats: [fst]

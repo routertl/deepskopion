@@ -1,0 +1,10 @@
+# pfsoc_ka_ref_clk.pdc — pin the 50 MHz fabric oscillator for the known-answer
+# REA image. DS-P2.132. Without this the platform:default flow auto-places
+# ref_clk_50mhz on an arbitrary pad and the fabric clock never toggles (the REA
+# sample domain freezes — START_PTR stuck, no capture). R18 = on-board 50 MHz
+# oscillator, HSIO Bank 0, 1.8 V (boards/polarfire-soc-discovery/pinout.yml).
+set_io -port_name ref_clk_50mhz \
+    -pin_name R18 \
+    -fixed true \
+    -DIRECTION INPUT \
+    -io_std LVCMOS18

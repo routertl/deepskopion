@@ -1,0 +1,88 @@
+# Buildroot defconfig — deepskopion riscv64 (PolarFire SoC Discovery Kit)
+# PF-L0 (DS-P2.125). The Zynq/Agilex python_overlay is armhf/aarch64; the
+# MPFS095T is a quad SiFive U54 (rv64gc), so its rootfs userspace is a THIRD,
+# architecture-distinct overlay. This is the riscv64 sibling of
+# sw/linux/buildroot_deepskopion_defconfig (armhf) and the Agilex aarch64 build
+# — same userspace CONTRACT (python3 + msgpack + dropbear + scp), rebuilt for
+# rv64gc so the same sw/stream daemon and rootfs_overlay init scripts run on the
+# PolarFire kit.
+#
+# WHY a separate file and not a flag on the existing one: an overlay tarball is
+# an ELF tree, not a config toggle — the interpreter, every .so, and the CPython
+# extension modules (msgpack's _cmsgpack, _ssl, zlib) are compiled for one ABI.
+# A riscv64 kernel cannot exec an armhf python3, so the overlay is per-arch by
+# construction. Keeping the three configs side by side makes "which arch is this
+# rootfs?" answerable from the filename.
+
+# Architecture: RISC-V 64-bit, rv64gc (imafdc) — the SiFive U54 application
+# cores of the MPFS (the E51 monitor core does not run Linux). glibc, LP64D.
+BR2_riscv=y
+BR2_RISCV_64=y
+BR2_riscv_g=y
+BR2_RISCV_ISA_RVC=y
+BR2_RISCV_ABI_LP64D=y
+
+# Toolchain: internal Buildroot toolchain, glibc, C++ enabled (some deps want it)
+BR2_TOOLCHAIN_BUILDROOT=y
+BR2_TOOLCHAIN_BUILDROOT_GLIBC=y
+BR2_TOOLCHAIN_BUILDROOT_CXX=y
+
+# Optimisation
+BR2_OPTIMIZE_2=y
+
+# System
+BR2_TARGET_GENERIC_HOSTNAME="deepskopion"
+BR2_TARGET_GENERIC_ISSUE="deepskopion (Buildroot python_overlay, riscv64)"
+BR2_TARGET_GENERIC_ROOT_PASSWD="root"
+BR2_INIT_BUSYBOX=y
+BR2_ROOTFS_DEVICE_CREATION_DYNAMIC_DEVTMPFS=y
+BR2_SYSTEM_DEFAULT_PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin"
+
+# Filesystem output — tarball; rr linux python_overlay extracts from this
+BR2_TARGET_ROOTFS_TAR=y
+BR2_TARGET_ROOTFS_TAR_GZIP=y
+
+# Python 3 + the non-stdlib deps deepskopion's sw/stream uses
+BR2_PACKAGE_PYTHON3=y
+BR2_PACKAGE_PYTHON3_SSL=y
+BR2_PACKAGE_PYTHON3_HASHLIB=y
+BR2_PACKAGE_PYTHON3_BZIP2=y
+BR2_PACKAGE_PYTHON3_ZLIB=y
+BR2_PACKAGE_PYTHON3_PIP=y
+BR2_PACKAGE_PYTHON_MSGPACK=y
+
+# SSH server = dropbear (lightweight sshd), same as the armhf overlay. dropbear's
+# own scp is compiled out by BR2_PACKAGE_DROPBEAR_SMALL (default y), so add the
+# OpenSSH CLIENT (scp/sftp/ssh) for `scp host:f board:` while keeping dropbear as
+# the running daemon. BR2_PACKAGE_OPENSSH_SERVER defaults to y once
+# BR2_PACKAGE_OPENSSH is enabled, so it MUST be explicitly disabled or sshd would
+# clash with dropbear on port 22 (DS-P3.79 caught this the hard way on armhf).
+BR2_PACKAGE_DROPBEAR=y
+BR2_PACKAGE_OPENSSH=y
+BR2_PACKAGE_OPENSSH_CLIENT=y
+# BR2_PACKAGE_OPENSSH_SERVER is not set
+
+# Useful runtime tools beyond busybox
+BR2_PACKAGE_TAR=y
+
+# CAN userspace is present but INERT by default: pfsoc_datalogger is CAN-free
+# (DS-P2.121 — CAN is opt-in per target, no CTU CAN nodes in this target's dt).
+# Shipping cansend/candump + the full iproute2 `ip` costs a few hundred KB and
+# means a CAN-enabled PolarFire variant needs no overlay rebuild — the same
+# reasoning as the armhf defconfig. busybox's `ip` cannot configure
+# `type can bitrate`, so the real iproute2 is required if CAN is ever enabled.
+BR2_PACKAGE_CAN_UTILS=y
+BR2_PACKAGE_IPROUTE2=y
+
+# NOTE — no I2C/SPI userspace here. The armhf overlay pulls pyserial/spidev/smbus2
+# and i2c-tools for the Zynq PS EMIO self-test (DS-P3.44/48). This image can open
+# the fabric MMUART1 as /dev/ttyS1 with the kernel 8250 driver (no extra package);
+# the boot arm does that when ds_mss_fabric=1 (DS-P2.126). It cannot open an MSS
+# I2C or SPI device, so those packages stay absent and the armers do not select
+# EMIO_MUX_SEL bits 8 or 10. CAN utils above stay inert: this target is CAN-free
+# and bit 11 is not armed.
+
+# Buildroot kernel/bootloader: WE DO NOT BUILD THESE — rr linux owns the kernel
+# and the HSS/U-Boot boot chain via its own steps. Buildroot here is strictly a
+# rootfs userspace tree. (Leave BR2_LINUX_KERNEL=n and BR2_TARGET_UBOOT=n
+# implicitly.)

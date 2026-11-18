@@ -1,0 +1,363 @@
+# =============================================================================
+# UART Datalogger Protocol Definition
+# Extracted from: hw/rtl/datalogger/uart/uart_datalogger.vhd, uart_frame_gen.vhd
+# =============================================================================
+# This file defines the HW<->SW protocol for the UART datalogger module.
+# The message width is 32 bits total.
+#
+# Key Feature: Blind-Discovery Auto-Calibration
+# The UART datalogger automatically detects baud rate, data bits (5-9),
+# parity, and stop bits from raw traffic.
+# =============================================================================
+
+protocol:
+  name: uart_datalogger
+  description: Auto-calibrating UART datalogger protocol
+  message_width: 32
+  version: "2.0"  # Protocol version with 9-bit optimization
+
+# =============================================================================
+# Identity — domain
+# =============================================================================
+# system_ids.yml is the source of truth for protocol domain codepoints.
+identity:
+  domain: 0x1
+
+# =============================================================================
+# Constants
+# =============================================================================
+constants:
+  # Field widths
+  device_id_width: 5
+  type_width: 3
+  timestamp_width: 16
+  data_width: 8
+  
+  # Message types (3-bit)
+  message_types:
+    config: 0b001        # Post-calibration configuration report
+    payload: 0b010       # Standard data or 9-bit with bit8=0
+    payload_9bit: 0b011  # 9-bit data with bit8=1
+    status: 0b100        # Calibration events and errors
+
+  # Status/Event codes (8-bit)
+  status_codes:
+    calibration_done: 0x00
+    calibration_timeout: 0x01
+    parity_error: 0x02
+    start_error: 0x03
+    stop_error: 0x04
+    # datalogger_lifecycle frames (DS-P3.90), on the per-device enable edge.
+    # DS-P2.245: they were 0x03/0x00, the START_ERROR/CALIBRATION_DONE codes.
+    enabled: 0x05
+    disabled: 0x06
+
+  # Parity encoding (2-bit: [parity_type, has_parity])
+  parity_encoding:
+    none: 0b00   # No parity (has_parity=0)
+    even: 0b01   # Even parity (has_parity=1, type=0)
+    odd: 0b11    # Odd parity (has_parity=1, type=1)
+
+  # Stop bit encoding (1-bit)
+  stop_bit_encoding:
+    one_stop: 1   # 1 stop bit
+    two_stop: 0   # 2 stop bits
+
+  # Calibration parameters
+  calibration:
+    min_bytes: 70           # Minimum bytes for reliable calibration
+    typical_bytes: 80       # Recommended bytes before lock
+    buffer_timeout_ms: 1.5  # Max idle time before timeout (at 100MHz)
+
+  # ==========================================================================
+  # Bit Ordering Convention
+  # ==========================================================================
+  # UART transmits data LSB-first per RS-232 standard.
+  # The shift register uses right-shift so that:
+  #   - First sampled bit (UART LSB, bit 0) → data[0]
+  #   - Last sampled bit (UART MSB, bit 7) → data[7]
+  # This maintains natural ascending bit order matching the original data.
+  # ==========================================================================
+  bit_ordering:
+    standard: LSB-first    # Per RS-232/UART specification
+    shift_direction: right # New bits enter at LSB, existing bits shift left
+    notes: >
+      The shift register implementation uses right-shift to preserve
+      natural bit ordering. Captured data[7:0] directly matches the
+      transmitted byte value without bit reversal.
+
+
+# =============================================================================
+# Message Formats
+# =============================================================================
+# All messages are 32-bit wide. The topmost 5 bits are always the device ID.
+# =============================================================================
+
+messages:
+  # ---------------------------------------------------------------------------
+  # Payload Message (Standard)
+  # Type: 0b010 - Captured UART data for 5-8 bit modes, or 9-bit with MSB=0
+  # ---------------------------------------------------------------------------
+  - name: payload
+    description: Captured UART data byte
+    type_code: 0b010
+    total_bits: 32
+    fields:
+      - name: device_id
+        bits: [31, 27]
+        width: 5
+        description: Datalogger device ID (from G_UART_DEV_ID generic)
+        
+      - name: type
+        bits: [26, 24]
+        width: 3
+        value: 0b010
+        description: Payload message type
+        
+      - name: timestamp
+        bits: [23, 8]
+        width: 16
+        description: Lower 16 bits of global 1µs timestamp
+        
+      - name: data
+        bits: [7, 0]
+        width: 8
+        description: |
+          Captured data byte:
+            - For 5-8 bit modes: Data left-aligned in [7:0]
+            - For 9-bit mode: Lower 8 bits, 9th bit encoded in type field
+
+  # ---------------------------------------------------------------------------
+  # Payload Message (9-bit High)
+  # Type: 0b011 - Captured 9-bit UART data where bit8=1
+  # ---------------------------------------------------------------------------
+  - name: payload_9bit
+    description: Captured 9-bit UART data with MSB=1
+    type_code: 0b011
+    total_bits: 32
+    fields:
+      - name: device_id
+        bits: [31, 27]
+        width: 5
+        description: Datalogger device ID (from G_UART_DEV_ID generic)
+        
+      - name: type
+        bits: [26, 24]
+        width: 3
+        value: 0b011
+        description: 9-bit payload with bit8=1
+        
+      - name: timestamp
+        bits: [23, 8]
+        width: 16
+        description: Lower 16 bits of global 1µs timestamp
+        
+      - name: data
+        bits: [7, 0]
+        width: 8
+        description: Lower 8 bits of 9-bit data (bit8 implied = 1)
+
+  # ---------------------------------------------------------------------------
+  # Config Message
+  # Type: 0b001 - Sent once after successful auto-calibration
+  # ---------------------------------------------------------------------------
+  - name: config
+    description: Post-calibration configuration report
+    type_code: 0b001
+    total_bits: 32
+    fields:
+      - name: device_id
+        bits: [31, 27]
+        width: 5
+        description: Datalogger device ID (from G_UART_DEV_ID generic)
+        
+      - name: type
+        bits: [26, 24]
+        width: 3
+        value: 0b001
+        description: Config message type
+        
+      - name: baud_cycles
+        bits: [23, 8]
+        width: 16
+        description: |
+          Detected baud rate expressed as clock cycles per bit.
+          Formula: baud_rate = clk_freq / baud_cycles
+          Example: 100 @ 100MHz = 1 Mbps
+        
+      - name: reserved
+        bits: [7, 7]
+        width: 1
+        description: Reserved for future use
+        
+      - name: stop_bits
+        bits: [6, 6]
+        width: 1
+        description: |
+          Stop bit configuration (stop_bit_encoding):
+            1 = one stop bit
+            0 = two stop bits
+        
+      - name: parity_type
+        bits: [5, 5]
+        width: 1
+        description: |
+          Parity type (valid only if parity_enable=1):
+            0 = Even parity
+            1 = Odd parity
+        
+      - name: parity_enable
+        bits: [4, 4]
+        width: 1
+        description: |
+          Parity detection:
+            0 = No parity detected
+            1 = Parity detected
+        
+      - name: word_length
+        bits: [3, 0]
+        width: 4
+        description: |
+          Detected word length:
+            5-9 = Number of data bits per frame
+          Note: For 9-bit mode, parity is not supported.
+
+  # ---------------------------------------------------------------------------
+  # Status Message
+  # Type: 0b100 - Calibration events and runtime errors
+  # ---------------------------------------------------------------------------
+  - name: status
+    description: Calibration events and error notifications
+    type_code: 0b100
+    total_bits: 32
+    fields:
+      - name: device_id
+        bits: [31, 27]
+        width: 5
+        description: Datalogger device ID (from G_UART_DEV_ID generic)
+        
+      - name: type
+        bits: [26, 24]
+        width: 3
+        value: 0b100
+        description: Status message type
+        
+      - name: timestamp
+        bits: [23, 8]
+        width: 16
+        description: Lower 16 bits of global 1µs timestamp
+        
+      - name: status_code
+        bits: [7, 0]
+        width: 8
+        description: |
+          Status/event code:
+            0x00 = Calibration complete (success)
+            0x01 = Calibration timeout (no valid traffic)
+            0x02 = Parity error detected
+            0x03 = Start bit error
+            0x04 = Stop bit error
+            0x05 = Enabled  (lifecycle: the datalogger was armed)
+            0x06 = Disabled (lifecycle: the datalogger was disarmed)
+
+# =============================================================================
+# Configuration Register
+# =============================================================================
+# The CONFIG port is G_CONFIG_WIDTH bits wide (default 16).
+# Unlike I2C/QSPI dataloggers, UART uses only the enable bit.
+# All parameters are auto-discovered.
+# =============================================================================
+
+config:
+  name: uart_config
+  description: Configuration input for UART datalogger
+  width: 16  # G_CONFIG_WIDTH default
+  fields:
+    - name: device_id
+      bits: [15, 11]
+      width: 5
+      description: Target device ID (must match G_UART_DEV_ID to apply config)
+      
+    - name: reserved
+      bits: [10, 1]
+      width: 10
+      description: Reserved (auto-calibration discovers all parameters)
+      
+    - name: enable
+      bits: [0, 0]
+      width: 1
+      description: |
+        Datalogger enable bit:
+          0 = Disabled (reset state, no traffic capture)
+          1 = Enabled (start auto-calibration and capture)
+
+# =============================================================================
+# Error Outputs
+# =============================================================================
+# The UART_ERRORS port is G_ERROR_WIDTH bits wide (default 2).
+# =============================================================================
+
+errors:
+  name: uart_errors
+  description: Error status outputs
+  width: 2  # G_ERROR_WIDTH default
+  fields:
+    - name: error_flags
+      bits: [1, 0]
+      width: 2
+      description: |
+        Runtime error flags:
+          [0] = Frame error (stop bit violation)
+          [1] = Parity error
+
+# =============================================================================
+# Decoding Examples (Python)
+# =============================================================================
+# Example decoder implementation for SW integration
+# =============================================================================
+
+examples:
+  decode_message: |
+    def decode_uart_msg(msg: int) -> dict:
+        """Decode a 32-bit UART datalogger message."""
+        device_id = (msg >> 27) & 0x1F
+        msg_type = (msg >> 24) & 0x07
+        timestamp = (msg >> 8) & 0xFFFF
+        data = msg & 0xFF
+        
+        result = {
+            "device_id": device_id,
+            "type": msg_type,
+            "timestamp": timestamp,
+        }
+        
+        if msg_type == 0b010:  # Payload (standard or 9-bit low)
+            result["name"] = "payload"
+            result["data"] = data
+            result["bit9"] = 0
+        elif msg_type == 0b011:  # Payload 9-bit high
+            result["name"] = "payload_9bit"
+            result["data"] = data
+            result["bit9"] = 1
+            result["full_word"] = (1 << 8) | data
+        elif msg_type == 0b001:  # Config
+            result["name"] = "config"
+            result["baud_cycles"] = timestamp  # Uses [23:8] for baud
+            result["stop_bits"] = 1 if (data >> 6) & 0x01 else 2
+            result["parity_enable"] = (data >> 4) & 0x01
+            result["parity_type"] = "odd" if (data >> 5) & 0x01 else "even"
+            result["word_length"] = data & 0x0F
+        elif msg_type == 0b100:  # Status
+            result["name"] = "status"
+            codes = {0x00: "cal_done", 0x01: "cal_timeout",
+                     0x02: "parity_err", 0x03: "start_err", 0x04: "stop_err",
+                     0x05: "enabled", 0x06: "disabled"}
+            result["status"] = codes.get(data, f"unknown_{data:#x}")
+        
+        return result
+
+  reconstruct_9bit: |
+    def reconstruct_9bit_word(msg_type: int, data: int) -> int:
+        """Reconstruct 9-bit word from message type and data."""
+        bit9 = 1 if msg_type == 0b011 else 0
+        return (bit9 << 8) | data

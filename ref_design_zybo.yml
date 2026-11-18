@@ -1,0 +1,52 @@
+# SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
+# DS-P1.103: the Zybo Z7-20 product reference design (target zybo_datalogger). The CTU CAN FD
+# bench design it replaces is kept, with its own build history, in bench/ref_design_canfd_demo.yml.
+# No resources block: no build of this target at a recorded commit exists yet, and a placeholder
+# number would read as a measurement.
+ref_design:
+  org: routertl
+  name: deepskopion-zybo
+  version: "0.1.0"
+  description: "Deepskopion hardware data logger on Digilent Zybo Z7-20 (AMD/Xilinx Zynq-7000)"
+  license: "CERN-OHL-W-2.0 AND MPL-2.0"
+  tags:
+    - deepskopion
+    - datalogger
+    - zynq-7000
+    - zybo
+    - vivado
+    - packet-capture
+target:
+  board: zybo-z7-20
+  vendor: xilinx
+  family: zynq-7000
+  part: xc7z020clg400-1
+  tool: Vivado
+  tool_version: "2024.1"
+project:
+  top_module: deepskopion_top
+  language: vhdl
+uses:
+  - ref: open-logic/olo_base_fifo_sync
+    version: "^4.4.1"
+  - ref: open-logic/olo_base_fifo_async
+    version: "^4.4.1"
+  - ref: open-logic/olo_base_wconv_n2xn
+    version: "^4.4.1"
+  - ref: open-logic/olo_base_wconv_xn2n
+    version: "^4.4.1"
+  - ref: enclustra/en_cl_fix_resize
+    version: "^d2ce1a617bc8"
+  - ref: routertl/rr_ddr_stream
+    version: "^0.3.6"
+source:
+  repo: https://github.com/routertl/deepskopion
+  # The commit this manifest was written against; zybo_datalogger is unchanged there. Not a build record.
+  commit: 3ab6df907951bd97bc906a62169a0f1d12c6119a
+build:
+  command: "rr target set zybo_datalogger && rr synth run && rr bitstream"
+  expected_bitstream: "build/zybo_datalogger/bitstream/deepskopion.bit"
+  estimated_time_minutes: 20
+verification:
+  status: claimed
+  blocker: "not built: no build of zybo_datalogger at a recorded commit yet; the DS-P1.103 clean-clone rr queue build records it"

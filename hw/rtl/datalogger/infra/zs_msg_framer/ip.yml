@@ -1,0 +1,48 @@
+# zs_msg_framer — packed 24-byte ZS frame emitter
+#
+# Wraps every accepted (datalogger_id, msg_class, msg_type, flags, timestamp,
+# payload) tuple into a 20-byte zs_msg header + payload-words, emitted
+# one 32-bit word per cycle on OUT_DATA. PS-side DdrRingDataSource parses
+# the resulting ring via sw/stream/zs_msg.parse_header (sanctioned oracle).
+#
+# Wire-format spec lives at:
+#   docs/software/data_plane/message_formats/common_header.md
+# Mirror parser:
+#   sw/stream/zs_msg.py
+#
+# DS-P3.28 shipped v1; DS-P2.36 added the contract-first requirements +
+# adversarial cocotb suite.
+
+ip:
+  name: zs_msg_framer
+  library: tich
+  language: vhdl
+  description: |
+    6-cycle FSM that latches a metadata+payload tuple on IN_VALID&&IN_READY
+    and emits a 20-byte ZS header + N×4-byte payload (G_PAYLOAD_WORDS,
+    default 1) into the downstream rr-ddr-stream FIFO. Single stamping
+    authority for the deepskopion data plane (post D.4).
+
+hdl:
+  top_module: zs_msg_framer
+  top_sim:    zs_msg_framer
+
+paths:
+  sources: .
+
+synthesis:
+  mode: rtl
+  sources:
+    - zs_msg_framer.vhd
+
+build:
+  simulation:
+    sources: []
+    test_dir: ../../../../sim/cocotb/tests/datalogger/infra/zs_msg_framer
+    simulator: nvc
+    waves:
+      formats: [fst]
+
+requirements: requirements.yml
+
+ips: []

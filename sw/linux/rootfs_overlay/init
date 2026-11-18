@@ -1,0 +1,87 @@
+#!/bin/sh
+# /init — deepskopion overlay (DS-T2.3).
+#
+# Overrides rr linux rootfs's stock /init (which execs /bin/sh
+# directly, bypassing /etc/init.d/S*). The overlay applies AFTER
+# rr scaffold per sdk/cli/commands/linux_steps/rootfs.py, so this
+# file wins.
+#
+# Boot order:
+#   1. virtual filesystems (proc/sys/dev) — same as stock /init
+#   2. /etc/init.d/S* in lexical order — busybox-traditional rcS
+#      pattern; deepskopion-stream lives at S99deepskopion-stream
+#   3. drop to /bin/sh for interactive use
+# System PATH: put /usr/local/bin on console and init.d PATH (DS-P3.162).
+# Matches BR2_SYSTEM_DEFAULT_PATH from the buildroot defconfigs.
+export PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin"
+
+mount -t proc proc /proc 2>/dev/null
+mount -t sysfs sysfs /sys 2>/dev/null
+mount -t devtmpfs devtmpfs /dev 2>/dev/null
+
+echo ""
+echo "======================================================="
+echo "  deepskopion — busybox $(busybox | head -1 | cut -d' ' -f2)"
+echo "  Kernel: $(uname -srv)"
+echo "  Hardware: $(uname -m)"
+echo "======================================================="
+echo ""
+
+# Proof-of-life: confirm /usr/bin/python3 is callable BEFORE running
+# init.d. Cheap smoke for the python_overlay (DS-P2.49) — if the
+# interpreter is missing or unloadable, every downstream daemon
+# silently fails with no diagnostic on the console.
+if command -v python3 >/dev/null 2>&1; then
+    echo "[init] python3 smoke:"
+    python3 -c "import sys; print('  python', sys.version.split()[0]); import msgpack; print('  msgpack', msgpack.version)" 2>&1 || true
+fi
+
+# Run BusyBox-traditional rcS chain: every executable S* script in
+# /etc/init.d/, lexical order. Lets deepskopion-stream + any future
+# init.d hooks fire without a separate sysvinit configure step.
+if [ -d /etc/init.d ]; then
+    for script in /etc/init.d/S*; do
+        [ -x "$script" ] || continue
+        echo "[init] $script start"
+        "$script" start
+    done
+fi
+
+# Give backgrounded daemons a moment to spit their startup line to the
+# log, then dump /var/log/* + process list to the console. Cheap
+# observability for headless / QEMU bring-up — without it, the boot
+# console just shows "Starting deepskopion-stream..." and we can't
+# tell if the daemon actually started or crashed on import.
+sleep 5
+echo "[init] === ps -ef ==="
+ps -ef 2>/dev/null | head -20 || ps 2>/dev/null | head -20 || true
+if [ -d /var/log ]; then
+    for log in /var/log/*.log; do
+        [ -f "$log" ] || continue
+        echo "[init] === ${log} ==="
+        tail -20 "$log" 2>/dev/null || true
+    done
+fi
+
+# DS-P3.45 / QEMU-iteration probe — print EMIO char-device + SPI
+# subsystem state so we can grep the serial log without typing into
+# a half-initialised shell. QEMU serial loop is much faster than
+# reboot-an-SD cycles for diagnosing kernel-driver binding issues.
+echo "[init] === EMIO char devices ==="
+ls -l /dev/ttyPS* /dev/i2c-* /dev/spidev* 2>&1
+echo "[init] === SPI subsystem (dmesg) ==="
+dmesg | grep -iE "spi[-_]?(master|cadence|dev)|cdns,spi|spi@" | head -10
+echo "[init] === SPI masters in /sys ==="
+ls /sys/class/spi_master/ 2>&1 | head -5
+echo "[init] === SPI devices in /sys ==="
+ls /sys/bus/spi/devices/ 2>&1
+
+# Interactive shell with a proper controlling terminal (DS-P3.51).
+# 'exec /bin/sh' as PID 1 puts the shell on /dev/console — a console
+# multiplexer, not a claimable tty — so it printed "can't access tty;
+# job control turned off" and Ctrl-Z / fg / bg / & were dead. setsid
+# makes the shell a session leader; cttyhack reopens the real console
+# (/sys/class/tty/console/active → e.g. ttyPS1) as its controlling tty,
+# restoring job control. Both are BusyBox applets (CONFIG_SETSID=y,
+# CONFIG_CTTYHACK=y). Kernel cmdline can still override via init=/bin/sh.
+exec setsid cttyhack /bin/sh

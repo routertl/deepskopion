@@ -1,0 +1,49 @@
+# edge_batcher — per-channel batching FSM for the EDGE_BATCH zs_msg payload
+#
+# Accumulates up to G_N_MAX edge_event entries into a packed payload buffer
+# and presents them to the downstream framer wrapper as a single zs_msg
+# frame. Five flush conditions per the wire spec (edge_batch.md §4):
+# capacity, delta overflow, timer, channel switch (handled at upstream
+# demux), reset.
+#
+# Wire-format spec:
+#   docs/software/data_plane/message_formats/payloads/edge_batch.md
+# Python codec (sanctioned oracle):
+#   sw/stream/zs_msg.py — EdgeEvent, pack_edge_batch, parse_edge_batch
+#
+# DS-P2.47 Phase B1 — block only; top-level wiring is Phase B2.
+
+ip:
+  name: edge_batcher
+  library: tich
+  language: vhdl
+  description: |
+    Per-channel batching FSM that turns a stream of 32-bit edge_event
+    words into a packed N × 4-byte EDGE_BATCH payload buffer, flushed
+    on capacity / delta overflow / idle timer / reset. Single channel
+    per instance — top-level instantiates one per datalogger_id and
+    arbitrates the outputs into zs_msg_framer.
+
+hdl:
+  top_module: edge_batcher
+  top_sim:    edge_batcher
+
+paths:
+  sources: .
+
+synthesis:
+  mode: rtl
+  sources:
+    - edge_batcher.vhd
+
+build:
+  simulation:
+    sources: []
+    test_dir: ../../../../sim/cocotb/tests/datalogger/infra/edge_batcher
+    simulator: nvc
+    waves:
+      formats: [fst]
+
+requirements: requirements.yml
+
+ips: []

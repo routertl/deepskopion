@@ -1,0 +1,12 @@
+# Deepskopion kernel config fragment for the EMIO self-test harness.
+#
+# Layered on top of the base xilinx_zynq_defconfig at kernel build
+# time via KERNEL_CONFIG_FRAGMENTS (or rr linux kernel auto-discovery
+# under RTL-P2.617 when the file lives at sw/linux/out/).
+#
+# DS-P3.45: spidev userspace driver lets /dev/spidev<bus>.<cs> appear
+# in /dev/ when an SPI controller has a child node with a whitelisted
+# compatible string (we use "rohm,dh2228fv" via build_dt.sh + DS-P3.48).
+# Without =y here, the spi-cadence master driver binds + the controller
+# is up, but no userspace device appears.
+CONFIG_SPI_SPIDEV=y

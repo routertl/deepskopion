@@ -1,0 +1,232 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# deployment_contract.yml — SW-C0 (DS-P1.46). THE declaration of how deepskopion
+# software reaches a board and starts there, in machine-readable form.
+#
+# Why this file exists: the repo used to answer "how does the capture daemon
+# start on the board?" in three places that disagreed. An init script sat in
+# rootfs_overlay/, two systemd units sat in docs/ labelled "examples", the
+# design decision on record (DS-D.7) said BOTH were staged in the overlay, and
+# nothing said which was authoritative. Every bring-up re-derived the answer,
+# and one of those derivations put `journalctl -u deepskopion-stream` into the
+# operator instructions for an image that has no systemd in it.
+#
+# This file is the SINGLE SOURCE OF TRUTH. Three consumers:
+#   * docs/DEPLOYMENT_CONTRACT.md — the prose. Its "autostart" section
+#     is GENERATED from this file, so the two cannot drift silently.
+#   * sw/linux/deployment_contract.py --check — the executable check. It fails
+#     when the overlay on disk and this declaration disagree about what starts
+#     on the board.
+#   * sw/linux/stage_daemon.sh — runs that check first, so `rr linux rootfs`
+#     ABORTS rather than baking an image whose boot behaviour nobody declared.
+#
+# Adding a mechanism (a systemd unit, an inittab, an rc.local) means editing
+# THIS file first. The check refuses an overlay that starts something the
+# declaration does not mention — which is the whole point: an undeclared
+# autostart file is exactly how the last one shipped for months into images
+# that could not run it.
+# ─────────────────────────────────────────────────────────────────────────────
+schema_version: '1.0.0'
+
+# ── The one autostart mechanism ──────────────────────────────────────────────
+boot:
+  # ONE init system, for every image this repo builds. Not "busybox, or systemd
+  # if you have it" — one, so "how does it start?" has an answer rather than a
+  # discussion.
+  init_system: busybox
+
+  # PID 1 comes from the overlay, not from rr's scaffold: `rr linux rootfs`
+  # writes a stock /init that execs /bin/sh directly and never looks at
+  # /etc/init.d, and the overlay is applied AFTER the scaffold, so this file
+  # wins. Without it nothing below would ever run.
+  pid1: init
+
+  # How PID 1 reaches the daemon, in one line a reader can verify by opening
+  # the file named above.
+  runner: >-
+    /init mounts proc/sys/dev, then iterates /etc/init.d/S* in lexical order and
+    calls `<script> start` on each executable one (busybox-traditional rcS),
+    then execs an interactive shell.
+
+  # The targets that build a Linux rootfs and therefore boot this way. Checked
+  # against every target file (targets/*.yml and bench/targets/*.yml, through
+  # tools/target_files.py) in both directions: a new Linux target that is not
+  # listed here is a target whose boot behaviour nobody declared. A board kept
+  # out of the public export declares its target in
+  # sw/linux/<board>/deployment_contract.yml instead, and the bench targets in
+  # bench/deployment_contract.yml (DS-P1.103).
+  targets:
+    - de25_datalogger
+    - zybo_datalogger
+
+# ── Bench tool images ────────────────────────────────────────────────────────
+# Images that are NOT product images and do NOT boot the way boot.targets do
+# (own PID 1, no /etc/init.d/S* chain, no inittab) are bench images. They are
+# declared under tool_images in bench/deployment_contract.yml (DS-P1.103); the
+# checker reads that key from a sidecar with the same rules. A rootfs-building
+# target is declared in boot.targets OR as a tool image, never both, never
+# neither.
+
+# ── Everything in the overlay that starts something at boot ──────────────────
+# The check requires this list to equal, exactly, the set of autostart-shaped
+# files present under the overlay root. Extra file on disk -> FAIL. Missing
+# declared file -> FAIL.
+overlay_root: sw/linux/rootfs_overlay
+
+autostart:
+  - path: init
+    provenance: tracked
+    starts: PID 1 itself — the /etc/init.d/S* chain, then an interactive shell
+    note: >-
+      Overrides the stock /init from `rr linux rootfs`.
+
+  - path: etc/init.d/S01hostname
+    provenance: tracked
+    starts: nothing — sets the kernel hostname from /etc/hostname
+    note: >-
+      First, so every later script and the login shell see the right name.
+
+  - path: etc/init.d/S40network
+    provenance: tracked
+    starts: eth0, using DHCP or owner-supplied `ds_ip=`/network.conf state
+    note: >-
+      Before dropbear and before the daemon: both bind sockets. The public
+      image contains no fallback address.
+
+  - path: etc/init.d/S49dropbear
+    provenance: tracked
+    starts: >-
+      the dropbear sshd on :22 (its binary is a per-arch staged artefact: armhf
+      for the Zynq targets from sw/linux/stage_dropbear_overlay.sh)
+    note: >-
+      After the network, before the daemon. Host keys generate on first use;
+      SSH remains closed until the owner provisions an authorized key.
+
+  - path: etc/init.d/S99deepskopion-stream
+    provenance: tracked
+    starts: THE CAPTURE DAEMON — `python3 -m sw.stream`, listening on 0.0.0.0:7475
+    note: >-
+      Last (S99), so the network is up and the datalogger defaults are armed
+      before the ring is drained. This is the answer to "how does the capture
+      daemon start on the board?".
+
+# ── The daemon: where its source lives and how it reaches the rootfs ─────────
+daemon:
+  name: deepskopion-stream
+  # The ONLY on-disk truth. Not a copy of it (DS-P2.81).
+  source: sw/stream
+  staged_to: sw/linux/rootfs_overlay/usr/local/share/deepskopion/sw/stream
+  staged_by: sw/linux/stage_daemon.sh
+  # Staging is not a step anyone has to remember: each Linux target declares
+  # linux.rootfs.stage_command, and `rr linux rootfs` runs it first and aborts
+  # if it fails (RTL-P1.117). Guarded by
+  # sw/stream/tests/test_overlay_in_sync.py.
+  staged_at: rr linux rootfs
+  # GENERATED, therefore gitignored. A fresh clone does not have it, and that
+  # absence is correct rather than broken.
+  provenance: generated
+  # Which --source the daemon runs is a PER-TARGET decision and it travels with
+  # the image, because the rootfs is tmpfs and anything written on the board is
+  # gone at the next boot (DS-P1.18).
+  source_selection: kernel cmdline `ds_source=` from targets/<name>.yml linux.bootargs
+  logs: /var/log/deepskopion-stream.log
+  pidfile: /var/run/deepskopion-stream.pid
+  listen: 0.0.0.0:7475 (wave_stream_v1) + 0.0.0.0:7476 (wave_events_v1)
+
+# ── Other things staged into the overlay (not autostart, but generated) ──────
+# Declared so a reader can tell a staged artefact from a source file without
+# running git: everything here is gitignored and regenerated by its script.
+staged_binaries:
+  # armhf dropbear for the Zynq targets, staged into the SHARED overlay.
+  - staged_to: sw/linux/rootfs_overlay/usr/sbin/dropbear
+    staged_by: sw/linux/stage_dropbear_overlay.sh
+  - staged_to: sw/linux/rootfs_overlay/usr/bin/{cansend,candump,cangen,candatalogger}
+    staged_by: sw/linux/stage_can_overlay.sh
+  - staged_to: sw/linux/rootfs_overlay/usr/bin/scp
+    staged_by: sw/linux/stage_openssh_scp_overlay.sh
+
+# ── Owner-supplied private files ─────────────────────────────────────────────
+# Files the image owner places in the overlay for a private image build. They
+# are neither source nor staged artefact: never committed, never in a public
+# image. Enforced: .gitignore matches exactly each path (a wider ignore would
+# hide other files next to it), and a tracked copy is a FAIL.
+owner_supplied:
+  - path: etc/deepskopion/authorized_keys
+    read_by: etc/init.d/S49dropbear
+    note: >-
+      The owner's SSH public key for a private image build. S49dropbear copies
+      it to /root/.ssh/authorized_keys on boot and starts dropbear; without it
+      SSH stays closed. Public images never carry it.
+
+# The rule that lets a reader classify ANY file under the overlay, with no
+# knowledge of the lists above. Enforced: a file that is neither tracked nor
+# ignored is a FAIL, because that is the state in which a build artefact gets
+# swept into the next broad `git add` and becomes a second source of truth.
+provenance_rule: >-
+  tracked by git = source, you may edit it; matched by .gitignore = staged
+  artefact, regenerate it and never edit it; neither = a mistake.
+
+# ── What does NOT autostart ──────────────────────────────────────────────────
+# Stated positively so "there is no unit for it" is an answer rather than a
+# hole in the documentation.
+not_autostarted:
+  - component: sw/telemetry
+    status: not staged into the rootfs at all; run it by hand over ssh
+    note: >-
+      Its exporter is a periodic snapshot tool, not part of the capture path.
+      It carried a systemd service+timer recipe until SW-C0; on a busybox
+      initramfs that recipe cannot run.
+  - component: sw/linux/rootfs_overlay/usr/local/bin/deepskopion-self-test
+    status: on-board self-test, invoked manually from a shell
+    note: >-
+      Deliberately not wired into the rcS chain — a self-test that runs on
+      every boot competes with the daemon for the ring it is testing.
+
+# ── Mechanisms this repo does not use, and why ───────────────────────────────
+# Each of these was, at some point, described in the tree as a supported path.
+# Deleting the description is not enough: the check below keeps them out.
+prohibited:
+  - mechanism: systemd
+    # Two units lived in rootfs_overlay/etc/systemd/system/ for months, so
+    # `rr linux rootfs` copied one into every image — into a rootfs with no
+    # systemd in it. MEASURED 2026-08-02 by unpacking the initramfs out of a
+    # deployed uImage: `sbin/init -> ../bin/busybox`, and `usr/lib/systemd`
+    # does not exist.
+    reason: >-
+      No image this repo builds contains systemd. A unit in the overlay is
+      dead weight that reads as authoritative.
+    forbidden_paths:
+      - etc/systemd
+      - usr/lib/systemd
+      - etc/xdg/autostart
+    forbidden_commands: [systemctl, journalctl]
+  - mechanism: petalinux
+    # House rule: never petalinux-build, never bitbake, never raw
+    # dtc. This is why the systemd variant lost its justification entirely —
+    # the only flow that would have produced a systemd rootfs is one we do not
+    # run.
+    reason: >-
+      Forbidden by house rule, and it is the ONLY justification the systemd
+      variant ever had. Python reaches the rootfs through a per-arch
+      python_overlay (armhf Zynq built by sw/linux/build_buildroot.sh and
+      sw/linux/extract_python_overlay.sh), not
+      through a PetaLinux profile.
+    forbidden_paths: []
+    forbidden_commands: [petalinux-build, petalinux-config, petalinux-create, bitbake]
+
+# Docs that state this contract to a reader. Their FENCED CODE BLOCKS — the
+# lines a reader copies and runs — must not invoke a prohibited command. Prose
+# may discuss systemd all it likes; a copyable `journalctl -u ...` is what put
+# an impossible command into the bring-up instructions.
+docs_bound_by_this_contract:
+  - docs/DEPLOYMENT_CONTRACT.md
+  - docs/software/telemetry_exporter.md
+  - sw/linux/README.md
+  - README.md
+
+# ── If a systemd target ever becomes real ────────────────────────────────────
+# Recorded so the answer is not re-litigated: a future target may land a DE25
+# rootfs that is not busybox. That is not a reason to keep a speculative unit
+# in the tree today. When it happens, ONE commit does all of: add the mechanism
+# here, stage the unit in the overlay, teach the check about it, and reconcile
+# the unit's --source with `ds_source=` so the selection still has exactly one
+# owner.

@@ -1,0 +1,27 @@
+rules:
+- id: ZYNQ7-SPI-EMIO-CS-001
+  severity: warning
+  message: 'Zynq-7000 PS SPI in EMIO mode: the native EMIO SPIx_SS_O slave-select
+    pin does NOT carry the chip-select to the fabric. The Cadence controller asserts
+    CS internally (CONFIG.SSCTRL) and its EMIO SCLK/MOSI reach the PL, but SPIx_SS_O
+    stays deasserted — so any fabric SPI slave keyed off SPIx_SS_O never sees a transaction
+    start (silent: build passes, HW hangs / slave never responds).'
+  incident: 'DS-T9 (deepskopion, Zybo Z7-20 xc7z020, Vivado 2024.1, 2026-05-31): SPI
+    injector ETIMEDOUT. rr_rea on-chip capture showed SPI0_SCLK_O toggles but SPI0_SS_O==0
+    NEVER triggers during a /dev/spidev1.0 transfer; live sampling of SPI CONFIG reg
+    0xE0006000 proved the xlnx,zynq-spi-r1p6 driver DOES drive native CS (SSCTRL=0xE
+    96%% of the xfer) — the EMIO SS_O pin silently drops it. Multi-build root-cause
+    hunt.'
+  property: PCW_EN_EMIO_SPI0
+  condition: == 1
+  fix: 'Do NOT rely on the native EMIO SPIx_SS_O. Enable an EMIO GPIO bit (PCW_GPIO_EMIO_GPIO_ENABLE),
+    route GPIO_O(n) to the fabric as the chip-select the slave watches, and couple
+    it to spidev via DT: cs-gpios = <&gpio0 (54+n) GPIO_ACTIVE_LOW> on the spi node.
+    The Linux SPI core toggles the GPIO around each transfer (spidev + cadence driver
+    untouched). Verified: REA SPI0_CS_GPIO==0 fires + full injector loop returns the
+    preloaded MISO bytes (deepskopion 694dbd5).'
+  part:
+  - xc7z020clg400-1
+  ip: processing_system7
+  ip_version:
+  - '5.5'

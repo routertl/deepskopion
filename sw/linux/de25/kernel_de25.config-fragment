@@ -1,0 +1,19 @@
+# DE-L0: built-in drivers needed before an initramfs can load modules.
+CONFIG_DEVMEM=y
+CONFIG_UIO=y
+CONFIG_UIO_PDRV_GENIRQ=y
+CONFIG_CAN=y
+CONFIG_CAN_DEV=y
+CONFIG_CAN_CTUCANFD=y
+CONFIG_CAN_CTUCANFD_PLATFORM=y
+# DS-P2.227: the CAN socket protocols, built in. The base defconfig has them =m
+# and this image loads no modules, so on de25_canfd socket(AF_CAN, SOCK_RAW,
+# CAN_RAW) failed with EPROTONOSUPPORT ("can: request_module (can-proto-1)
+# failed", DS-P3.211 board session, 2026-11-06) while can0/can1 were bound.
+CONFIG_CAN_RAW=y
+CONFIG_CAN_BCM=y
+CONFIG_STMMAC_ETH=y
+CONFIG_DWMAC_SOCFPGA=y
+# The generated initramfs source is necessarily an absolute build path. Do not
+# embed .config in the public kernel image and turn that path into board data.
+# CONFIG_IKCONFIG is not set

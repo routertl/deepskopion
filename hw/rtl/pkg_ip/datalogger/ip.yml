@@ -1,0 +1,35 @@
+# datalogger_pkg — the shared datalogger package pair, as a dependency manifest
+#
+# DS-P2.137: `rr sim run --ip <dir>` compiles ONLY the closure the selected
+# manifest declares; it never runs the test's main() (whose
+# custom_libraries={"tich": [...]} is what made these packages appear in a
+# project-mode sim). Every datalogger IP whose RTL says
+# `use tich.datalogger_pkg.all` must therefore name this manifest under
+# `dependencies:` — otherwise the standalone compile dies on
+# "library TICH not found".
+#
+# Lives in its own directory (not hw/rtl/pkg/) on purpose: rr attributes a
+# file's VHDL library to the NEAREST ip.yml above it, so an ip.yml dropped
+# into hw/rtl/pkg/ would silently claim every package there. This manifest
+# names the two files below by path and owns no other file's library. It
+# declares no `paths.sources` scan scope either: rr reconciles declared files
+# against every HDL file in that scope, and hw/rtl/pkg holds twelve packages.
+#
+# Order matters: datalogger_pkg `use`s datalogger_config_pkg.
+
+name: datalogger_pkg
+description: |
+  Generated datalogger build configuration (datalogger_config_pkg, from
+  tools/datalogger-builder/config/datalogger_config.yml) and the shared
+  datalogger types/constants built on it (datalogger_pkg).
+
+hdl:
+  language: vhdl
+  library: tich
+
+build:
+  synthesis:
+    mode: rtl
+    sources:
+      - ../../pkg/datalogger_config_pkg.vhd
+      - ../../pkg/datalogger_pkg.vhd

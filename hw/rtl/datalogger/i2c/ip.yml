@@ -1,0 +1,47 @@
+# i2c_datalogger — I2C line datalogger IP
+#
+# Mirrors the uart_datalogger contract-first pattern (DS-P2.33 / SNIF.1).
+# See docs/standards/datalogger_compliance_checklist.md section 8b for
+# the cross-datalogger R1..R8 rules.
+#
+# i2c_slave.vhd is promoted to a synthesis source (DS-P2.51 Phase 2):
+# the i2c_injector module wraps it as the bus responder for the chip-
+# internal EMIO testbench. Still listed under build.simulation.sources
+# too — the cocotb VIP keeps consuming it directly.
+
+ip:
+  name: i2c_datalogger
+  library: tich
+  language: vhdl
+  description: |
+    Bus-state-aware I2C line datalogger. Detects START / STOP /
+    REPEATED_START conditions, decodes address + direction + data
+    bytes, and emits 32-bit framed events + payload messages per
+    zs_msg_header_t convention. Reference event vocabulary in
+    hw/sim/vip/datalogger/i2c/decoder.py (I2cEvent enum).
+
+hdl:
+  top_module: i2c_datalogger
+  top_sim:    i2c_datalogger
+
+paths:
+  sources: .
+
+synthesis:
+  mode: rtl
+  sources:
+    - i2c_datalogger.vhd
+    - i2c_slave.vhd
+
+build:
+  simulation:
+    sources:
+      - i2c_slave.vhd
+    test_dir: ../../../sim/cocotb/tests/datalogger/i2c
+    simulator: nvc
+    waves:
+      formats: [fst]
+
+requirements: requirements.yml
+
+ips: []

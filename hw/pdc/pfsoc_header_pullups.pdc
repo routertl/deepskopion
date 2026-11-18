@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: 2026 Daniel J. Mazure
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+# DS-P2.309 interim (RTL-P2.2402): remove when rr ships the per-target pull key (DS-P3.269).
+# Every Raspberry Pi header input idles HIGH (UART RX, SPI CS and I2C all idle high):
+# an undriven input with no pull reads low and the I2C logger reports a stretch storm.
+set_io -port_name {rpi_gpio4} -RES_PULL Up
+set_io -port_name {rpi_gpio17} -RES_PULL Up
+set_io -port_name {rpi_gpio18} -RES_PULL Up
+set_io -port_name {rpi_gpio27} -RES_PULL Up
+set_io -port_name {rpi_gpio22} -RES_PULL Up
+set_io -port_name {rpi_gpio23} -RES_PULL Up
+set_io -port_name {rpi_gpio24} -RES_PULL Up
+set_io -port_name {rpi_gpio25} -RES_PULL Up
+set_io -port_name {rpi_gpio5} -RES_PULL Up
+set_io -port_name {rpi_gpio6} -RES_PULL Up
+set_io -port_name {rpi_gpio12} -RES_PULL Up
+set_io -port_name {rpi_gpio13} -RES_PULL Up
+set_io -port_name {rpi_gpio19} -RES_PULL Up
+set_io -port_name {rpi_gpio16} -RES_PULL Up

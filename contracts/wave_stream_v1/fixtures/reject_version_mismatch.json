@@ -1,0 +1,127 @@
+{
+  "contract": "wave_stream_v1",
+  "name": "reject_version_mismatch",
+  "expect": "reject",
+  "why": "HELO.ver names a wire version this side does not implement. This is the ONE fatal incompatibility in the policy: the consumer answers ERR VERSION_MISMATCH and closes rather than guessing at an unknown wire.",
+  "expect_fields": [
+    "frame[0][HELO].ver"
+  ],
+  "frames": [
+    {
+      "dir": "p2c",
+      "tag": 0,
+      "payload": {
+        "ver": "wave_stream_v2",
+        "producer": "deepskopion-daemon/0.1.0",
+        "sample_clk_hz": 100000000,
+        "channels": [
+          {
+            "id": 8,
+            "name": "uart_rx",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 9,
+            "name": "uart_tx",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 10,
+            "name": "i2c_sda",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 11,
+            "name": "i2c_scl",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 12,
+            "name": "can_rx",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 13,
+            "name": "can_tx",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 100,
+            "name": "uart_byte",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 101,
+            "name": "i2c_frame",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 102,
+            "name": "spi_xact",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 103,
+            "name": "jtag_tap",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 105,
+            "name": "can_msg",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 202,
+            "name": "protocol_stats",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "DecimalUnsigned"
+          },
+          {
+            "id": 920,
+            "name": "edge_lane",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          }
+        ],
+        "channel_total_bits": 6
+      }
+    }
+  ]
+}

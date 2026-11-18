@@ -1,0 +1,77 @@
+# Per-deployment RouteRTL resource descriptor (DS-C1).
+#
+# Copy this file to runtimes/hw.local.yml, which is gitignored, and replace
+# every angle-bracket value (or point RR_BENCH_CONFIG at a copy elsewhere). A
+# host with one attached board normally needs no file; use this only to
+# disambiguate a shared/multi-board host or to declare an optional netboot
+# service.
+#
+# DS-P2.161: do NOT copy it to runtimes/hw.yml. That path is the TRACKED
+# rr.hw.contract/v1 hardware contract (DE25 silicon REQs + falsifiers); its
+# `extends: "hw.local.yml"` hands this file to rr's bench resolver, and the
+# repo's own deployment readers (tools/de25_linux_image.py, check_bench_ip,
+# ds_preflight) read hw.local.yml directly.
+
+bench:
+  resources:
+    jtag_primary:
+      kind: jtag
+      cable: <jtag-cable-serial>
+    uart_primary:
+      kind: uart
+      dev: <persistent-uart-device-path>
+    netboot:
+      kind: tftp
+      path: <tftp-root>
+      layout: shared-root
+    de25_address:
+      # DS-D.39: deploy-time network identity. The DE25 image builder resolves
+      # this resource and injects ds_ip=<addr>/<prefix> into /chosen/bootargs.
+      kind: bench_ip
+      addr: <de25-static-ip>
+      prefix: <network-prefix-length>  # optional; DE25 default is 24
+    zybo_address:
+      # DS-P2.216: the Zybo-Z7-20's deploy-time address. Same DS-D.39 split:
+      # tools/check_bench_ip.py --target zybo --print-bootargs composes the
+      # bootargs for `rr linux dtb --bootargs`, and --target zybo refuses an
+      # image whose ds_ip= is absent or disagrees.
+      kind: bench_ip
+      addr: <zybo-static-ip>
+      prefix: <network-prefix-length>  # optional; default is 24
+    pfsoc_address:
+      # PF-L0 (DS-P2.125): the PolarFire SoC Discovery Kit's deploy-time
+      # address. Same DS-D.39 split as the DE25 — the public target names no
+      # address; tools/check_bench_ip.py --target pfsoc resolves this and
+      # refuses an image whose baked ds_ip= is absent or disagrees.
+      kind: bench_ip
+      addr: <pfsoc-static-ip>
+      prefix: <network-prefix-length>  # optional; default is 24
+
+  targets:
+    z7_20_primary:
+      board: zybo-z7-20
+      bench_ip: zybo_address
+      cmdline_ip_key: ds_ip
+      uses:
+        - zybo_address
+        - jtag_primary
+        - uart_primary
+        - netboot
+    de25_bench:
+      board: de25-standard
+      bench_ip: de25_address
+      cmdline_ip_key: ds_ip
+      uses:
+        - de25_address
+    pfsoc_bench:
+      board: polarfire-soc-discovery
+      bench_ip: pfsoc_address
+      cmdline_ip_key: ds_ip
+      uses:
+        - pfsoc_address
+        # PF-L0 (DS-P2.125): the TFTP slot the kit's boot payload stages into
+        # (ticket "stage per the TFTP layout"). PolarFire primary boot is HSS →
+        # U-Boot → Image from SD (plan §5.4); the netboot slot is the shared-root
+        # staging surface for pushing a refreshed Image/DTB during bring-up,
+        # scoped ${ipaddr}/deepskopion/active the same way the Zynq targets are.
+        - netboot

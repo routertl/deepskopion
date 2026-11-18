@@ -1,0 +1,46 @@
+# deepskopion_core capture sources ("board pins") — DS-P1.66.
+#
+# datalogger_config.yml numbers LOGICAL capture pins (the gather's
+# CAPTURE_PINS index). These are the sources deepskopion_core can put on a
+# logical pin. datalogger_gather_gen.py owns the logical-pin -> board-pin
+# map: it gives every configured signal one board pin and emits the result as
+# C_CAPTURE_BOARD_PIN in datalogger_config_pkg. deepskopion_core builds its
+# board_pin bus in this order (C_BOARD_PIN_<name>) and drives
+#   capture_pin(i) <= board_pin(C_CAPTURE_BOARD_PIN(i))
+# so whatever pin numbers a config uses, the core wires them.
+#
+# Order is the board_pin index; adding or renaming an entry needs the matching
+# board_pin assignment in deepskopion_core.vhd (elaboration fails otherwise).
+#
+#   prefer   PROTO.SIGNAL this source is built for (an EMIO/self-test mux or a
+#            tap). Allocation fills these first, which reproduces the PoC
+#            wiring (I2C on JA0-3, SPI on JA4-7, UART on JB0-1, EDGE on JB2-5,
+#            JTAG on the REA tap) for any mix that fits it.
+#   general  true: a package pin any signal may take once its preferred users
+#            are placed. false: an internal tap, only its preferred signal.
+#
+# A config may pin a signal by hand with a top-level BoardPins map
+# (logical pin -> name), e.g. `BoardPins: {3: JB7}`.
+
+board_pins:
+  - {name: JA0, prefer: I2C.SCL, general: true}     # ja(0), or EMIO I2C SCL (EMIO_MUX_SEL[0])
+  - {name: JA1, prefer: I2C.SDA, general: true}     # ja(1), or EMIO I2C SDA (EMIO_MUX_SEL[0])
+  - {name: JA2, prefer: I2C.SCL, general: true}     # ja(2)
+  - {name: JA3, prefer: I2C.SDA, general: true}     # ja(3)
+  - {name: JA4, prefer: SPI.CS, general: true}      # ja(4), or EMIO SPI SS (EMIO_MUX_SEL[2])
+  - {name: JA5, prefer: SPI.MOSI, general: true}    # ja(5), or EMIO SPI MOSI
+  - {name: JA6, prefer: SPI.MISO, general: true}    # ja(6), or EMIO SPI MISO
+  - {name: JA7, prefer: SPI.SCLK, general: true}    # ja(7), or EMIO SPI SCLK
+  - {name: JB0, prefer: UART.TX, general: true}     # jb(0), or EMIO UART0 TX (EMIO_MUX_SEL[1])
+  - {name: JB1, prefer: UART.TX, general: true}     # jb(1)
+  - {name: JB2, prefer: EDGE.LINE, general: true}   # jb(2), or the EDGE#1 self-test sources
+  - {name: JB3, prefer: EDGE.LINE, general: true}   # jb(3), or the EDGE#2 self-test sources
+  - {name: JB4, prefer: EDGE.LINE, general: true}   # jb(4), or SPI MISO (EMIO_MUX_SEL[3])
+  - {name: JB5, prefer: EDGE.LINE, general: true}   # jb(5), or SPI CS (EMIO_MUX_SEL[3])
+  - {name: JB6, general: true}                      # jb(6)
+  - {name: JB7, general: true}                      # jb(7)
+  - {name: REA_TCK, prefer: JTAG.TCK, general: false}  # REA BSCAN tap (DS-P3.56)
+  - {name: REA_TMS, prefer: JTAG.TMS, general: false}
+  - {name: REA_TDI, prefer: JTAG.TDI, general: false}
+  - {name: REA_TDO, prefer: JTAG.TDO, general: false}
+  - {name: CAN_BUS, prefer: CAN.RX, general: false}    # fabric CAN wired-AND bus (DS-P3.102)

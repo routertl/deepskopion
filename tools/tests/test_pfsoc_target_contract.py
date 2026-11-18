@@ -1,0 +1,312 @@
+"""PF-H0 (DS-P2.124): contract guards for targets/pfsoc_datalogger.yml.
+
+Mirrors tools/tests/test_de25_core_baseline_contract.py for the third silicon.
+The expensive proof (that the microchip closure simulates byte-identically to
+the Xilinx one) is the queued `pfsoc_baseline` tag run; these are the cheap,
+sub-second static invariants that keep the target honest:
+
+  * pfsoc_baseline is equality-pinned to zybo_datalogger's xilinx_baseline, so
+    PF-R0/PF-H0 can run "the same baseline, resolved for microchip" and diff
+    test-by-test (a divergent member set would mean a different DUT graph);
+  * the PFSoC-cheaper-than-DE25 facts (frozen MSS `.cxz` + the fic backend pin)
+    cannot silently drop out — losing either is what would make PF a re-derive
+    of DE25 rather than a shell (PF-P0 §9);
+  * the target wires the PFSoC top, the Libero SDC and the microchip vendor —
+    not a stray Xilinx/Altera leftover.
+"""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+import yaml
+
+
+ROOT = Path(__file__).resolve().parents[2]
+XILINX_TARGET = ROOT / "targets" / "zybo_datalogger.yml"  # DS-P1.103: the shipped Xilinx target
+PFSOC_TARGET = ROOT / "targets" / "pfsoc_datalogger.yml"
+
+
+def _load(path: Path) -> dict:
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def test_pfsoc_baseline_matches_xilinx_baseline_membership() -> None:
+    """Identical baseline module set => identical DUT closure, resolved for microchip."""
+    xil = _load(XILINX_TARGET)["simulation"]["tags"]["xilinx_baseline"]
+    pf = _load(PFSOC_TARGET)["simulation"]["tags"]["pfsoc_baseline"]
+    assert set(pf) == set(xil), (
+        "pfsoc_baseline must equal zybo_datalogger's xilinx_baseline module-for-module "
+        f"(missing={set(xil) - set(pf)}, extra={set(pf) - set(xil)})"
+    )
+
+
+def test_pfsoc_target_declares_microchip_libero_polarfire() -> None:
+    hw = _load(PFSOC_TARGET)["hardware"]
+    assert hw["vendor"] == "microchip"
+    assert hw["tool"] == "libero"
+    assert hw["platform"] == "polarfire-soc-discovery"
+    # One part, verified (PF-P0 §5.2) — no second variant anywhere.
+    assert hw["part"] == "MPFS095T-1FCSG325E"
+
+
+def test_pfsoc_top_module_is_the_third_wrapper() -> None:
+    proj = _load(PFSOC_TARGET)["project"]
+    assert proj["top_module"] == "deepskopion_pfsoc_top", (
+        "the PFSoC target must build the third wrapper deepskopion_pfsoc_top, not "
+        "the Zynq deepskopion_top or the DE25 top"
+    )
+    top = ROOT / "hw" / "rtl" / "pfsoc" / "deepskopion_pfsoc_top.vhd"
+    assert top.is_file(), f"{top} does not exist — the target names a missing top"
+
+
+def test_pfsoc_declares_frozen_mss_and_pins_the_fic_backend() -> None:
+    """PF-P0 §9: dropping either fact silently loses what makes PF cheaper than DE25."""
+    target = _load(PFSOC_TARGET)
+    mss = target["hardware"].get("mss")
+    assert mss == "hw/libero/pfsoc/mss/disco_mss.cxz", (
+        f"hardware.mss must point at the frozen MSS Configurator .cxz at the "
+        f"PF-P0 §3.1 location, found {mss!r}"
+    )
+    packages = target["packages"]
+    assert "routertl/rr_ddr_stream" in packages, (
+        "rr_ddr_stream (the FIC backend, ddr_stream_fic) must stay pinned — it is "
+        "how the PolarFire ring reuses proven RTL instead of new IP (PF-P0 §3.4)"
+    )
+
+
+# DS-P1.81: these two helpers also live in test_pfsoc_frozen_mss_cxz_ds_p1_81.py,
+# which holds the .cxz content checks that use them.
+def _part_die_and_package() -> tuple[str, str]:
+    """Derive (DIE, PACKAGE) from the target's `hardware.part`.
+
+    `MPFS095T-1FCSG325E` -> DIE `MPFS095T`, speed grade `1`, PACKAGE `FCSG325`,
+    range `E`. The die is everything before the first `-`; the package is the
+    alphanumeric run after the leading speed-grade digit(s), minus the trailing
+    single-letter temperature/range suffix.
+    """
+    part = _load(PFSOC_TARGET)["hardware"]["part"]
+    die, _, tail = part.partition("-")
+    m = re.match(r"^\d*([A-Z]+\d+)[A-Z]$", tail)
+    assert m, f"could not parse a package out of hardware.part {part!r}"
+    return die, m.group(1)
+
+
+def _grab(cfg: str, key: str) -> str:
+    m = re.search(rf"^{re.escape(key)}\s+(\S+)\s*$", cfg, re.M)
+    assert m, f"{key} not found in the vendored disco_mss.cfg"
+    return m.group(1)
+
+
+
+def test_pfsoc_memory_map_pins_the_family_token() -> None:
+    """GAP-0a (PF-L0 boot session): the family token `rr linux` resolves.
+
+    `rr linux`'s PolarFire backend reads `target:` from system_memory_map.yml and
+    looks it up in `_ARCH_TABLE` (_pfsoc.py). `polarfire-soc-mpfs` is NOT a member,
+    so every `rr linux` step for this target died "Unknown PolarFire SoC Linux
+    target". The board is the Discovery Kit, whose member token is `mpfs-disco-kit`.
+
+    This is the DE25 pin (test_de25_linux_image.py:252 asserts
+    memory_map["target"] == "agilex5-hps"); PolarFire had no equivalent, so the
+    GAP-0a fix landed with zero test power — reverting the token to the broken
+    value left the whole suite green. Pin it here so a revert fails loudly.
+    """
+    target = _load(PFSOC_TARGET)
+    mmap_rel = target["memory_map"]
+    assert mmap_rel == "sw/linux/pfsoc/system_memory_map.yml"
+    memory_map = _load(ROOT / mmap_rel)
+    assert memory_map["target"] == "mpfs-disco-kit", (
+        "system_memory_map.yml `target:` must be the `_ARCH_TABLE` member "
+        "`mpfs-disco-kit` — `polarfire-soc-mpfs` is not a member and dies at the "
+        "`rr linux` family gate (GAP-0a, BOOT_SESSION_2026-09-06.md)."
+    )
+
+
+def test_pfsoc_linux_pins_mss_handoff_and_hss_board() -> None:
+    """GAP A / GAP B (HSS half): the MSS handoff and the HSS board rr linux reads.
+
+    rr's `resolve_mss_handoff()` reads `hardware.mss` (RTL-P2.1220, in every
+    release from 5.1.0), so the vendored, part-correct .cxz is named there and
+    nowhere else; a `linux.mss_handoff` alias is read by no rr code (DS-P3.202).
+    `_ARCH_TABLE` maps `mpfs-disco-kit` -> hss_board `mpfs-icicle-kit-es`, so
+    `linux.hss_board` must override it back to the real board.
+    """
+    target = _load(PFSOC_TARGET)
+    linux = target["linux"]
+    assert linux["hss_board"] == "mpfs-disco-kit", (
+        "linux.hss_board must override the _ARCH_TABLE default "
+        "(mpfs-disco-kit -> mpfs-icicle-kit-es) back to the real Discovery-Kit "
+        "board — an Icicle HSS cannot train this board's DDR (GAP B)."
+    )
+    assert target["hardware"]["mss"] == "hw/libero/pfsoc/mss/disco_mss.cxz", (
+        "hardware.mss must name the frozen MSS .cxz; resolve_mss_handoff() reads it (GAP A)."
+    )
+    assert "mss_handoff" not in linux, (
+        "linux.mss_handoff is read by no rr code (DS-P3.202); a second copy of the "
+        "path can drift from hardware.mss without anything noticing."
+    )
+
+
+def test_pfsoc_gen_project_hook_binds_the_mss_builder() -> None:
+    """The queued Libero fit must source the SmartDesign builder tcl.
+
+    Without this, `tcl_hooks.gen_project` could be deleted or retargeted and all
+    the builder-contract tests (which hardcode the tcl path) stay green while the
+    queued build silently stops sourcing hw/libero/pfsoc/pfsoc_mss_subsys.tcl.
+    DE25 (test_de25_synthesis_hooks_p1_42.py) shows hook wiring is exactly the
+    thing that drifts.
+    """
+    target = _load(PFSOC_TARGET)
+    hooks = target.get("tcl_hooks", {})
+    gen_project = hooks.get("gen_project", [])
+    assert "hw/libero/pfsoc/pfsoc_mss_subsys.tcl" in gen_project, (
+        "targets/pfsoc_datalogger.yml tcl_hooks.gen_project must list "
+        "hw/libero/pfsoc/pfsoc_mss_subsys.tcl so the queued Libero fit sources "
+        f"the SmartDesign MSS builder, found {gen_project!r}"
+    )
+    assert (ROOT / "hw" / "libero" / "pfsoc" / "pfsoc_mss_subsys.tcl").is_file()
+
+
+def test_pfsoc_uses_libero_sdc_not_xdc_or_quartus_sdc() -> None:
+    target = _load(PFSOC_TARGET)
+    sdc = target["sources"]["sdc"]
+    # PF-F0 (DS-P2.151): moved under hw/sdc/pfsoc/ so paths.constraints can be
+    # scoped there (the flat hw/sdc leaked de25/ka SDCs into the Libero timing
+    # run — see test_pfsoc_sdc_scope_ds_p2_151.py).
+    assert sdc == ["hw/sdc/pfsoc/pfsoc_timing.sdc"], (
+        f"the PFSoC target must carry the Libero-dialect pfsoc_timing.sdc, found {sdc!r}"
+    )
+    assert (ROOT / "hw" / "sdc" / "pfsoc" / "pfsoc_timing.sdc").is_file()
+    # No Xilinx xdc leftovers on this target.
+    assert "xdc" not in target["sources"], "PFSoC target must not list a Xilinx xdc"
+
+
+def test_pfsoc_shares_the_datalogger_packages_block_with_xilinx() -> None:
+    """No forked datalogger RTL: the CAN-free package set matches zybo_datalogger's."""
+    xil = _load(XILINX_TARGET)["packages"]
+    pf = _load(PFSOC_TARGET)["packages"]
+    # The CTU CAN FD package is bench-only (DS-P1.103); no product declares it.
+    # DS-P1.73: routertl/rea is declared by BOTH (PFSoC reaches it through the
+    # MMIO door, Xilinx through JTAG) — the single provider, same version spec.
+    xil_non_opt_in = {
+        k: v for k, v in xil.items()
+        if k not in ("ctu-fee/ctucanfd_ip_core", "local/rr_rea")
+    }
+    assert "ctu-fee/ctucanfd_ip_core" not in pf
+    assert "local/rr_rea" not in pf
+    assert "routertl/rea" in pf
+    assert pf == xil_non_opt_in, (
+        "PFSoC datalogger package set must match zybo_datalogger's (minus the CAN "
+        "opt-in and Xilinx JTAG REA) — a divergence means a forked copy of the shared RTL"
+    )
+
+
+def test_pfsoc_rr_rea_workarounds_removed_ds_p3_163() -> None:
+    """DS-P3.163: verify DS-P2.128 workarounds are dropped and clash is resolved.
+
+    RTL-P2.1320 (Microchip gen_project maps g_libraries and refuses basename clash)
+    and RTL-P2.1319 (sources.libraries copies parsed correctly) allow removing:
+    1. sources_per_vendor.microchip.exclude [libs/local/rr_rea] in targets/pfsoc_datalogger.yml.
+    2. catch-block library mapping in hw/libero/pfsoc/pfsoc_mss_subsys.tcl.
+    3. local/rr_rea in packages (ensuring single rr_rea upstream source without clash).
+    """
+    target = _load(PFSOC_TARGET)
+    spv_exclude = (
+        target.get("sources_per_vendor", {})
+        .get("microchip", {})
+        .get("exclude", [])
+    )
+    # Workaround 1 dropped:
+    assert "libs/local/rr_rea" not in spv_exclude, (
+        "ds_p3_163: libs/local/rr_rea workaround must be removed from "
+        "sources_per_vendor.microchip.exclude"
+    )
+
+    # Single rr_rea source without package collision:
+    assert "local/rr_rea" not in target.get("packages", {}), (
+        "ds_p3_163: local/rr_rea package must not be declared in packages "
+        "(pfsoc uses upstream MMIO REA via sources.libraries.rr_rea)"
+    )
+    # DS-P1.73 reverses the old "routertl/rea must NOT be declared" half: the
+    # vendored copy that justified it is the defect (two non-identical
+    # rr_rea_regbank.vhd). routertl/rea IS the one source now.
+    assert "routertl/rea" in target.get("packages", {}), (
+        "ds_p1_73: routertl/rea must be declared in packages (the single REA source)"
+    )
+
+    # Workaround 2 dropped:
+    hook_text = (ROOT / "hw" / "libero" / "pfsoc" / "pfsoc_mss_subsys.tcl").read_text(
+        encoding="utf-8"
+    )
+    assert "0b. VHDL library mapping (DS-P2.152)" not in hook_text, (
+        "ds_p3_163: catch-block library mapping must be removed from pfsoc_mss_subsys.tcl"
+    )
+    assert "add_file_to_library -library $lib" not in hook_text, (
+        "ds_p3_163: add_file_to_library catch block must be removed from pfsoc_mss_subsys.tcl"
+    )
+
+
+def test_pfsoc_datalogger_pinout_materialization_has_no_pin_drift_warnings(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """DS-P3.192: rr project create / board-pinout materialization on
+    targets/pfsoc_datalogger.yml must resolve _top_module_ports to
+    deepskopion_pfsoc_top (not a package component in sources.syn) and
+    emit zero 'not declared on top' pin-drift warnings.
+    """
+    import logging
+    from routertl_core.project_manager import (
+        _materialize_board_pinout,
+        _top_module_ports,
+        resolve_auto_sources,
+    )
+    from sdk.cli.project_config import load_project_config
+
+    # DS-P2.279: the project holds every source the target's compile order needs. Besides hw/ and
+    # libs/, that is each path the target declares under `sources:` (its ctu_can_fd_rtl library is
+    # the stub tools/sim/vendor_stubs/ctu_can_fd/can_top_apb_stub.vhd, which is in the synthesis
+    # compile order, `rr sources --syn`). Without it the unit deepskopion_core.vhd instantiates was
+    # unresolved here: silent with no ctu-fee in libs/, refused with it, refused always under RTL-P2.2324.
+    target_yml = yaml.safe_load((ROOT / "targets" / "pfsoc_datalogger.yml").read_text(encoding="utf-8"))
+    declared = set()
+    for value in (target_yml.get("sources") or {}).values():
+        items = value.values() if isinstance(value, dict) else [value]
+        for item in items:
+            for path in (item if isinstance(item, list) else [item]):
+                if isinstance(path, str) and path and not Path(path).is_absolute():
+                    declared.add(Path(path).parts[0])
+    for entry in sorted({"hw", "libs", "targets", "project.yml", "routertl.lock", "ip.lock"} | declared):
+        src = ROOT / entry
+        if src.exists() and not (tmp_path / entry).exists():
+            (tmp_path / entry).symlink_to(src)
+
+    monkeypatch.setenv("RR_TARGET", str(tmp_path / "targets" / "pfsoc_datalogger.yml"))
+    cfg = load_project_config(str(tmp_path / "project.yml"))
+    resolve_auto_sources(cfg, str(tmp_path))
+
+    top_ports = _top_module_ports(cfg, proj_root=str(tmp_path))
+    records: list[str] = []
+
+    class _CaptureHandler(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record.getMessage())
+
+    logger = logging.getLogger("sdk.engine.board_pinout")
+    handler = _CaptureHandler(level=logging.WARNING)
+    logger.addHandler(handler)
+    try:
+        materialized = _materialize_board_pinout(cfg, proj_root=str(tmp_path))
+    finally:
+        logger.removeHandler(handler)
+
+    drift_warnings = [m for m in records if "not declared on top" in m]
+    assert drift_warnings == [], (
+        f"pfsoc_datalogger emitted pin-drift warnings: {drift_warnings}"
+    )
+    assert set(cfg["hardware"]["pins"]) <= set(top_ports), (
+        f"_top_module_ports missed pfsoc_datalogger pins: "
+        f"{sorted(set(cfg['hardware']['pins']) - set(top_ports))}"
+    )
+    assert materialized, "pfsoc_datalogger must materialize board_pins.pdc"

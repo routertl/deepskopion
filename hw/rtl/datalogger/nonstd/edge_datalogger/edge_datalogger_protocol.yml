@@ -1,0 +1,427 @@
+# =============================================================================
+# Edge Detector Datalogger Protocol Definition
+# Extracted from: hw/rtl/datalogger/nonstd/edge_datalogger/edge_datalogger.vhd
+# =============================================================================
+# This file defines the HW<->SW protocol for the Edge Detector datalogger module.
+# The message width is 32 bits total.
+#
+# Key Feature: Sub-Microsecond Edge Timing
+# The Edge Detector captures signal transitions with clock-cycle precision
+# using a 16-bit global timestamp plus an 8-bit sub-microsecond extension.
+#
+# This datalogger is classified as "non-standard" (nonstd/) because it does
+# not use the 3-bit message type discriminator. Instead, bits [26:24] carry
+# three independent operational flags (S, F, E).
+# =============================================================================
+
+protocol:
+  name: edge_datalogger
+  description: Single-channel edge transition detector with sub-µs timing
+  message_width: 32
+  version: "1.0"
+  category: nonstd  # Non-standard: no message type discriminator
+
+# =============================================================================
+# Constants
+# =============================================================================
+constants:
+  # Field widths
+  device_id_width: 5
+  flags_width: 3       # S + F + E (not a message type)
+  timestamp_width: 16
+  extension_width: 8
+
+  # FIFO parameters
+  fifo_depth: 8           # NB: EXPONENT — fifo_sync makes 2**8 = 256 words
+  fifo_width: 27        # S + F + E + timestamp(16) + extension(8)
+
+  # CONFIG control codes (2-bit, in deviceLoadConfig[1:0])
+  config_codes:
+    disabled: 0b00              # Datalogger off (default after reset)
+    enable_capturing: 0b01      # Enable edge capture
+    read_trigger_on: 0b10      # Enable reading + continue capturing
+    read_trigger_off: 0b11     # Enable reading + stop capturing
+
+  # Edge types (from datalogger_pkg)
+  edge_detection: both         # Captures both rising and falling edges
+
+# =============================================================================
+# Message Format
+# =============================================================================
+# The Edge Detector emits a single message type. There is no CONFIG/STATUS
+# discrimination — every output word is an edge event (or a read-triggered
+# sample). The S bit distinguishes SW-requested reads from edge-triggered
+# events.
+# =============================================================================
+
+messages:
+  # ---------------------------------------------------------------------------
+  # Edge Event Message
+  # Sent on: detected edge transition OR software-triggered readback
+  # ---------------------------------------------------------------------------
+  - name: edge_event
+    description: Edge transition or readback event with sub-µs timestamp
+    total_bits: 32
+    fields:
+      - name: device_id
+        bits: [31, 27]
+        width: 5
+        description: >
+          Datalogger instance ID (from G_ED_DEV_ID generic, default 28).
+          Used by the arbiter and SW to identify the source datalogger.
+
+      - name: s_bit
+        bits: [26, 26]
+        width: 1
+        description: >
+          Send/ReadEvent flag.
+            0 = Edge-triggered event (normal operation).
+            1 = Software-triggered readback (via CONFIG read trigger codes).
+          Affects interpretation of the E bit polarity. DS-T2.84: an edge
+          detected on the cycle of a read is written one cycle later with
+          S=0 and that cycle's E and timestamp; it no longer reads as a
+          second readback.
+
+      - name: f_bit
+        bits: [25, 25]
+        width: 1
+        description: >
+          FIFO pressure flag.
+            0 = FIFO has capacity.
+            1 = FIFO is almost full (backpressure warning).
+          SW should use this to detect potential data loss.
+
+      - name: e_bit
+        bits: [24, 24]
+        width: 1
+        description: >
+          Edge polarity / signal level.
+            When S=0 (edge event): Inverted current input level (captures
+            the PREVIOUS level before the edge: 1=was-high→falling,
+            0=was-low→rising).
+            When S=1 (read event): Current input level (direct sample:
+            1=high, 0=low).
+          RTL: `not EDGE_IN when ReadEvent='0' else EDGE_IN` (line 169).
+
+      - name: timestamp
+        bits: [23, 8]
+        width: 16
+        description: >
+          Lower 16 bits of the global 1µs timestamp.
+          Registered snapshot at the moment of the event.
+
+      - name: extension
+        bits: [7, 0]
+        width: 8
+        description: >
+          Sub-microsecond timing extension. Free-running counter (0–99 at
+          100 MHz) that resets on each 1µs timestamp tick.
+          Full timestamp: timestamp_us * 1000 + extension * 10 (ns).
+          Provides clock-cycle-precise edge timing.
+
+  # ---------------------------------------------------------------------------
+  # Lifecycle frame (DS-T2.43; wire identity DS-T2.84)
+  # Sent on: every enable (code 0x03) and disable (code 0x00) of the datalogger
+  # ---------------------------------------------------------------------------
+  - name: lifecycle
+    description: >
+      ENABLED / DISABLED marker. Bits [26:24] = "100" are bit-identical to an
+      S=1/F=0/E=0 readback of level 0, so the word cannot identify itself.
+      ED_MSG_LIFECYCLE = 1 on its ED_MSG_VLD cycle; the gather tags it
+      EVT_EDGE_LIFECYCLE (0x08) and the core frames it alone as msg_type
+      0x0608. It never enters an EDGE_BATCH / EDGE_EVENTS.
+    total_bits: 32
+    fields:
+      - { name: device_id, bits: [31, 27], width: 5,  description: "G_ED_DEV_ID" }
+      - { name: type,      bits: [26, 24], width: 3,  description: "100" }
+      - { name: timestamp, bits: [23, 8],  width: 16, description: "low 16 bits of TIMESTAMP" }
+      - { name: code,      bits: [7, 0],   width: 8,  description: "0x03 ENABLED, 0x00 DISABLED" }
+
+  # ---------------------------------------------------------------------------
+  # Stream-RLE words (DS-P2.16), CONFIG[4:3] = 10
+  # Sent with ED_MSG_STREAM = 1. The gather tags them EVT_EDGE_RLE (0x09) and
+  # the core frames each alone as msg_type 0x0609; never an EDGE_BATCH entry.
+  # Bits [26:24] are the word type below, not S/F/E. Ticks are CLK cycles.
+  # Edge time = SYNC timestamp + every delta since = the TIMESTAMP an
+  # edge_event word would carry. At most one word is written per CLK.
+  # ---------------------------------------------------------------------------
+  - name: rle_sync
+    description: >
+      Anchor. Written on the first cycle after enable, and on the first cycle
+      the FIFO has room after an RLE word was lost to a full FIFO (ED_ERRORS[0]
+      pulses once for the lost word; edges until the SYNC are not recorded).
+      Type 000 = line low, 001 = line high.
+    total_bits: 32
+    fields:
+      - { name: device_id, bits: [31, 27], width: 5,  description: "G_ED_DEV_ID" }
+      - { name: type,      bits: [26, 24], width: 3,  description: "000 line low, 001 line high" }
+      - { name: timestamp, bits: [23, 0],  width: 24, description: "TIMESTAMP[23:0]" }
+
+  - name: rle_pack
+    description: >
+      Three edges. Each delta is 1..255 ticks since the previous edge (or the
+      SYNC / IDLE before it) and toggles the line. A PACK with one or two
+      deltas is written zero-padded when its newest delta reaches 255 ticks
+      with no next edge, or on disable.
+    total_bits: 32
+    fields:
+      - { name: device_id, bits: [31, 27], width: 5, description: "G_ED_DEV_ID" }
+      - { name: type,      bits: [26, 24], width: 3, description: "101" }
+      - { name: delta_2,   bits: [23, 16], width: 8, description: "newest, 0x00 = empty" }
+      - { name: delta_1,   bits: [15, 8],  width: 8, description: "0x00 = empty" }
+      - { name: delta_0,   bits: [7, 0],   width: 8, description: "oldest" }
+
+  - name: rle_long
+    description: One edge 256 .. 2**G_RLE_CNT_WIDTH-1 ticks after the previous one.
+    total_bits: 32
+    fields:
+      - { name: device_id, bits: [31, 27], width: 5,  description: "G_ED_DEV_ID" }
+      - { name: type,      bits: [26, 24], width: 3,  description: "110" }
+      - { name: delta,     bits: [23, 0],  width: 24, description: "ticks" }
+
+  - name: rle_idle
+    description: >
+      2**G_RLE_CNT_WIDTH-1 ticks (2**24-1 in production) with no edge. Time
+      advances, the line does not toggle; the next delta counts from here.
+    total_bits: 32
+    fields:
+      - { name: device_id, bits: [31, 27], width: 5,  description: "G_ED_DEV_ID" }
+      - { name: type,      bits: [26, 24], width: 3,  description: "111" }
+      - { name: ticks,     bits: [23, 0],  width: 24, description: "ticks elapsed" }
+
+# =============================================================================
+# Configuration Register
+# =============================================================================
+# The CONFIG port is G_CONFIG_WIDTH bits wide (default 16).
+# The config_control entity filters by device ID and extracts local bits.
+# =============================================================================
+
+config:
+  name: edge_config
+  description: Configuration input for Edge Detector datalogger
+  width: 16  # G_CONFIG_WIDTH default
+  fields:
+    - name: device_id
+      bits: [15, 11]
+      width: 5
+      description: >
+        Target device ID (must match G_ED_DEV_ID to apply config).
+        Managed by the config_control shared infrastructure entity.
+
+    - name: maxfreq_rearm
+      bits: [2, 2]
+      width: 1
+      description: >
+        DS-P3.117 max-frequency RE-PING / RE-ARM. A RISING edge on this bit
+        clears the latched min edge-to-edge interval (ED_MAX_INTERVAL back to
+        all-ones) and reopens a fresh measurement window — the mandatory
+        stale-latch escape. Level-held; edge-detected in RTL so a held bit
+        re-arms exactly once. (Was config.reserved[10:2] bit 2.)
+
+    - name: capture_mode
+      bits: [4, 3]
+      width: 2
+      description: >
+        DS-P2.16 capture mode, latched on the enable cycle (a change while
+        enabled applies at the next enable):
+          00 = Event (default): one edge_event word per edge.
+          10 = Stream-RLE: rle_* words, ED_MSG_STREAM = 1, see messages.
+          01, 11 = Reserved, behave as Event.
+        In Stream-RLE mode the read-trigger readbacks (control codes 10/11)
+        are not written; the SYNC word carries the line level.
+
+    - name: reserved
+      bits: [10, 5]
+      width: 6
+      description: Reserved for future use (must be 0)
+
+    - name: control_code
+      bits: [1, 0]
+      width: 2
+      description: >
+        Operating mode selection:
+          00 = Disabled (reset state, no capture)
+          01 = Enable edge capturing (capture both edges)
+          10 = Enable read trigger + continue capturing
+          11 = Enable read trigger + stop capturing
+
+# =============================================================================
+# Error Outputs  (DS-P3.24 / DS-P3.70 error-provenance)
+# =============================================================================
+# The ED_ERRORS port is G_ERROR_WIDTH bits wide (default 2).
+#
+# Edge is a FABRIC-RATE datalogger: its internal FWFT FIFO (depth 8) can overflow
+# UPSTREAM of the gather when edges arrive faster than ED_MSG_RDY drains — a
+# data loss INVISIBLE to DROP_CNT (arbiter backpressure) and DDR_BACKPRESSURE_CNT
+# (ring full). This is the canonical internal-FIFO-overflow provenance class
+# (system_ids.yml error_events: internal_fifo_overflow = ERR_EVT 0xF0).
+# =============================================================================
+
+errors:
+  name: edge_errors
+  description: >
+    Runtime loss-provenance, ED_ERRORS port. DS-P3.24 drives it; the gather
+    accumulates the overflow pulses into ERR_CNT_EDGE = the lost-edge COUNT.
+  width: 2  # G_ERROR_WIDTH default
+  fields:
+    - name: internal_fifo_overflow
+      bits: [0, 0]
+      width: 1
+      provenance: internal_fifo_overflow   # system_ids.yml -> ERR_EVT_INTERNAL_FIFO_OVERFLOW (0xF0)
+      description: >
+        Pulses '1' for ONE clk per DROPPED edge — a both-edge transition was
+        detected while the internal FIFO was FULL, so the write was suppressed
+        and the edge was lost. The gather sums these pulses into ERR_CNT_EDGE
+        (the out-of-band lost-edge count, devmem-readable). DS-P3.70 piece-3 then
+        snapshots it into an in-band SEV_ERROR | DOMAIN_EDGE |
+        ERR_EVT_INTERNAL_FIFO_OVERFLOW | lost_count frame, rendered by RouteWave
+        as an inline "N edges lost here" marker. Distinct from the per-event
+        f_bit (almost-full PRESSURE warning) — this is actual LOSS.
+    - name: reserved
+      bits: [1, 1]
+      width: 1
+      description: "Reserved (driven 0). Future: read-path / batcher overflow split."
+
+# =============================================================================
+# Max-Frequency Telemetry  (DS-P3.117)
+# =============================================================================
+# IN-BAND on the edge stream. The FPGA is authoritative — it measures the FASTEST
+# validated activity on the captured line as the SMALLEST edge-to-edge interval
+# (min half-period) in CLK ticks since the last re-arm, and surfaces it as a
+# dedicated edge event: EVT_EDGE_MAXFREQ (DOMAIN_EDGE | event_id 0x02; see
+# sw/stream/zs_msg.py pack/parse_edge_maxfreq + decoders.decode_edge). This is
+# NOT a regbank CSR — the earlier MAXFREQ_IVAL_EDGE<k> CSR slots were the wrong
+# out-of-band channel and were reverted — so RouteWave can correlate the max
+# frequency in time with the live edges on the same stream.
+#
+# Plumbing note: the gather→edge_batcher aggregator hard-stamps event_id 0x01
+# (EVT_EDGE_BATCH) on the normal per-event edge path, so the max-freq frame does
+# NOT ride that path. It is emitted as a SEPARATE framer input — the established
+# in-band escape used by the per-channel loss frames (error_event_bank emits
+# SEV_ERROR|DOMAIN_EDGE|ERR_EVT_INTERNAL_FIFO_OVERFLOW as its own framer input,
+# bypassing the aggregator). A sibling EVT_EDGE_MAXFREQ emitter follows that
+# exact mechanism. (D.27/D.28 govern the RouteWave sigrok decoder, not this
+# in-band-vs-CSR split; the formal tdecision is recorded super-repo-side.)
+#
+# Glitch robustness (the heart of the ticket): the interval feeding the tracker
+# comes only from glitch_filter-conditioned edges (gather DS-T3.5), AND a local
+# floor G_MAXFREQ_MIN_INTERVAL rejects any sub-floor interval — a one-off runt
+# can never latch a spuriously-high frequency. Host re-arm (CONFIG[2]) clears
+# the latch. The interval counter SATURATES (never wraps) so a long idle gap
+# cannot alias to a small interval.
+maxfreq:
+  name: edge_maxfreq
+  event_id: 0x02   # EVT_EDGE_MAXFREQ under DOMAIN_EDGE (in-band carrier)
+  description: >
+    Max-frequency (min validated edge-to-edge interval) telemetry, carried
+    IN-BAND as EVT_EDGE_MAXFREQ (DOMAIN_EDGE | 0x02).
+    freq_max = G_SYS_CLK / (2 * ED_MAX_INTERVAL). Wire format + helpers:
+    sw/stream/zs_msg.py pack/parse_edge_maxfreq (8-byte payload: u32 interval,
+    u8 channel, u8 ival_width, u16 flags); sw/stream/edge_capture.py
+    maxfreq_interval_to_hz / maxfreq_is_sentinel; daemon decode in
+    sw/stream/decoders.py decode_edge.
+  generics:
+    - { name: G_MAXFREQ_WIDTH,        default: 24, description: "min-interval register width (CLK ticks)" }
+    - { name: G_MAXFREQ_MIN_INTERVAL, default: 2,  description: "glitch floor: intervals strictly below this are rejected" }
+    - { name: G_MAXFREQ_CONFIRM,      default: 1,  description: "confirmation count N: latch the largest of the last N consecutive intervals; N >= 4 stops one above-floor runt raising the max" }
+  ports:
+    - name: ED_MAX_INTERVAL
+      dir: out
+      width: G_MAXFREQ_WIDTH
+      description: >
+        Smallest validated edge-to-edge interval in CLK ticks since the last
+        re-arm. All-ones = sentinel (no edge measured yet / just re-armed).
+    - name: ED_MAX_NEW
+      dir: out
+      width: 1
+      description: >
+        Pulses one CLK each time a NEW (smaller) min interval is latched —
+        event-driven, so the downstream EVT_EDGE_MAXFREQ emitter can fire on the
+        pulse (and on a CONFIG[2] re-arm) without polling.
+
+# =============================================================================
+# Decoding Examples (Python)
+# =============================================================================
+# Example decoder implementation for SW integration
+# =============================================================================
+
+examples:
+  decode_message: |
+    def decode_edge_msg(msg: int, clk_freq_mhz: int = 100) -> dict:
+        """Decode a 32-bit Edge Detector datalogger message.
+
+        Args:
+            msg: Raw 32-bit hardware word.
+            clk_freq_mhz: System clock frequency in MHz (for extension→ns).
+
+        Returns:
+            Dictionary with decoded fields.
+        """
+        device_id = (msg >> 27) & 0x1F
+        s_bit     = (msg >> 26) & 0x01
+        f_bit     = (msg >> 25) & 0x01
+        e_bit     = (msg >> 24) & 0x01
+        timestamp = (msg >> 8) & 0xFFFF
+        extension = msg & 0xFF
+
+        # Convert extension to nanoseconds
+        ns_per_cycle = 1000 // clk_freq_mhz  # 10ns at 100MHz
+        full_ts_ns = timestamp * 1000 + extension * ns_per_cycle
+
+        result = {
+            "device_id": device_id,
+            "timestamp_us": timestamp,
+            "extension_cycles": extension,
+            "timestamp_ns": full_ts_ns,
+            "fifo_pressure": bool(f_bit),
+        }
+
+        if s_bit:
+            # Software-triggered readback
+            result["type"] = "readback"
+            result["level"] = e_bit  # Direct sample
+        else:
+            # Edge-triggered event
+            result["type"] = "edge"
+            # E bit is inverted for edge events
+            result["edge"] = "falling" if e_bit else "rising"
+            result["level_after"] = 0 if e_bit else 1
+
+        return result
+
+  reconstruct_waveform: |
+    def edge_to_transitions(messages: list[int]) -> list[tuple[int, int]]:
+        """Convert a stream of edge messages to (timestamp_ns, value) pairs.
+
+        Suitable for feeding into logic-trace Channel::addTransition().
+        """
+        transitions = []
+        for msg in messages:
+            decoded = decode_edge_msg(msg)
+            if decoded["type"] == "edge":
+                transitions.append((
+                    decoded["timestamp_ns"],
+                    decoded["level_after"],
+                ))
+        return transitions
+
+# =============================================================================
+# Contract Compliance Notes
+# =============================================================================
+# This datalogger is in the "nonstd" category and has known divergences from
+# the standard datalogger contract (UART/I2C/QSPI):
+#
+# Justified divergences:
+#   - No 3-bit message type: Uses S/F/E flags instead (more useful for
+#     edge detection than message type discrimination).
+#   - No CONFIG message: No auto-calibration; immediately operational.
+#   - Extension in [7:0] instead of Data: Sub-µs timing is the core value.
+#
+# Resolved (DS-P3.24):
+#   - ED_ERRORS[0] now DRIVEN — pulses per dropped edge; gather accumulates it
+#     into ERR_CNT_EDGE (the lost-edge count, out-of-band). Closes the old
+#     "error reporting not driven" gap.
+# Remaining (DS-P3.70 piece 3):
+#   - In-band SEV_ERROR | DOMAIN_EDGE | ERR_EVT_INTERNAL_FIFO_OVERFLOW | lost_count
+#     message in the data stream (the framer-side emit) — tracked under DS-P3.70.
+# =============================================================================

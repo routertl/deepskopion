@@ -1,0 +1,158 @@
+{
+  "contract": "wave_stream_v1",
+  "name": "reject_loss_unknown_stage",
+  "expect": "reject",
+  "why": "A loss annotation naming a stage outside the provenance taxonomy. The point of the taxonomy is that a loss is attributable to a pipeline stage; an unknown stage is exactly the unattributable number it replaced.",
+  "expect_fields": [
+    "frame[2][ANNOTATIONS].annotations[0].payload.loss_stage"
+  ],
+  "frames": [
+    {
+      "dir": "p2c",
+      "tag": 0,
+      "payload": {
+        "ver": "wave_stream_v1",
+        "producer": "deepskopion-daemon/0.1.0",
+        "sample_clk_hz": 100000000,
+        "channels": [
+          {
+            "id": 8,
+            "name": "uart_rx",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 9,
+            "name": "uart_tx",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 10,
+            "name": "i2c_sda",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 11,
+            "name": "i2c_scl",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 12,
+            "name": "can_rx",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 13,
+            "name": "can_tx",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 100,
+            "name": "uart_byte",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 101,
+            "name": "i2c_frame",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 102,
+            "name": "spi_xact",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 103,
+            "name": "jtag_tap",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 105,
+            "name": "can_msg",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 202,
+            "name": "protocol_stats",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "DecimalUnsigned"
+          },
+          {
+            "id": 920,
+            "name": "edge_lane",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          }
+        ],
+        "channel_total_bits": 6
+      }
+    },
+    {
+      "dir": "c2p",
+      "tag": 1,
+      "payload": {
+        "consumer": "routewave/1.7.0",
+        "max_rate_hint_hz": 5000000
+      }
+    },
+    {
+      "dir": "p2c",
+      "tag": 6,
+      "payload": {
+        "seq": 0,
+        "annotations": [
+          {
+            "ts_start": 10,
+            "ts_end": 10,
+            "channel_id": 920,
+            "kind": "loss",
+            "text": "! 5 edge event(s) lost",
+            "payload": {
+              "loss_stage": "gremlins",
+              "lost_count": 5,
+              "domain": "edge",
+              "in_band": true
+            },
+            "is_error": true
+          }
+        ]
+      }
+    }
+  ]
+}

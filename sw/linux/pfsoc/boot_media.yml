@@ -1,0 +1,52 @@
+# DS-P2.147 / DS-P2.149 — PolarFire Discovery Kit boot-media layout.
+#
+# Consumed by tools/pfsoc_boot_media.py (the in-tree assembler). `rr linux`
+# still builds the chain (hss | uboot | kernel | dtb | bootscr | rootfs);
+# this file is the declarative recipe that turns those artefacts into a
+# flashable sdcard.img.
+#
+# DS-P2.149: the layout is a >=3-partition **GPT**, identical to the deployed
+# card and the RTL-P2.1271 `rr linux sdcard` path — NOT the pre-DS-P2.149
+# 2-partition MBR. The disco-kit HSS finds its payload by scanning the
+# HSS-payload GPT type (CONFIG_SERVICE_BOOT_MMC_USE_GPT), never a FAT filename,
+# so:
+#   P1 raw HSS payload — payload.bin wrapping S-mode U-Boot, its OWN partition
+#                        (GPT type 21686148-6449-6E6F-744E-656564454649).
+#   P2 FAT boot        — kernel Image + DTB + boot.scr + u-boot.bin + recipe.
+#   P3 ext4 rootfs     — riscv64 python_overlay via the deployment contract
+#                        (stage_daemon.sh). This is bootargs root=/dev/mmcblk0p3.
+# The pre-DS-P2.149 MBR layout put the rootfs at p2, so a root=p3 kernel
+# VFS-panicked; that divergence seeded the discarded DS-P2.150 root=p3->p2
+# regression (tools/tests/test_pfsoc_root_partition_guard_ds_p2_150.py).
+# Never petalinux / bitbake. Live boot of this media is DS-P2.146, not here.
+schema_version: '1.0.0'
+target: targets/pfsoc_datalogger.yml
+kernel_dtb: microchip-mpfs-disco-kit
+payload:
+  wraps: u-boot.bin
+  never_wraps: hss
+  exec_addr: '0x80200000'
+  priv_mode: prv_s
+  owner_hart: u54_1
+  generator_entrypoint: tools/pfsoc_hss_lim_stage.py:generate_payload
+layout:
+  align_mib: 1
+  fat_mib: 64
+  # 0 = autosize to the staged rootfs + headroom_mib.
+  rootfs_mib: 0
+  rootfs_headroom_mib: 16
+  fat_label: BOOT
+# payload.bin is NOT here: it is the raw P1 GPT partition (the HSS scans the
+# HSS-payload GPT type, never a FAT filename). The FAT (P2) carries the rest.
+fat_files:
+  - Image
+  - system.dtb
+  - microchip-mpfs-disco-kit.dtb
+  - boot.scr
+  - u-boot.bin
+  - uboot_payload.yaml
+rootfs_markers:
+  - etc/init.d/S99deepskopion-stream
+  - usr/local/share/deepskopion/sw/stream/__main__.py
+  - usr/bin/python3.12
+python_overlay: sw/linux/pfsoc/python_overlay

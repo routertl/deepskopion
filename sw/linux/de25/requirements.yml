@@ -1,0 +1,156 @@
+ip: de25_linux_image
+version: 1.0
+
+functional_contract:
+  - id: DE-L0-IN-001
+    kind: behavioral
+    desc: >-
+      INPUT DOMAIN. The DE25 HPS executes AArch64 binaries; the ARMv7 Xilinx
+      Python overlay is not a valid image input. Python and every native
+      dependency in the DE25 rootfs must be AArch64 or architecture-neutral.
+  - id: DE-L0-BUILD-001
+    kind: behavioral
+    desc: >-
+      rr linux build for de25_datalogger constructs an fpga-first SD boot set from
+      the GSRD-25.3-pinned ATF, U-Boot and Linux sources: a bootable P1 FAT32
+      partition (u-boot.itb, kernel Image, board DTB, boot script) plus a real
+      P2 ext4 rootfs partition (linux.sdcard.rootfs: partition) — matching the
+      rr-ddr-stream de25_agilex5_ddr_validator BENCH_RUNBOOK.md CHILD-1 step 4
+      recipe. There is no type-A2 raw partition on this Agilex 5 / SDM chain
+      (RTL-P2.668): the SDM boots from FAT files, not a BootROM+A2 raw loader
+      area, so DE-L0-NEG-003 below prohibits reintroducing that assumption.
+  - id: DE-L0-NEG-003
+    kind: negative
+    desc: >-
+      The emitted sdcard.img has no type-A2 raw partition and the SD layout
+      config never claims one; a defect report that assumes a BootROM+A2 first
+      stage on this Agilex 5 / SDM chain is describing the wrong chip family
+      and must not be "fixed" by adding one.
+  - id: DE-L0-BUILD-002
+    kind: behavioral
+    desc: >-
+      Because targets/de25_datalogger.yml declares linux.sdcard.config_order:
+      fpga-first, the SDM configures the fabric before the HPS boots and the
+      U-Boot SPL rides embedded INSIDE the .sof (quartus_pfg hps_path=,
+      `rr linux sof`, RTL-P3.778). That fabric config reaches the SDM via
+      JTAG / persistent config flash (`rr program`), not the SD card: the
+      SPL-embedded, fabric-configuring .sof must land in out/ as a tracked
+      build artifact, but two independent silicon-proven cards (boot17-era
+      and the DS-P3.146 boot21 rebuild) both booted cleanly from cold reset
+      with no .sof on the SD card's P1 FAT32 partition (DS-P3.147). A card
+      missing the sof from out/ has no fabric configuration data for
+      out-of-band `rr program` bring-up, which this project measured as
+      total UART silence (DS-P1.50); DE-L0-NEG-004 below prohibits treating
+      the SD card's FAT itself as needing that .sof.
+  - id: DE-L0-IN-002
+    kind: behavioral
+    desc: >-
+      INPUT DOMAIN. The silicon-proven U-Boot 2025.07 QPDS25.3 default distro
+      boot flow loads Image and the board DTB by their default FAT names. The
+      DTB /chosen node produced by `rr linux dtb` is the canonical carrier for
+      all target bootargs; boots 17, 18, and the card-restore boot20 prove this
+      hands-off path.
+  - id: DE-L0-IN-003
+    kind: behavioral
+    desc: >-
+      INPUT DOMAIN (DS-D.39). A deployment that needs static DE25 networking
+      declares de25_bench.cmdline_ip_key: ds_ip and exactly one kind: bench_ip
+      resource with an IPv4 addr (and an optional prefix, default 24) in its
+      ignored runtimes/hw.local.yml. The public target contains no address or
+      fallback bench identity.
+  - id: DE-L0-BUILD-003
+    kind: behavioral
+    desc: >-
+      A fresh DE25 image build runs `rr linux dtb` after the kernel build so
+      the emitted board DTB's /chosen/bootargs contains the declared console,
+      earlycon, P2 rootfs, memory/SMP/KVM, and ds_* settings consumed by the
+      default distro boot flow. At this image-build boundary it resolves the
+      deployment address from runtimes/hw.local.yml and invokes `rr linux dtb
+      --bootargs` with exactly one ds_ip=<addr>/<prefix> token. The builder
+      emits and stages no uboot.env.
+  - id: DE-L0-NEG-005
+    kind: negative
+    desc: >-
+      The provenance lock must fail closed if any /uboot.env is present on the
+      emitted card's P1 FAT. A CRC-valid persistent environment replaces the
+      working default distro bootcmd; the former boot.scr override then loses
+      the default load-address variables and strands the board at U-Boot
+      (boot19). Validating a particular environment size or CRC must never be
+      accepted as a substitute for this prohibition.
+  - id: DE-L0-NEG-004
+    kind: negative
+    desc: >-
+      The SPL-embedded .sof-derived boot artifact is hash-gated in out/
+      exactly like every other boot-set file: `rr linux lock --check` must
+      fail closed when that file is missing from out/, or present but not
+      byte-identical to the tracked build output — a generic-GSRD or stale
+      prebuilt substitution must never pass silently. It is NOT a member of
+      the SD card's FAT partition (DS-P3.147 corrected this after measuring
+      that routertl's real assembler never stages it there and two
+      silicon-proven cards booted without one): `lock --check` must NOT
+      demand the .sof's presence on the card, and reintroducing that FAT
+      membership expectation is the defect this requirement now prohibits.
+  - id: DE-L0-MAP-001
+    kind: behavioral
+    desc: >-
+      The deployed daemon starts with the DE25 lightweight-bridge CSR base
+      0x20000000 and discovers the 256 MiB f2sdram ring at CPU physical address
+      0xA0000000 from the regbank.
+  - id: DE-L0-NEG-001
+    kind: negative
+    desc: >-
+      No boot-set input or emitted image contains a developer identity, fixed
+      private-network address, cable identity, credential or private key.
+  - id: DE-L0-NEG-007
+    kind: negative
+    desc: >-
+      DS-D.39: the image build must refuse a missing, malformed, wrong-key, or
+      non-IPv4 DE25 address declaration. It must never silently emit an
+      address-less image for this no-DHCP deployment, and no fixed address or
+      ds_ip=/bench_ip= token may reappear in targets/de25_datalogger.yml.
+  - id: DE-L0-NEG-002
+    kind: negative
+    desc: >-
+      A missing or checksum-corrupted pinned userspace dependency must terminate
+      the declared rootfs stage command non-zero before it replaces the last
+      known-good DE25 overlay; stale output must never be reported as rebuilt.
+  - id: DE-L0-BUILD-004
+    kind: behavioral
+    desc: >-
+      DS-P2.94: U-Boot's own control DTB (binman-embedded into u-boot.itb at
+      build time, separate from the kernel board DTB run_socfpga_dtb patches)
+      ships the GSRD default EMAC0/gmac0 MDIO child at reg=0. The DE25 KSZ9031
+      is strapped at MDIO address 1 (same fact the kernel-side
+      /soc@0/ethernet@10810000/mdio0/ethernet-phy@0 dt_nodes override already
+      encodes), but routertl's u-boot control-DTB patch surface
+      (_patch_uboot_control_dtb_disable_nodes / _patch_uboot_control_dtb_console)
+      has no analogous additive/override hook, so the kernel-side dt_nodes fix
+      never reached U-Boot. A build for de25_datalogger must patch the U-Boot
+      control DTB's ethernet-phy@0 node to reg=1 and rebuild u-boot.itb from
+      that patched source before shipping it, so U-Boot's own phy_connect()
+      probes the KSZ9031 at its real strapped address instead of address 0.
+  - id: DE-L0-NEG-006
+    kind: negative
+    desc: >-
+      DS-P2.94: the emitted u-boot.itb must never ship with U-Boot's control
+      DTB still pointing gmac0's phy at the GSRD default reg=0 — that state is
+      exactly the measured defect (tftpboot: "Could not get PHY for
+      ethernet@10810000: addr 0 / phy_connect() failed") and must never be
+      silently accepted as "built successfully".
+  - id: DE-L0-BUILD-005
+    kind: behavioral
+    desc: >-
+      DS-P2.310: U-Boot writes its environment bootargs into /chosen at booti
+      (boot/fdt_support.c), replacing the dtb's string, and the card carries no
+      uboot.env, so U-Boot's compiled-in default (CONFIG_BOOTARGS) is the kernel
+      command line of a hands-off boot. The build passes the same composed
+      deployment bootargs (target linux.bootargs plus the one ds_ip= token) to
+      `rr linux uboot --bootargs` as to `rr linux dtb --bootargs`.
+  - id: DE-L0-NEG-008
+    kind: negative
+    desc: >-
+      DS-P2.310: the shipped u-boot.itb never carries a default-env bootargs
+      other than exactly the composed deployment bootargs: no entry, two
+      entries, or a different string (the DE25 C3 card's had ds_ip but no
+      ds_ring_word_bytes, so the daemon reported every PL zero-pad word as
+      zs_resync) fails the build before the card is assembled.

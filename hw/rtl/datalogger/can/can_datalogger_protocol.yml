@@ -1,0 +1,270 @@
+# =============================================================================
+# CAN Datalogger Protocol Definition  (DRAFT v0.1 — co-refine with the RTL, DS-P3.100)
+# =============================================================================
+# Defines the HW<->SW protocol for a PASSIVE CAN / CAN-FD datalogger.
+# Message width is 32 bits, matching every other deepskopion datalogger.
+#
+# WHAT IT IS: the can_datalogger watches a single post-transceiver RX line as an
+# INPUT ONLY (it never drives the bus, never ACKs). On the wire a CAN bit is
+# dominant='0' / recessive='1'. The datalogger recovers CAN bit timing, removes
+# stuff bits (the 5-consecutive-identical-bit rule, active SOF..CRC), mirrors
+# the frame FSM, captures the arbitration ID + control + data + CRC, validates
+# CRC-15, and streams the fields out as 32-bit zs_msg messages — exactly the
+# byte-streaming + begin/end-event shape the jtag/uart dataloggers use.
+#
+# CLOCK DOMAIN (v0.1 = P1): like UART/I2C/SPI, the slow async RX line is
+# oversampled on clk_sys (100 MHz). v0.1 assumes a CONFIGURED nominal bit rate
+# (CONFIG.bit_prescaler) — no auto-baud (CAN auto-bitrate is a P2 enhancement,
+# harder than UART's because there is no idle-mark reference). Bit boundaries
+# are recovered by a hard sync on the SOF recessive->dominant edge and a CAN
+# soft resync on every recessive->dominant edge (SJW), sampling at the
+# configured sample point.
+#
+# SCOPE: v0.1 = classic CAN 2.0A (11-bit) + 2.0B (29-bit), 0..8 data bytes,
+# CRC-15. CAN-FD (BRS/ESI, stuff-count + CRC-17/21, 0..64 byte payload) is
+# reserved in the type/event space below and lands in P2.
+# =============================================================================
+
+protocol:
+  name: can_datalogger
+  description: Passive CAN / CAN-FD datalogger — bit de-stuff + frame FSM + ID/data/CRC capture
+  message_width: 32
+  version: "0.2"          # DS-P2.64: CAN-FD types/events filled in (FSM FD fork shipped)
+
+# =============================================================================
+# Identity — domain + device id
+# =============================================================================
+identity:
+  domain: 0xA             # DOMAIN_CAN — already RESERVED in system_ids.yml
+  device_id: 20           # PROPOSED 5-bit datalogger id (free; 21 reserves a 2nd CAN bus)
+  category: Burst         # per-protocol arbiter feeding the BURST output
+
+# =============================================================================
+# Constants
+# =============================================================================
+constants:
+  # Field widths (uniform with the other Burst dataloggers)
+  device_id_width: 5
+  type_width: 3
+  timestamp_width: 16
+  data_width: 8
+
+  # Message types (3-bit, immediately below the 5-bit device_id)
+  message_types:
+    id_payload:      0b001   # one byte of the arbitration ID (MSB-first; 2 bytes std, 4 ext)
+    data_payload:    0b010   # one byte of the data field (MSB-first, DLC bytes)
+    control:         0b011   # one byte: {IDE, RTR, reserved, DLC[3:0]} — frame shape
+    event:           0b100   # lifecycle + frame boundary + ACK + error markers
+    crc_payload:     0b101   # captured CRC. classic CRC-15 = 2 bytes; FD CRC-17/21 = 3 bytes (big-endian, zero-extended)
+    fd_control:      0b110   # CAN-FD control byte {IDE,BRS,ESI,0,DLC[3:0]} (FDF implied by type). DS-P2.64
+    fd_aux:          0b111   # CAN-FD stuff-count {parity_ok[7],0000,gray[2:0]}. DS-P2.64
+
+  # control byte [7:0] (type 0b011), emitted once per frame after arbitration:
+  control_byte:
+    ide:        { bit: 7,      description: "1 = extended (29-bit) frame, 0 = standard (11-bit)" }
+    rtr:        { bit: 6,      description: "1 = remote frame (no data), 0 = data frame" }
+    reserved:   { bits: [5,4], description: "0 (v0.1); P2: CAN-FD FDF/BRS/ESI" }
+    dlc:        { bits: [3,0], description: "raw 4-bit DLC; classic data len = min(DLC,8)" }
+
+  # Event codes (8-bit). SHARED CONVENTION: 0x00=disabled, 0x03=enabled — the
+  # same lifecycle codes every deepskopion datalogger uses. CAN adds frame-boundary
+  # + error-provenance codes (CAN has a rich, datalogger-valuable error model).
+  events:
+    disabled:        0x00   # datalogger disabled (shared lifecycle)
+    enabled:         0x03   # datalogger enabled  (shared lifecycle)
+    overflow_error:  0x05   # capture FIFO overflowed (shared-style error)
+    frame_begin:     0x10   # SOF detected (recessive->dominant after bus idle)
+    frame_end:       0x20   # EOF completed (7 recessive) — frame fully captured
+    ack_observed:    0x30   # ACK slot was dominant — at least one node ACKed
+    # ── error provenance (CAN's native fault model — the datalogger's edge) ──
+    stuff_error:     0x40   # 6 consecutive identical bits where a stuff bit was due
+    form_error:      0x41   # fixed-form field had the wrong value (CRC/ACK/EOF delim); also FD fixed-stuff form fault
+    crc_error:       0x42   # datalogger's own CRC disagrees with the captured CRC (CRC-15 classic, CRC-17/21 FD)
+    ack_error:       0x43   # ACK slot stayed recessive — nobody ACKed the frame
+    overload_marker: 0x44   # overload frame observed (P2: full overload decode)
+    stuff_count_error: 0x45 # CAN-FD stuff-count parity mismatch (gray+even-parity safeguard). DS-P2.64
+
+  # Bit ordering — CAN transmits MSB-first (the identifier and data are sent
+  # most-significant-bit first), the OPPOSITE of UART/JTAG (LSB-first).
+  bit_ordering:
+    standard: MSB-first
+    notes: >
+      id_payload, data_payload and crc_payload bytes are packed MSB-first: the
+      first bit on the wire is bit 7 of the first payload byte. An 11-bit
+      standard ID streams as 2 bytes (top 5 bits of byte 0 unused -> right-align
+      by 5); a 29-bit extended ID streams as 4 bytes (top 3 bits unused). SW uses
+      the control byte's IDE bit to know 2 vs 4 id bytes and DLC for data length.
+
+# =============================================================================
+# Message Formats — all 32-bit; [31:27]=device_id, [26:24]=type
+#   payload messages: [23:8]=timestamp (low 16 b of the 1us global), [7:0]=byte
+# =============================================================================
+messages:
+  - name: id_payload
+    description: One byte of the arbitration identifier (MSB-first)
+    type_code: 0b001
+    fields:
+      - { name: device_id, bits: [31,27], width: 5 }
+      - { name: type,      bits: [26,24], width: 3, value: 0b001 }
+      - { name: timestamp, bits: [23,8],  width: 16, description: Low 16 b of the global 1us timestamp }
+      - { name: data,      bits: [7,0],   width: 8, description: "Arbitration-ID byte, MSB-first" }
+
+  - name: data_payload
+    description: One byte of the data field (MSB-first), DLC bytes per frame
+    type_code: 0b010
+    fields:
+      - { name: device_id, bits: [31,27], width: 5 }
+      - { name: type,      bits: [26,24], width: 3, value: 0b010 }
+      - { name: timestamp, bits: [23,8],  width: 16 }
+      - { name: data,      bits: [7,0],   width: 8, description: "Data byte, MSB-first" }
+
+  - name: control
+    description: Frame shape — IDE / RTR / DLC — emitted once per frame
+    type_code: 0b011
+    fields:
+      - { name: device_id, bits: [31,27], width: 5 }
+      - { name: type,      bits: [26,24], width: 3, value: 0b011 }
+      - { name: timestamp, bits: [23,8],  width: 16 }
+      - { name: control,   bits: [7,0],   width: 8, description: "{IDE[7],RTR[6],rsvd[5:4],DLC[3:0]}" }
+
+  - name: crc_payload
+    description: Captured CRC-15 (2 bytes, MSB-first) — SW compares vs datalogger's own
+    type_code: 0b101
+    fields:
+      - { name: device_id, bits: [31,27], width: 5 }
+      - { name: type,      bits: [26,24], width: 3, value: 0b101 }
+      - { name: timestamp, bits: [23,8],  width: 16 }
+      - { name: data,      bits: [7,0],   width: 8, description: "CRC byte, MSB-first (byte0=bits[14:7], byte1=bits[6:0]<<1)" }
+
+  - name: event
+    description: Lifecycle + frame-boundary + ACK + error markers
+    type_code: 0b100
+    fields:
+      - { name: device_id, bits: [31,27], width: 5 }
+      - { name: type,      bits: [26,24], width: 3, value: 0b100 }
+      - { name: timestamp, bits: [23,8],  width: 16 }
+      - { name: event_code,bits: [7,0],   width: 8, description: see constants.events }
+
+  - name: fd_control
+    description: "CAN-FD control byte (DS-P2.64) — emitted INSTEAD of `control` for FD frames. FDF implied by the type."
+    type_code: 0b110
+    fields:
+      - { name: device_id, bits: [31,27], width: 5 }
+      - { name: type,      bits: [26,24], width: 3, value: 0b110 }
+      - { name: timestamp, bits: [23,8],  width: 16 }
+      - { name: fd_control,bits: [7,0],   width: 8, description: "{IDE[7],BRS[6],ESI[5],0[4],DLC[3:0]}. DLC decodes via the FD 0..64 table (9..15 → 12/16/20/24/32/48/64)." }
+
+  - name: fd_aux
+    description: "CAN-FD stuff-count (DS-P2.64) — one per FD frame, after the data field, before the CRC bytes."
+    type_code: 0b111
+    fields:
+      - { name: device_id, bits: [31,27], width: 5 }
+      - { name: type,      bits: [26,24], width: 3, value: 0b111 }
+      - { name: timestamp, bits: [23,8],  width: 16 }
+      - { name: fd_aux,    bits: [7,0],   width: 8, description: "{parity_ok[7],0000[6:3],stuff_count_gray[2:0]}. parity_ok=0 ⇒ a stuff_count_error event (0x45) follows." }
+
+# =============================================================================
+# Configuration Register (CONFIG, 16 bits) — device_id[15:11] + local bits
+# =============================================================================
+config:
+  name: can_config
+  width: 16
+  fields:
+    - { name: device_id, bits: [15,11], width: 5, description: target id (must match to apply) }
+    - { name: enable,    bit: 0,  description: "1 = enable capture (shared lifecycle)" }
+    - name: bit_prescaler
+      bits: [10,1]
+      width: 10
+      description: >
+        LOCKED v0.1: clk_sys cycles per CAN time-quantum (TQ). The bit is a
+        fixed 16 TQ; sample point 75 % at reset, software-set to the bus's own in
+        1/256 of a bit (fields_type1_sample_points); SJW = 1 TQ. No auto-baud.
+        e.g. 500 kbit @ 100 MHz -> 200 cyc/bit -> prescaler ~= 12 cyc/TQ.
+
+  # ── CAN-FD data-phase prescaler (DS-P3.108b) — a BANKED config word ──────────
+  # The 16-bit word above is full (id + bit_prescaler + enable). Rather than burn a
+  # 2nd device_id (one-id-one-datalogger!), the CAN datalogger BANKS its config: payload
+  # bit [10] is a TYPE bit selecting which config word this write is. Two
+  # config_control instances on the SAME id (20) latch the two banks independently
+  # (a data write never disturbs enable, and vice-versa). Backward-compatible:
+  # 0xA033 (enable + prescaler 25) has bit[10]=0 ⇒ type 0, unchanged.
+  config_type_bit:
+    bit: 10                   # CONFIG[10] = payload MSB = the bank/type selector
+    description: "0 = primary config (this word); 1 = data config (below)"
+  fields_type0_primary:
+    # CONFIG[10]=0: the classic word. bit_prescaler shrinks to [9:1] (9 bits, max
+    # 511 cyc/TQ ⇒ CAN ≥ ~12.5 kbit @ 100 MHz; covers 250 k–1 M). enable[0] as before.
+    - { name: type,          bit: 10,    value: 0 }
+    - { name: bit_prescaler, bits: [9,1], width: 9 }
+    - { name: enable,        bit: 0 }
+  fields_type1_data:
+    # CONFIG[10]=1: bank 1, three sub-words selected by [9:8]; config_control holds
+    # the last bank-1 word and each register updates only from its own sub-word, so
+    # a data_cyc write never moves a sample point and vice versa.
+    # [9]=0: the CAN-FD data-phase bit period (clk_sys cycles per DATA bit; the B2
+    # sampler runs the data phase as a direct cycle count, not TQ). 0 ⇒ the power-on
+    # default (2 Mbit @ 100 MHz = 50). Max 511 (≥ ~196 kbit/s data @ 100 MHz); the SW
+    # setter rejects larger values. Used only while BRS=recessive.
+    # SW: set_can_data_prescaler().
+    - { name: type,             bit: 10,     value: 1 }
+    - { name: sample_point_sel, bit: 9,      value: 0 }
+    - { name: data_cyc_per_bit, bits: [8,0], width: 9 }
+  fields_type1_sample_points:
+    # [9]=1: a sample point, as a fraction of its own bit in 1/256; [8] selects
+    # which: 0 = nominal, 1 = data. 0 ⇒ 192 (75 %, the reset value). A CAN FD
+    # transmitter switches to the data rate at ITS nominal sample point, so the
+    # datalogger is set to the bus's: Linux sets 87.5 % at 250 kbit/s (224) and
+    # 0.740 at 2 Mbit/s (189). The datalogger switches at the BRS sample and runs
+    # the rest of BRS as the data phase-2 segment. SW: set_can_sample_points()
+    # (writes both sub-words, then data_cyc last); bench: can_fd_link arm-datalogger.
+    - { name: type,             bit: 10,     value: 1 }
+    - { name: sample_point_sel, bit: 9,      value: 1 }
+    - { name: data_not_nominal, bit: 8 }
+    - { name: sample_point_256, bits: [7,0], width: 8 }
+
+# =============================================================================
+# Frame ordering (SW reassembly) — bracketed by frame_begin / frame_end
+# =============================================================================
+# Per captured frame the datalogger emits, in capture order:
+#   event frame_begin
+#   control                      (IDE/RTR/DLC — SW now knows std/ext + data len)
+#   id_payload   x (2 std | 4 ext)
+#   data_payload x DLC           (omitted for RTR=1 remote frames)
+#   crc_payload  x 2
+#   event ack_observed | ack_error
+#   event frame_end              (or an error event if the frame faulted mid-way)
+# SW groups messages between frame_begin..frame_end of the same device_id.
+#
+# CAN-FD frame ordering (DS-P2.64) — distinguished by fd_control (0b110) instead
+# of control (0b011):
+#   event frame_begin
+#   fd_control                   ({IDE,BRS,ESI,DLC} — SW decodes DLC via the FD table)
+#   id_payload   x (2 std | 4 ext)
+#   data_payload x (0..64)       (FD has no remote frames)
+#   fd_aux                       (stuff-count gray + parity_ok)
+#   [event stuff_count_error]    (only if parity_ok=0)
+#   crc_payload  x 3             (CRC-17 if data<=16 B else CRC-21; big-endian, zero-extended)
+#   [event crc_error]            (FD CRC verdict; coverage validated via DS-P3.15 golden frame)
+#   event ack_observed | ack_error
+#   event frame_end
+# =============================================================================
+
+# =============================================================================
+# Decoding example (Python) — sketch for SW integration
+# =============================================================================
+examples:
+  decode_message: |
+    def decode_can_msg(m: int) -> dict:
+        device_id = (m >> 27) & 0x1F
+        mtype     = (m >> 24) & 0x07
+        ts        = (m >> 8)  & 0xFFFF
+        byte      =  m        & 0xFF
+        kind = {1:"id",2:"data",3:"control",4:"event",5:"crc"}.get(mtype,"?")
+        out = {"device_id": device_id, "type": kind, "timestamp_us": ts}
+        if kind == "control":
+            out.update(ide=bool(byte & 0x80), rtr=bool(byte & 0x40), dlc=byte & 0x0F)
+        elif kind == "event":
+            out["event_code"] = byte
+        else:
+            out["byte"] = byte
+        return out

@@ -1,0 +1,18 @@
+#!/bin/sh
+#
+# /etc/init.d/S01hostname — set the kernel hostname from /etc/hostname.
+#
+# The minimal busybox base leaves the hostname unset ("(none)" in prompts and
+# `uname -n`). Runs early (S01) so every later init script + the login shell
+# see the right name. BR2_TARGET_GENERIC_HOSTNAME only seeds Buildroot's own
+# /etc/hostname, which isn't in this initramfs base — so we set it explicitly.
+
+case "$1" in
+    start)
+        [ -f /etc/hostname ] && hostname -F /etc/hostname
+        ;;
+    stop)
+        ;;
+    *)
+        echo "usage: $0 {start|stop}" >&2; exit 1 ;;
+esac

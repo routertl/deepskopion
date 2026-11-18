@@ -1,0 +1,106 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  desk-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # latest: the newest RouteRTL wheel. floor: exactly the release this
+        # tree declares as its minimum (tools/ci/routertl_floor.py). The newest
+        # wheel satisfies any floor, so only the floor leg goes red when the
+        # tree needs RouteRTL code newer than the floor it declares.
+        routertl: [latest, floor]
+    name: desk-checks (routertl ${{ matrix.routertl }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install RouteRTL and the test requirements
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyyaml
+          # Both legs install the published wheel from PyPI, never a git URL.
+          # latest: the newest release at or above the declared floor.
+          # floor: exactly the declared floor.
+          floor="$(python tools/ci/routertl_floor.py)"
+          if [ "${{ matrix.routertl }}" = floor ]; then
+            spec="routertl==$floor"
+          else
+            spec="routertl>=$floor"
+          fi
+          python -m pip install "$spec" pytest
+          python -m pip freeze > "${RUNNER_TEMP:-/tmp}/pip-freeze-before.txt"
+          python -m pip install -r requirements.txt
+          python tools/ci/requirements_no_downgrade.py "${RUNNER_TEMP:-/tmp}/pip-freeze-before.txt"
+          python -m pip check
+          rr --version
+      - name: Put rr-installed tools on PATH
+        # rr eda install links tools into ~/.local/bin, which a job
+        # container's root shell does not have on PATH.
+        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install GHDL for lint
+        run: rr eda install ghdl
+      - name: Install the SD-card image tools
+        # tools/pfsoc_boot_media.py builds the PolarFire SD image root-free with
+        # mtools (mformat, mcopy, mtype), e2fsprogs (mke2fs, debugfs) and sfdisk.
+        # sw/linux/stage_daemon.sh copies the overlay with rsync, which the
+        # python:3.11 job container lacks.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mtools e2fsprogs fdisk rsync
+      - name: Install NVC for the simulation tests
+        # project.yml names nvc as the simulator; the desk tests that run
+        # rr sim need it. rr builds it, after the apt-get update above.
+        run: rr eda install nvc
+      - name: Fetch the locked packages
+        run: rr workspace sync
+      - name: Project keys are in this RouteRTL release's schema
+        # rr ignores a key it does not know, so a key only a newer release
+        # reads stays green on the newest wheel; on the floor leg it is red.
+        run: python tools/ci/rr_schema_keys.py
+      - name: Lock matches the tree on the floor release
+        if: matrix.routertl == 'floor'
+        run: python tools/lock_check_leg.py --all
+      - name: Generate the build-time package lint reads
+        # rom_info_pkg.vhd is gitignored; rr linting runs no hooks.
+        run: bash tools/ci/materialize_lint_packages.sh
+      - name: Lint
+        run: rr linting
+      - name: Desk tests
+        run: tools/ci/run_desk_tests.sh
+
+  de25-toolchain-stage:
+    # The same leg as the Forgejo CI's. Three tests in
+    # sw/linux/de25/test_de25_toolchain_stage.py need the pinned 144 MB ARM GNU
+    # toolchain archive and skip without it; this leg fetches it
+    # (sha256-pinned), stages it, runs the suite, prints the counts, and is red
+    # when any of the three is skipped.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    name: de25-toolchain-stage
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install RouteRTL and the test requirements
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyyaml
+          python -m pip install "routertl>=$(python tools/ci/routertl_floor.py)" pytest
+          python -m pip freeze > "${RUNNER_TEMP:-/tmp}/pip-freeze-before.txt"
+          python -m pip install -r requirements.txt
+          python tools/ci/requirements_no_downgrade.py "${RUNNER_TEMP:-/tmp}/pip-freeze-before.txt"
+          python -m pip check
+      - name: DE25 toolchain stage suite with the pinned archive
+        run: python tools/ci/de25_toolchain_stage_leg.py

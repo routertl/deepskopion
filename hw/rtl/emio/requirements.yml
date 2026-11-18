@@ -1,0 +1,114 @@
+# emio — Requirements catalog (contract-first per ROUTERTL convention)
+#
+# Each EMIO-LOOP-REQ-N is referenced by ≥1 cocotb test in
+# hw/sim/cocotb/tests/datalogger/infra/emio_loop/test_emio_loop.py via
+# @requires("EMIO-LOOP-REQ-N"). `rr sim coverage-map` enforces the mapping.
+#
+# These REQs reproduce — IN SIMULATION, against the REAL fabric RTL
+# (tich.ds_emio_mux + tich.i2c_injector + tich.spi_injector wired exactly as
+# deepskopion_top does) — the three Layer-1 self-validation failures observed
+# on the booted Zybo Z7-20 (DS-T2.11, run_self_test FAIL on REQ-5/6/7):
+#   REQ-5 UART : 0 frames captured (word_delta=0).
+#   REQ-6 I2C  : master ACKs + completes but reads 0x00000000 (want deadbeef).
+#   REQ-7 SPI  : master ETIMEDOUT (controller can't complete the xfer).
+#
+# HYPOTHESIS under test: the three HW failures share ONE root cause on the
+# PS↔fabric boundary (regbank delivery of CONTROL/DATAIN, EMIO_MUX_SEL not set,
+# PS controller config, spidev DT) — NOT in the fabric loop itself. The i2c/spi
+# injector UNIT tests already pass and ds_emio_mux's bus model is logically
+# equivalent to the unit-test bus models, so the EXPECTED outcome is that
+# REQ-6/7 PASS here, localising the HW bug to the PS side. If a REQ FAILS in
+# sim, a real fabric bug has been found — file it as a T-tier ticket.
+#
+# Per the bug-finding-is-success rule, a green run that finds nothing is a
+# yellow flag in general — but here a clean fabric loop is the VALUABLE,
+# diagnostic result (it discriminates fabric-bug from PS-side-bug). Neither
+# outcome may be softened to force a colour.
+
+ip: emio
+hdl_file: ds_emio_mux.vhd
+version: 0.1
+
+# DS-P2.187: `ip: emio` names no entity, so contract-check failed with
+# no-matching-hdl and never compared a port. The fabric loop these REQs
+# exercise is routed by ds_emio_mux (the EMIO_MUX_SEL source/bus mux that
+# deepskopion_core instantiates); hdl_file pins it. glitch_filter.vhd in this
+# directory is a separate entity, not part of this contract. Port shape
+# scaffolded from ds_emio_mux (rr ip contract init) and reviewed: a purely
+# combinational mux, so no clock or reset.
+port_contract:
+  slaves:
+    - { name: PMOD_SPI, protocol: spi }
+    - { name: SPI0, protocol: spi }
+  masters:
+    - { name: SRC_SPI, protocol: spi }
+  scalars:
+    - { name: EMIO_MUX_SEL, dir: in, width: "2 downto 0" }
+    - { name: PMOD_I2C_SCL, dir: in, width: "1" }
+    - { name: PMOD_I2C_SDA, dir: in, width: "1" }
+    - { name: PMOD_UART_TX, dir: in, width: "1" }
+    - { name: UART0_TX, dir: in, width: "1" }
+    - { name: I2C0_SCL_O, dir: in, width: "1" }
+    - { name: I2C0_SCL_T, dir: in, width: "1" }
+    - { name: I2C0_SDA_O, dir: in, width: "1" }
+    - { name: I2C0_SDA_T, dir: in, width: "1" }
+    - { name: SPI0_CS_GPIO, dir: in, width: "1" }
+    - { name: I2C_INJ_SDA_O, dir: in, width: "1" }
+    - { name: I2C_INJ_SDA_T, dir: in, width: "1" }
+    - { name: SPI_INJ_MISO_O, dir: in, width: "1" }
+    - { name: SPI_INJ_MISO_T, dir: in, width: "1" }
+    - { name: I2C0_BUS_SCL, dir: out, width: "1" }
+    - { name: I2C0_BUS_SDA, dir: out, width: "1" }
+    - { name: SPI0_BUS_SCLK, dir: out, width: "1" }
+    - { name: SPI0_BUS_MOSI, dir: out, width: "1" }
+    - { name: SPI0_BUS_MISO, dir: out, width: "1" }
+    - { name: SPI0_BUS_SS, dir: out, width: "1" }
+    - { name: UART0_RX, dir: out, width: "1" }
+    - { name: SRC_I2C_SCL, dir: out, width: "1" }
+    - { name: SRC_I2C_SDA, dir: out, width: "1" }
+    - { name: SRC_UART_TX, dir: out, width: "1" }
+  clocks:
+    []
+  resets:
+    []
+
+parameters: []
+# Each:
+#   - { name: DATA_WIDTH, type: positive, default: 32 }
+#   - { name: DEPTH_G, type: positive, required: true }  # no HDL default — must be supplied at elaboration
+
+functional_contract:
+
+  # ── REQ-5 UART (DS-T2.10) ─────────────────────────────────────────────
+  - id: EMIO-LOOP-REQ-5
+    kind: behavioral
+    desc: >-
+      With EMIO_MUX_SEL bit[1]='1' (UART source = EMIO bus), a byte driven
+      on the PS UART0_TX leg is reproduced bit-for-bit on the muxed datalogger
+      source SRC_UART_TX. The mux passes UART0_TX through unmodified when
+      the select bit is set; with bit[1]='0' SRC_UART_TX must instead follow
+      the external PMOD_UART_TX. This proves the mux half of the UART capture
+      path (the source the datalogger would see), independent of the framer.
+
+  # ── REQ-6 I2C (DS-T7) ─────────────────────────────────────────────────
+  - id: EMIO-LOOP-REQ-6
+    kind: behavioral
+    desc: >-
+      Preload the i2c_injector TX FIFO with the four bytes DE AD BE EF via
+      DATAIN/DATAIN_VLD, pin the slave address in CONTROL[7:1], and assert
+      EMIO_MUX_SEL bit[0]. An I2C master read transaction routed through the
+      real ds_emio_mux open-drain resolution must return exactly
+      DE AD BE EF — NOT 0x00000000. This directly mirrors the HW failure
+      "master ACKs + completes but reads zeros". The expected bytes are
+      hard-coded (ROUTERTL-002), never derived from the FIFO at runtime.
+
+  # ── REQ-7 SPI (DS-T8) ─────────────────────────────────────────────────
+  - id: EMIO-LOOP-REQ-7
+    kind: behavioral
+    desc: >-
+      Preload the spi_injector TX FIFO with a known byte sequence, assert
+      EMIO_MUX_SEL bit[2], and drive a mode-0 SPI transfer through the real
+      ds_emio_mux push-pull MISO resolution. The master must read back the
+      preloaded bytes on MISO in FIFO order. This exercises the fabric path
+      whose HW symptom is the PS SPI controller timing out (ETIMEDOUT) — a
+      clean read here localises that timeout to the PS↔fabric boundary.

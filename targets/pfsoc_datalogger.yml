@@ -1,0 +1,681 @@
+# targets/pfsoc_datalogger.yml — proposed by PF-P0 (DS-P2.123); created by
+# PF-H0 (DS-P2.124). No shared-root edit: project.yml stays the managed pointer,
+# and every key here is scope `both` or `target` per `rr schema`, so the PFSoC
+# values live only in this file (guarded by
+# tools/tests/test_pfsoc_target_contract.py). CAN is opt-in (DS-P2.121); this
+# target is CAN-free by default (no CTU CAN nodes, no can APB windows exercised).
+project:
+  name: deepskopion
+  top_module: deepskopion_pfsoc_top
+  output_dir: build/pfsoc_datalogger
+# DS-P1.72: the Libero target now opts into both unmatched-constraint gates and
+# names its board reference and generated fabric domains for CDC applicability.
+# clk_ddr aliases clk_sys in phase 1, but remains explicit at the RTL interface.
+synthesis:
+  fail_on_unmatched_constraints: true
+implementation:
+  fail_on_unmatched_constraints: true
+declared_clocks:
+  - name: ref_clk_50mhz
+    freq_hz: 50000000
+    assert_drift: false
+  - name: clk_sys
+    freq_hz: 100000000
+    assert_drift: false
+  - name: clk_ddr
+    freq_hz: 100000000
+    assert_drift: false
+hardware:
+  vendor: microchip
+  part: MPFS095T-1FCSG325E        # verified: chip marking, registry, manual all agree — PF-P0 §5.2
+  mss: hw/libero/pfsoc/mss/disco_mss.cxz   # frozen MSS Configurator .cxz (PF-P0 §3.1)
+  language: vhdl
+  platform: polarfire-soc-discovery
+  platform_strict: true
+  tool: libero
+  tool_path: /opt/microchip/libero_soc/Libero_SoC
+  tool_version: '2025.2'
+  idcode: '0x0F8181CF'            # MEASURED live FlashPro5 chain (MPFS095T; skill §Physical, DS-P2.132 pfsoc_ka_a)
+  pins:
+  - ref_clk_50mhz
+  # DS-P2.153: led[0..3] and rpi_gpio26/20 REMOVED from the subscription — the
+  # fit aborts on them the moment the io PDC is genuinely associated with
+  # PLACEROUTE (which the current rr Libero flow now does; the DS-P2.151 fit
+  # never associated it, so these never fired):
+  #   * led[0..3] (T18/V17/U20/U21): the polarfire-soc-discovery registry emits
+  #     LVCMOS33, but these pins sit in HSIO Bank 0 on the 1.8 V rail — a hard
+  #     PDCPF-13 "macro incompatible with IoBank" abort. The registry defect and
+  #     its LVCMOS18 fix are already documented (docs/design/pfsoc_port_plan.md
+  #     §1.1 "registry is wrong", guard test_led_bank_and_iostandard_are_
+  #     vendor_correct); the registry fix is PF-B0's (routertl-side — no
+  #     per-target io_std override exists, confirmed against rr schema).
+  #   * rpi_gpio26/rpi_gpio20: unused top inputs Synplify prunes from the
+  #     netlist, so a -fixed set_io on them is a hard PDCPF-01 abort.
+  # The six PORTS are removed from deepskopion_pfsoc_top.vhd in the same step
+  # (core led left open, jb(6)/jb(7) tied low) so the subscription contract
+  # (test_every_top_port_is_subscribed) stays exact — an entity port with no
+  # subscription is the DE-B0 unplaced-pin class that guard refuses. None of
+  # the six carries a timed fabric path; PF-B0 (on-silicon bring-up) re-adds
+  # port + subscription together WITH the corrected registry facts.
+  - rpi_gpio4
+  - rpi_gpio17
+  - rpi_gpio18
+  - rpi_gpio27
+  - rpi_gpio22
+  - rpi_gpio23
+  - rpi_gpio24
+  - rpi_gpio25
+  - rpi_gpio5
+  - rpi_gpio6
+  - rpi_gpio12
+  - rpi_gpio13
+  - rpi_gpio19
+  - rpi_gpio16
+  # DS-P2.157: the VSC8221 PHY's fabric pins (registry: mdc D15, mdio D16,
+  # phy_rst_n A14, phy_txdis_sresetn E20 — the reference MPFS_DISCOVERY_MAC.pdc
+  # balls). MAC_0 management is FABRIC, so without these eth0 has no PHY.
+  - mdc
+  - mdio
+  - phy_rst_n
+  - phy_txdis_sresetn
+simulation:
+  test_dir: hw/sim/cocotb/tests
+  waves_dir: hw/sim/waves
+  logs_dir: hw/sim/logs
+  simulator: nvc
+  tags:
+    pfsoc_baseline:
+    # equality-pinned to canfd_demo's xilinx_baseline (the DE25 de25_baseline
+    # shape), so PF-R0/PF-H0 can run "the same baseline, resolved for
+    # microchip" and diff results test-by-test against the Xilinx record.
+    # Membership is pinned by tools/tests/test_pfsoc_target_contract.py.
+    - test_i2c_datalogger
+    - test_uart_precommit
+    - test_qspi_capture
+    - test_jtag_datalogger
+    - test_can_datalogger
+    - test_edge_datalogger
+    - test_datalogger_gather
+    - test_datalogger_gather_crossproto
+    - test_datalogger_gather_i2c
+    - test_datalogger_gather_uart
+    - test_datalogger_gather_spi
+    - test_datalogger_gather_jtag
+    - test_datalogger_gather_edge
+    - test_demo_axilite_bfm_conformance
+    - test_regbank_datalogger_config_seam
+    - test_zs_msg_framer
+    - test_framer_axistream_conformance
+    - test_arbiter
+    - test_error_event_bank
+    - test_error_event_emitter
+    - test_emit_framer_integration
+    - test_datalogger_to_ddr
+    # DS-P2.323: the regbank schema hex content readers (equality-pinned to xilinx_baseline).
+    - test_regbank_rom_stream_ds_p1_82
+    - test_regbank_wrapper_rom_seam
+    - test_pfsoc_fic0_regbank_read_ds_p2_305
+    - test_pfsoc_fic0_rom_stream_rdloop_ds_p2_305
+    - test_fic0_stall_trigger_ds_p2_326
+    - test_fic0_stall_capture_ds_p2_326
+    - test_regbank_reset_values_ds_p2_317
+    # PF-H0 (DS-P2.124): the product-geometry write-path guard, extended from
+    # the DE25 pattern (DS-P2.110) to the PolarFire FIC geometry. It is
+    # DELIBERATELY its own PFSoC-specific tag and NOT a member of pfsoc_baseline:
+    # that tag is equality-pinned to canfd_demo's xilinx_baseline, and this test
+    # is PFSoC-only (64-bit FIC width, base 0xA0000000), so it does not belong in
+    # the shared Xilinx set. tools/tests/test_pfsoc_product_geometry_guard.py
+    # pins this membership so the guard cannot silently drift out of the batch.
+    # Runs as its own `_run_sim_direct()` session.
+    pfsoc_product_geometry:
+    - test_datalogger_to_ddr_product_base_fic
+paths:
+  sources:
+  - hw/rtl
+  # DS-P2.128: the REA MMIO door lives OUTSIDE hw/rtl (the classic_eye
+  # precedent, RTL-P2.727) because it references library rr_rea, which only
+  # this target compiles — under hw/rtl every other target's closure preflight
+  # fails on "library 'rr_rea' is referenced but not in the compile plan".
+  - hw/pfsoc_rea
+  - libs
+  - generated
+  simulation: hw/sim
+  # PF-F0 (DS-P2.151): scope the SDC auto-discovery root to the Libero-dialect
+  # pfsoc subdir. `paths.constraints` is walked RECURSIVELY for *.sdc, so the
+  # flat `hw/sdc` leaked BOTH the Quartus-idiom de25_timing.sdc (get_registers /
+  # get_collection_size — SDC0061/SDC0001 in Libero SmartTime, aborts the
+  # timing-driven PLACEROUTE / VERIFYTIMING) AND pfsoc_ka_timing.sdc (the
+  # known-answer image's clock) into THIS design's constraint set. PF-H0 only
+  # ran SYNTHESIZE, where a bad SDC is a non-fatal warning; PF-F0 is the first
+  # to run SDC-ASSOCIATED timing, so the leak surfaces here as a real fit abort.
+  # This is the symmetric twin of the DE25 fix (DS-T1.15, hw/sdc/de25) — the
+  # shared flat hw/sdc is the trap both legs fall into. Guarded by
+  # tools/tests/test_pfsoc_sdc_scope_ds_p2_151.py.
+  constraints: hw/sdc/pfsoc
+  verification: hw/verif
+sources:
+  # DS-P1.88: deepskopion_core's regbank ROMs read these at elaboration (VHDL
+  # textio, sized from the files, DS-P1.82), so they key the build cache.
+  # Staging them into the tool's run directory is rr's job (RTL-P1.297).
+  data:
+  - hw/rtl/regbank/regbank_schema.hex
+  - hw/rtl/regbank/config_schema.hex
+  sdc:
+  - hw/sdc/pfsoc/pfsoc_timing.sdc # DS-T10 CDC set_max_delay re-derived for Libero SDC
+  libraries:
+    # deepskopion_core.vhd:16 references `library ctu_can_fd_rtl` unconditionally
+    # (the CTU CAN FD cores live inside the core). pfsoc_datalogger is CAN-free by
+    # default (no ctu-fee/ctucanfd_ip_core package), so the library is satisfied
+    # by the same lightweight stub top the CAN-free DE25 leg uses — otherwise the
+    # synth closure preflight fails "library 'ctu_can_fd_rtl' not in the compile
+    # plan" (surfaced by queued job bd175ba06436). Real cores return via the CAN
+    # opt-in (DS-P2.121), which adds the package with library: ctu_can_fd_rtl.
+    ctu_can_fd_rtl:
+    - tools/sim/vendor_stubs/ctu_can_fd/can_top_apb_stub.vhd
+# DS-P2.128 / DS-P3.163 / DS-P1.73: the REA the MMIO door instantiates comes from
+# ONE source, the registry package routertl/rea (library rr_rea, declared in
+# `packages` below). The vendored hw/vendor/rr_rea_upstream copy (1.2.0) is
+# gone: next to the locked 1.12 package it supplied a second, non-identical
+# rr_rea_regbank.vhd and rr refuses to pick one.
+# Microchip Libero imports sources flat into hdl/ by basename (RTL-P2.1320);
+# redundant bundled copies of olo_base packages in olo_base_fifo_async are
+# excluded here so they do not clash with the primary providers.
+sources_per_vendor:
+  microchip:
+    exclude:
+    - libs/open-logic/olo_base_fifo_async/src/base/vhdl/olo_base_pkg_*.vhd
+    - libs/open-logic/olo_base_fifo_async/src/base/vhdl/olo_base_ram_sdp.vhd
+# DS-P1.73 / RTL-P2.1595: routertl/rea ships rr_rea_scoped_microchip.sdc, which
+# clocks the UJTAG macro's UDRCK pin and bounds the */u_top/*u_cdc_*/s1* JTAG
+# synchronizers. This target instantiates rr_rea_top with G_REG_IFACE =
+# "external" (MMIO door, hw/pfsoc_rea/pfsoc_rea_door.vhd), which generates that
+# logic away, so the selectors match nothing and Libero's synthesis SDC check
+# aborts (queue job 27478cc4415a: SDC0001 on UDRCK, SDC0023 x2 on s1*). Only
+# rea's constraints are excluded; every other package's constraints still
+# apply, and each build prints the excluded file. The door's own bus clock is
+# clk_sys, constrained by hw/sdc/pfsoc/pfsoc_timing.sdc.
+package_constraints:
+  exclude: [routertl/rea]
+build_options:
+  tool_version: '2025.2'          # BOM/lock provenance tag
+# PF-F0 (DS-P2.151): measured Libero per-stage process-RAM peaks (MB), so the
+# eda-memory cgroup cap is sized to a REAL number, not a guess (PF-P0 §4 note —
+# "a Libero peak table is added by PF-F0 once a real Synplify/place-and-route
+# peak is measured"). Measured on this bench 2026-09-20 (Libero SoC 2025.2,
+# MPFS095T-1FCSG325E, from a clean build dir): synth (gen_project + Synplify)
+# peak_proc 3.0 GB; impl (PLACEROUTE) peak_proc 2.9 GB. Rounded up for headroom.
+eda_memory:
+  peaks:
+    libero:
+      synth: 3072
+      impl: 3072
+features:
+  regbank: true
+system_config: tools/datalogger-builder/config/datalogger_config.yml
+auto_sources: true
+hooks:
+  pre_commit:
+    enabled: true
+    lint: true
+    check_yaml: true
+    check_docs: true
+    tests: []
+    exclude:
+      lint:
+      - hw/rtl/datalogger/infra/datalogger_gather/datalogger_gather.vhd
+      tests: []
+  pre_sim:
+  # DS-P2.231: rom_info_pkg.vhd is a gitignored build output; a fresh clone has
+  # none until a hook writes it. Sims list it as a source, so generate it here
+  # from the tracked regbank memory images (pre_build regbank-regen does the
+  # full regeneration before synth).
+  - name: rom-info-sim
+    script: tools/regen_regbank.sh
+    args:
+    - --rom-info-only
+    - --output-dir
+    - hw/rtl/pkg
+    - --regbank-dir
+    - hw/rtl/regbank
+    - --library
+    - tich
+    idempotent_outputs: true
+    expected_outputs:
+    - hw/rtl/pkg/rom_info_pkg.vhd
+  - name: rr_rea_build_id_sim
+    script: tools/hooks/run_sdk_generator.py
+    args:
+    - rea-build-id
+    - --design-identity
+    - deepskopion
+    - --out
+    - generated/rr_rea_build_id_pkg.vhd
+    idempotent_outputs: true
+    expected_outputs:
+    - generated/rr_rea_build_id_pkg.vhd
+  - name: pre-sim-seed-libs
+    script: tools/sim/pre_sim_seed_libs.py
+    args: []
+  pre_build:
+  - name: rr_rea_build_id
+    script: tools/hooks/run_sdk_generator.py
+    args:
+    - rea-build-id
+    - --design-identity
+    - deepskopion
+    - --sidecar
+    - build/pfsoc_datalogger/bitstream/deepskopion.rea_build_id
+    - --out
+    - generated/rr_rea_build_id_pkg.vhd
+    idempotent_outputs: true
+    expected_outputs:
+    - generated/rr_rea_build_id_pkg.vhd
+  - name: datalogger-builder
+    script: tools/datalogger-builder/datalogger_gather_gen.py
+    args:
+    - tools/datalogger-builder/config/datalogger_config.yml
+    - --pkg-dir
+    - hw/rtl/pkg
+    - --rtl-dir
+    - hw/rtl/datalogger/infra/datalogger_gather
+    - --regbank-dir
+    - hw/rtl/regbank
+    idempotent_outputs: true
+    expected_outputs:
+    - hw/rtl/pkg/datalogger_config_pkg.vhd
+    - hw/rtl/datalogger/infra/datalogger_gather/datalogger_gather.vhd
+    - hw/rtl/regbank/config_schema.hex
+  - name: regbank-regen
+    script: tools/regen_regbank.sh
+    args:
+    - --output-dir
+    - hw/rtl/pkg
+    - --regbank-dir
+    - hw/rtl/regbank
+    - --library
+    - tich
+    idempotent_outputs: true
+    expected_outputs:
+    - hw/rtl/pkg/rom_info_pkg.vhd
+    - hw/rtl/pkg/system_regbank_pkg.vhd
+    - hw/rtl/regbank/regbank_schema.bin
+    - hw/rtl/regbank/regbank_schema.hex
+    - hw/rtl/regbank/system_regbank.vhd
+# DS-P2.231: no lock.exclude for hw/rtl/pkg/rom_info_pkg.vhd any more — the
+# file is gitignored, and routertl.lock leaves gitignored files out (RTL-P2.2095).
+tcl_hooks:
+  gen_project:
+  - hw/libero/pfsoc/pfsoc_mss_subsys.tcl   # ONLY this target's hook (D1, PF-P0 §3.1);
+                                           # the Zybo/DE25 targets keep theirs
+  # PF-F0 (DS-P2.151): MUST run AFTER the MSS builder (it needs the generated
+  # CCC/MSS component SDCs). Derives + associates the component timing
+  # constraints so the CCC-generated clk_sys (100 MHz) is TIMED — without it the
+  # fabric is 78394/78401 setup-UNconstrained and "timing met" is vacuous.
+  - hw/libero/pfsoc/pfsoc_derive_timing.tcl
+  # DS-P2.309 interim (RTL-P2.2402): weak pull-up on every header input; import
+  # only, rr associates constraint/io/*.pdc with PLACEROUTE. Remove with DS-P3.269.
+  - hw/libero/pfsoc/import_header_pullups_pdc.tcl
+  # DS-T1.22: add Libero post-route SmartTime CDC analysis step to generate
+  # vendor-authoritative CDC evidence.
+  post_implementation:
+  - hw/libero/pfsoc/ds_cdc_evidence_impl.tcl
+linux:
+  board: polarfire-soc-discovery
+  # PF-L0 boot session 2026-09-06 — two keys that `rr linux`'s PolarFire backend
+  # (sdk/cli/commands/linux_steps/_pfsoc.py) READS but `rr schema` does NOT know.
+  # They are declared here because without them rr builds the WRONG BOARD's
+  # firmware; both are filed as routertl gaps in
+  # docs/evidence/pf-l0/BOOT_SESSION_2026-09-06.md (GAP B / GAP A / GAP D).
+  #
+  # hss_board: rr's _ARCH_TABLE maps the token 'mpfs-disco-kit' to
+  #   hss_board='mpfs-icicle-kit-es' — i.e. every Discovery-Kit build silently
+  #   gets Icicle-Kit board facts. Upstream HSS ships a REAL mpfs-disco-kit board
+  #   (boards/mpfs-disco-kit/, with its own MPFS_DISCOVERY_KIT_MSS_mss_cfg.xml).
+  #   The parts differ (MPFS095T/FCSG325/DDR4 x16 here vs MPFS250T/LPDDR4 x32 on
+  #   Icicle), so an Icicle HSS cannot train this board's DDR. Name the real board.
+  hss_board: mpfs-disco-kit
+  # The MSS handoff is hardware.mss (above): rr's resolve_mss_handoff() reads
+  # that key since RTL-P2.1220 (in every release from 5.1.0), so no linux.*
+  # alias is needed.
+  # PF-L0 boot session 2026-09-06 — GAP F, PRE-STAGED, INERT TODAY. rr's PolarFire
+  # profile clones the kernel from github.com/polarfire-soc/linux and pins branch
+  # `linux-6.6-mchp+fpga` (_pfsoc.PfsocArch.kernel_branch). That repo now carries
+  # ONLY `master` and `mpfs-linux-5.12.x`, so `rr linux kernel` dies with
+  # "Remote branch linux-6.6-mchp+fpga not found in upstream origin" (verified by
+  # git ls-remote, 2026-09-06). Microchip moved the kernel to linux4microchip,
+  # which DOES carry that exact branch — so only the repo is stale, not the pin.
+  #
+  # HONESTY NOTE (land refusal, DS-P2.125): this key does NOT take effect on the
+  # PolarFire path today. `rr linux kernel` for a pfsoc target clones
+  # `arch.kernel_repo` from the profile UNCONDITIONALLY (_pfsoc.py:675 at routertl
+  # origin/main 9201cf83); it never consults `linux.kernel_repo` or the KERNEL_REPO
+  # env override (both are proven ignored live — BOOT_SESSION_2026-09-06.md GAP G).
+  # The seam that would honour this key is the routertl fix RTL-P2.1217/1218; until
+  # that lands, this value is a PRE-STAGED override that documents the correct repo,
+  # NOT an in-tree workaround. It is inert, so it cannot regress the build — it is
+  # kept here so the fix, once landed, finds the right value already declared.
+  kernel_repo: https://github.com/linux4microchip/linux
+  # DS-P2.147: pin the Discovery-Kit DTB names at the keys `rr linux` actually
+  # reads. Without these, a silent _ARCH_TABLE regression (GAP B) would bake
+  # Icicle `microchip-mpfs-icicle-kit` firmware onto this MPFS095T kit.
+  # kernel DTB name comes from linux4microchip arch/riscv/boot/dts/microchip/
+  # Makefile (mpfs-disco-kit.dtb) — it is NOT the U-Boot DTB name below; the
+  # 2026-09-12 session measured both (kernel mpfs-disco-kit.dtb, U-Boot
+  # microchip-mpfs-disco-kit.dtb) and pinning the U-Boot name here makes
+  # `rr linux kernel` FileNotFound a step that previously succeeded.
+  kernel_dtb: mpfs-disco-kit
+  uboot_device_tree: microchip-mpfs-disco-kit
+  # Console = MMUART @ 0x2010_6000 — the physical FlashPro5 console on the
+  #   Discovery Kit (DS-P2.148 hw witness: HSS, OpenSBI and U-Boot all drive
+  #   serial@20106000; U-Boot prints In/Out/Err = serial@20106000). The stock
+  #   Microchip kernel DTB (linux4microchip .../microchip/mpfs-disco-kit.dts)
+  #   aliases it `serial4 = &mmuart4` with `stdout-path = "serial4:115200n8"`, so
+  #   the vendor-canonical name is ttyS4 (of_alias serial<N> -> /dev/ttyS<N>).
+  #
+  #   DS-P2.150 (SILICON-PROVEN on a PLAIN cold boot). The DS-P2.148 canonical
+  #   mapping was `console=ttyS4` + kernel CONFIG_SERIAL_8250_NR_UARTS>=5. It was
+  #   NEVER exercised end-to-end, and it CANNOT boot the card as deployed: the
+  #   on-card kernel Image ships the base defconfig NR_UARTS=4, so the 8250 driver
+  #   creates only lines 0..3 and REJECTS serial4 (line 4) — console=ttyS4 gets no
+  #   tty and the console is SILENT after "Starting kernel ..." (measured
+  #   DS-P2.150, docs/evidence/pf-l0/DS-P2.150/). Registering ttyS4 needs a 19 MiB
+  #   NR_UARTS>=5 kernel reflash, which the bench cannot stage in a non-interactive
+  #   dispatch (card seated in J17, no host SD reader; DS-P2.148 named this as the
+  #   remaining step). So this target uses the mapping that WAS proven to reach a
+  #   root shell on this exact silicon — the DS-P2.148 `fdt rm`/ttyS0 workaround —
+  #   baked REPRODUCIBLY into the DTB via dt_nodes so a plain cold boot needs no
+  #   interactive U-Boot:
+  #     * console=ttyS0 — line 0, which the deployed NR_UARTS=4 kernel DOES create;
+  #     * dt_nodes below re-alias `serial0 -> /soc/serial@20106000` so of_alias
+  #       resolves the FlashPro5 UART to line 0 / ttyS0. The base
+  #       `serial4 -> /soc/serial@20106000` alias is REPOINTED off the physical
+  #       node (else of_alias_get_id, first-match, would return 4 and reject it).
+  #       stdout-path is moved to serial0 so `earlycon` targets the physical UART.
+  #     * ttyS0 stays the console because that serial0 alias and console=ttyS0
+  #       name MMUART0 @0x2010_6000 (the FlashPro5 pad). MMUART1 @0x2010_0000 is
+  #       status okay and aliased serial1, so of_alias_get_id returns 1 and the
+  #       node registers as ttyS1. An unaliased okay node could auto-grab line 0
+  #       before the console; the serial1 alias is what keeps ttyS0 on MMUART0.
+  #       serial4 names the still-disabled MMUART2 @0x2010_2000, so it is neither
+  #       the console nor the fabric UART.
+  #   Requirement still holds: the fabric dt_nodes must NOT anchor at `/soc@0` (a
+  #   shadow node named "soc" hides the real /soc bus so /soc/serial@20106000
+  #   never resolves — DS-P2.148 root cause); they are anchored at /fabric-uio@0.
+  # DS-P2.157 (MEASURED on the kit 2026-09-23, fabric DS-P1.60 14949d5):
+  #   * init=/init is REQUIRED, for the DE25 reason (DS-P2.98): the kit boots
+  #     straight to its ext4 root with no initrd (`booti ... - ${fdt_addr}`), so
+  #     without init= the kernel finds busybox /sbin/init first, whose inittab
+  #     only respawns /bin/sh. The deepskopion /init that runs /etc/init.d/S*
+  #     (S40network, S99deepskopion-stream) never ran on a cold boot.
+  #   * NO mem=. The DE25-copied mem=512M does NOT mean "RAM is
+  #     0x8000_0000..0xA000_0000" on this kit: the reference DTB declares RAM as
+  #     five fragments (0x8000_0000 64M, 0x8A00_0000 128M, 0xC400_0000 96M,
+  #     0x10_2200_0000 480M, 0x14_1200_0000 256M) and mem= keeps the first
+  #     512 MiB of them in address order. That drops 0x14_1200_0000 entirely,
+  #     which is where the reference's linux,dma-default pool
+  #     (non-cached-high-buffer) must be allocated. The boot log shows
+  #     "OF: reserved mem: failed to allocate memory for node
+  #     'non-cached-high-buffer': size 256 MiB", then "mmc0: Unable to allocate
+  #     ADMA buffers" and macb eth0 "Unable to allocate DMA memory (error -12)".
+  #     The ring at 0xA000_0000 is outside every DT memory node AT THAT
+  #     ADDRESS, but its DDR is aliased by the 64-bit windows (DS-P1.62, see
+  #     the /memory@1022000000 override below).
+  #   * ds_ip= is deployment identity (DS-D.39): runtimes/hw.local.yml
+  #     bench.targets.pfsoc_bench, composed at the image boundary, never here.
+  bootargs: "console=ttyS0,115200 earlycon root=/dev/mmcblk0p3 rootwait rw uio_pdrv_genirq.of_id=generic-uio ds_source=ddr ds_ring_word_bytes=8 ds_mmio_base=0x60000000 ds_clk_hz=100000000 ds_mss_fabric=1 init=/init"
+  # PF-L0 (DS-P2.125): built-in UIO_PDRV_GENIRQ (the bootargs above pass
+  # uio_pdrv_genirq.of_id=generic-uio) + Cadence GEM (macb) for eth0. See the
+  # fragment's header for why each symbol is load-bearing.
+  kernel_config: sw/linux/pfsoc/kernel_pfsoc.config-fragment
+  # DS-P2.150: root = /dev/mmcblk0p3 — the ext4 rootfs of the DEPLOYED bootable
+  # card, and it MUST NOT be "corrected" to p2. Measured on a plain cold boot
+  # (docs/evidence/pf-l0/DS-P2.150/): U-Boot loads /boot.scr from `mmc 0:2`, so
+  # the FAT boot partition is p2 and the ext4 rootfs is p3 (a >=3-partition GPT
+  # layout: p1 / p2 FAT boot / p3 ext4 rootfs); the DS-P2.148 root login shell
+  # booted p3. p2 is the FAT boot partition, so root pointed at p2 VFS-panics —
+  # the discarded prior DS-P2.150 dispatch (commit 3f65616) did exactly that and
+  # regressed (it was seeded by an earlier stale comment here that still claimed
+  # p2). DS-P2.149 RECONCILED the layouts: the in-tree assembler
+  # tools/pfsoc_boot_media.py (_assemble_gpt) now lays the SAME >=3-partition GPT
+  # as the deployed card and the RTL-P2.1271 `rr linux sdcard` path — P1 raw HSS
+  # payload / P2 FAT boot / P3 ext4 rootfs — so root=/dev/mmcblk0p3 is correct
+  # for the image the in-tree tool emits, not just the deployed card. Guarded by
+  # tools/tests/test_pfsoc_root_partition_guard_ds_p2_150.py and
+  # tools/tests/test_pfsoc_boot_media_gpt_ds_p2_149.py.
+  # HSS loads payload.bin from the raw P1 GPT partition it scans
+  # (CONFIG_SERVICE_BOOT_MMC_USE_GPT), never a FAT filename.
+  # Never petalinux/bitbake.
+  sdcard:
+    rootfs: partition
+    # 0 = autosize to overlay + daemon + headroom at sdcard *assembly*.
+    # `rr linux rootfs --mode partition` still defaults to 32 MiB (SDK
+    # _DEFAULT_EXT4_SIZE_MB) which is TOO SMALL for the 50 MiB+ riscv64
+    # overlay+daemon tree — pass --size-mb 128 (or larger) on that step,
+    # then `rr linux sdcard --refresh --no-deps`. DS-P2.146.
+    # DS-P2.157: an explicit size. MEASURED on the kit: autosize (0 = du + 8 MiB)
+    # produced a 51 MiB ext4 at 100% use with 0 bytes free (ext4 journal and
+    # metadata ate the headroom), so the daemon's log write hit ENOSPC and S99's
+    # python self-test refused to start it. 128 MiB leaves ~70 MiB free.
+    rootfs_mib: 128
+    fat_mib: 64
+    align_mib: 1
+  # PF-L0 (DS-P2.125): the deepskopion fabric DT deltas, mirroring the DE25 shape
+  # (targets/de25_datalogger.yml) with the PolarFire memory map
+  # (sw/linux/pfsoc/system_memory_map.yml). The three nodes are what turn the
+  # bootargs above into a working ring path; without them the daemon starts and
+  # finds nothing (the SKIP-shaped failure DS-X5 forbids, and the exact hole the
+  # land refusal named against `dt_nodes: []`):
+  #
+  #   * reserved-memory/deepskopion-ring@a0000000 (no-map) — the 256 MiB the FIC1
+  #     DDR ring DMA fills. `no-map` both keeps Linux out of it AND makes it
+  #     mappable through /dev/mem (STRICT_DEVMEM refuses System RAM but allows a
+  #     no-map reservation). 0xA000_0000 lies outside every memory node of the
+  #     reference DTB, so the kernel never maps it as RAM AT THAT ADDRESS
+  #     (DS-P2.157 removed the DE25-copied mem=512M, which on this kit starved
+  #     the DMA pools). The SAME DDR was also Linux RAM through the 64-bit
+  #     windows; the DS-P1.62 overrides at the end of this list move Linux
+  #     off every alias of it.
+  #   * clocks/deepskopion-clk — the 100 MHz fabric clock (matches bootargs
+  #     ds_clk_hz=100000000), a fixed-clock the same way DE25 declares it.
+  #   * fabric-uio@0/ring-watermark@60000000 — `compatible = "generic-uio"` at the
+  #     FIC0 CSR base (== bootargs ds_mmio_base=0x60000000, == system_memory_map.yml
+  #     system_regs.base_addr), so `uio_pdrv_genirq.of_id=generic-uio` binds it
+  #     and exposes /dev/uioN for the ring-watermark IRQ. The CSR and the ring
+  #     themselves are read over /dev/mem (sw/stream MmioRegbank / RealDdrMmap);
+  #     the uio node is the watermark interrupt path. The F2M→PLIC source number
+  #     is the ONE value still read from the MSS memory-map handoff at PF-B0
+  #     (system_memory_map.yml provenance note), so `interrupts` is deliberately
+  #     omitted until then — uio_pdrv_genirq registers the device with
+  #     UIO_IRQ_NONE and sw/stream falls back to polling (sw/stream/__main__.py),
+  #     so the ring path works before the IRQ is pinned rather than fabricating a
+  #     wrong PLIC number here.
+  #
+  # The MSS MAC (eth0) node is NOT authored here: unlike the DE25 SoCDK DTB, the
+  # PolarFire GEM/PHY node is emitted by the frozen MSS .cxz base DT (SGMII to the
+  # VSC8221 PHY on MSS Bank 5, PF-P0 §5.6); CONFIG_MACB (kernel fragment) binds
+  # it. Its MDIO reg is read from the reference DT at PF-B0. Consistency of these
+  # three nodes with the bootargs + memory map is guarded by
+  # tools/tests/test_pfsoc_dt_nodes_p2_125.py.
+  dt_nodes:
+  - path: /reserved-memory/deepskopion-ring@a0000000
+    create: true
+    properties:
+      reg: [0, 0xA0000000, 0, 0x10000000]
+      no-map: ""
+  # DS-P2.270: the pfsoc base DTB has no /clocks node; rr creates one node per
+  # create: true entry and never an intermediate, so the container comes first.
+  - path: /clocks
+    create: true
+  - path: /clocks/deepskopion-clk
+    create: true
+    properties:
+      compatible: fixed-clock
+      "#clock-cells": 0
+      clock-frequency: 100000000
+      phandle: 0x7F01
+  # DS-P2.148: this MUST NOT be parented at `/soc@0`. `rr linux dtb` applies
+  # dt_nodes as a dtc ROOT OVERLAY, so a `/soc@0/...` path creates a SECOND
+  # top-level node whose node-name (the part before '@') is ALSO "soc". The pfsoc
+  # base kernel DTB (linux4microchip mpfs.dtsi) already has the real bus at `/soc`
+  # (no unit address). Linux and U-Boot resolve a path component by
+  # node-name-before-'@' and take the FIRST match, so the injected `/soc@0`
+  # SHADOWS `/soc`: the serial4 alias target "/soc/serial@20106000" and the
+  # `stdout-path` resolve to the serial-less shadow, ttyS4 never appears, and the
+  # console is silent after "Starting kernel ..." (DS-P2.148 root cause; the
+  # kernel itself booted to arch_cpu_idle, proven by JTAG). Parent it at a
+  # DISTINCT top-level node instead (node-name "fabric-uio" != "soc"), which
+  # keeps the generic-uio binding + the 2-cell reg exactly as before (uio binds
+  # by compatible, path-independently; the daemon reads the CSR over /dev/mem) so
+  # nothing in the DS-P2.149 daemon path changes. (The DE25 target correctly uses
+  # /soc@0 because ITS base DTB's soc node IS named soc@0 — the anchor is
+  # board-specific, and was wrongly copied to the pfsoc target.)
+  # DS-P2.270: the parent bus is created here with 1/1 address/size cells, so the
+  # child's reg [0x60000000, 0x10000] reads as written (without them the default
+  # 2/1 cells misread it). The base DTB's /fabric-bus@40000000/uio@60000000
+  # ("fpga_lsram") is the reference design's LSRAM, a different device.
+  - path: /fabric-uio@0
+    create: true
+    properties:
+      compatible: simple-bus
+      "#address-cells": 1
+      "#size-cells": 1
+      # Explicit 1:1 window: child address (1 cell), parent address (2 cells,
+      # the root is 2/2), size (1 cell). An empty `ranges;` is what is meant, but
+      # rr writes "" and true as a one-byte string, which Linux does not read
+      # as 1:1 (rr cannot write a zero-length property, RTL-P2.2314).
+      ranges: [0x60000000, 0, 0x60000000, 0x10000]
+  - path: /fabric-uio@0/ring-watermark@60000000
+    create: true
+    properties:
+      compatible: generic-uio
+      reg: [0x60000000, 0x10000]
+      # interrupts: omitted until PF-B0 pins the MSS_INT_F2M PLIC source (see above)
+  # DS-P2.150 console re-alias (SILICON-PROVEN, plain cold boot). See the bootargs
+  # comment above for the full rationale. These three nodes bake the DS-P2.148
+  # `fdt rm`/ttyS0 workaround into the DTB so a plain cold boot reaches the shell
+  # on the deployed NR_UARTS=4 kernel with NO interactive U-Boot. `rr linux dtb`
+  # applies each property with `fdtput -p -ts` (string), which OVERWRITES the base
+  # value in place — so repointing the vendor `serial4` alias and disabling the
+  # competing MMUART are expressible here, not just additions.
+  - path: /aliases
+    properties:
+      # of_alias resolves /soc/serial@20106000 (physical FlashPro5 UART) to
+      # /dev/ttyS0 — line 0 exists under the deployed NR_UARTS=4 kernel.
+      serial0: "/soc/serial@20106000"
+      # DS-P2.126: MMUART1 @0x2010_0000 is the fabric-routed UART the logger
+      # watches. Alias it to serial1 (ttyS1, line 1, inside NR_UARTS=4) so
+      # Linux can open it. It must NOT be serial0 (that is the FlashPro5
+      # console) and must NOT stay on serial4 (line 4 is rejected).
+      serial1: "/soc/serial@20100000"
+      # Repoint the vendor `serial4 -> /soc/serial@20106000` alias OFF the
+      # physical console AND off the fabric MMUART. Without this the physical
+      # node has BOTH serial0 and serial4; of_alias_get_id (first match, DT
+      # order) returns 4 and the 8250 driver rejects line 4 (NR_UARTS=4).
+      # MMUART2 @0x2010_2000 stays disabled below, so serial4 names a node
+      # that never registers a tty.
+      serial4: "/soc/serial@20102000"
+  - path: /soc/serial@20100000
+    properties:
+      # Enabled, but only as ttyS1 via the serial1 alias above. Leaving it
+      # disabled (DS-P2.150) kept it from stealing ttyS0 and also left the
+      # fabric MMUART with no Linux tty at all.
+      status: "okay"
+  - path: /soc/serial@20102000
+    properties:
+      status: "disabled"
+  # DS-P1.62: keep EVERY alias of the ring's DDR out of Linux. The frozen MSS
+  # config (disco_mss.cxz <segs>, which the HSS writes into the SEG registers)
+  # maps every DDR window base to DDR offset 0: 0x8000_0000, 0xC000_0000,
+  # 0xD000_0000, 0x10_0000_0000, 0x14_0000_0000 and 0x18_0000_0000 are all
+  # DDR 0. The reference DTB's dma-ranges say the same thing
+  # (0x14_2200_0000 -> 0x10_2200_0000), and it tiles all 1 GiB of DDR as Linux
+  # RAM. So the ring at 0xA000_0000 (+256 MiB) is DDR 0x2000_0000..0x3000_0000:
+  #   * DDR 0x2200_0000..0x3000_0000 was /memory@1022000000 (the DS-P2.157
+  #     224 MiB cap kept EXACTLY that part), i.e. the only 64-bit RAM fragment
+  #     Linux allocates from;
+  #   * DDR 0x2000_0000..0x2200_0000 was the top 32 MiB of the linux,dma-default
+  #     pool (non-cached-high-buffer, 0x14_1200_0000), where SD ADMA and macb
+  #     buffers live.
+  # The no-map carve at 0xA000_0000 protected neither. The fabric ring address
+  # stays unchanged (no bitstream change); Linux is moved off it instead.
+  # Guarded by tools/tests/test_pfsoc_ring_ddr_alias_ds_p1_62.py.
+  #
+  # /memory@1022000000: the same 224 MiB the DS-P2.157 cap proved, but moved
+  # above the ring, to DDR 0x3000_0000..0x3E00_0000 (cpu 0x10_3000_0000). It
+  # still ends 28 MiB below hss-buffer (DDR 0x3FC0_0000) and below the DDR
+  # ~0x3FBF_0000 address where the one full-RAM boot panicked (DS-P2.157,
+  # mechanism still unknown). The node keeps its name so fdtput patches the
+  # reference node in place; the unit address no longer matches reg, and only
+  # dtc's cosmetic unit_address_vs_reg check looks at that. Not yet booted on
+  # silicon: this DDR range is the one part of this layout no captured boot
+  # has handed to Linux in a clean boot.
+  - path: /memory@1022000000
+    properties:
+      reg: [0x10, 0x30000000, 0x0, 0x0E000000]
+  # The dma-default pool and its RAM fragment are cut to 224 MiB so that both
+  # end at DDR 0x2000_0000, the ring base. alloc-ranges and size move together.
+  # A pool bigger than its range fails to allocate, and the DS-P2.157 log shows
+  # what that costs: mmc0 without ADMA and eth0 -12.
+  - path: /memory@1412000000
+    properties:
+      reg: [0x14, 0x12000000, 0x0, 0x0E000000]
+  - path: /reserved-memory/non-cached-high-buffer
+    properties:
+      size: [0x0, 0x0E000000]
+      alloc-ranges: [0x14, 0x12000000, 0x0, 0x0E000000]
+  # DS-P2.271: the base DTB (linux4microchip+fpga-2025.03.1 mpfs-disco-kit.dtb,
+  # from mpfs-disco-kit-fabric.dtsi) describes the Microchip reference design's
+  # fabric under /fabric-bus@40000000, all status okay. The deepskopion fabric has
+  # none of these IPs: FIC0 carries only the regbank CSR at 0x6000_0000
+  # (system_memory_map.yml system_regs), and FIC3's APB initiator has only its
+  # clock connected (hw/libero/pfsoc/pfsoc_mss_subsys.tcl). Left enabled, the
+  # corepwm and corei2c drivers would probe at 0x4000_0000/0x4000_0200,
+  # uio@60000000 ("fpga_lsram", 0x6000_0000 + 0x1000) lies inside the CSR window
+  # ring-watermark@60000000 maps, and dma-controller@60010000 starts at the first
+  # address after that window. Disabled here at their base paths (no create);
+  # guarded by tools/tests/test_pfsoc_reference_fabric_ds_p2_271.py.
+  - path: /fabric-bus@40000000/pwm@40000000
+    properties:
+      status: "disabled"
+  - path: /fabric-bus@40000000/i2c@40000200
+    properties:
+      status: "disabled"
+  - path: /fabric-bus@40000000/dma-controller@60010000
+    properties:
+      status: "disabled"
+  - path: /fabric-bus@40000000/uio@60000000
+    properties:
+      status: "disabled"
+  - path: /chosen
+    properties:
+      # Move stdout-path off the (now repointed) serial4 to serial0 so bare
+      # `earlycon` in bootargs targets the physical UART during early boot too.
+      stdout-path: "serial0:115200n8"
+  rootfs:
+    # riscv64 overlay — the MPFS is a SiFive U54 (rv64gc), so the armhf
+    # sw/linux/python_overlay cannot exec here (PF-L0). Its own arch-distinct
+    # tree, built from sw/linux/pfsoc/buildroot_pfsoc_defconfig.
+    python_overlay: sw/linux/pfsoc/python_overlay
+    # DS-P1.87: refuse an image whose overlay lacks the native edge library
+    # built from this checkout (tools/native_edge_lib.py prints the install line).
+    stage_command: ./sw/linux/stage_daemon.sh && python3 tools/native_edge_lib.py check --profile pfsoc && python3 tools/pfsoc_boot_media.py stage
+# PF-L0 (DS-P2.125): the PolarFire userspace CSR/ring windows the daemon mmaps
+# at runtime, reached over FIC0/FIC1. Top-level key (scope both) so this target
+# diverges from the Zynq map without editing the shared root.
+memory_map: sw/linux/pfsoc/system_memory_map.yml
+packages:
+  routertl/edge_counter: local
+  routertl/edge_detector: local
+  routertl/infilter: local
+  routertl/infilter_array: local
+  routertl/lfsr: local
+  routertl/phase_accumulator: local
+  routertl/ram_dual_port: local
+  routertl/ram_lut: local
+  open-logic/olo_base_fifo_sync: {version: ^4.4.1, library: olo}
+  open-logic/olo_base_fifo_async: {version: ^4.4.1, library: olo}
+  open-logic/olo_base_wconv_n2xn: {version: ^4.4.1, library: olo}
+  open-logic/olo_base_wconv_xn2n: {version: ^4.4.1, library: olo}
+  enclustra/en_cl_fix_resize: ^d2ce1a617bc8
+  routertl/rr_ddr_stream: {version: ^0.3.6, library: rr}
+  routertl/rea: "==1.12.4"

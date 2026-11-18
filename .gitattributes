@@ -1,0 +1,7 @@
+# Staged Libero FlashPro Express programming jobs for the PolarFire SoC Discovery Kit.
+hw/libero/pfsoc/mss/*.job binary
+
+# Raw `rr hw bit-sha` stdout+stderr kept beside a run record: verbatim
+# instrument output; rr's console lines can end in a space, and those bytes are
+# the record. Exempt from git's whitespace gate rather than reformatted.
+runs/hw/**/bit_sha.txt -whitespace

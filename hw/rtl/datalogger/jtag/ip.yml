@@ -1,0 +1,40 @@
+# jtag_datalogger — passive IEEE-1149.1 (JTAG/TAP) line datalogger IP
+#
+# Mirrors the cross-datalogger contract-first pattern (DS-P3.56 / JTAG P1).
+# See docs/standards/datalogger_compliance_checklist.md section 8b for the
+# R1..R8 rules and section 10 for the lifecycle/reset contract.
+
+ip:
+  name: jtag_datalogger
+  library: tich
+  language: vhdl
+  description: |
+    Passive JTAG/TAP datalogger. Mirrors the 16-state TAP FSM from
+    TCK/TMS/TDI/TDO (watched as inputs), captures the IR/DR shift
+    streams, and emits 32-bit framed events + TDI/TDO payload messages
+    per zs_msg_header_t convention. Reference event vocabulary in
+    hw/rtl/datalogger/jtag/jtag_datalogger_protocol.yml.
+
+hdl:
+  top_module: jtag_datalogger
+  top_sim:    jtag_datalogger
+
+paths:
+  sources: .
+
+synthesis:
+  mode: rtl
+  sources:
+    - jtag_datalogger.vhd
+
+build:
+  simulation:
+    sources: []
+    test_dir: ../../../sim/cocotb/tests/datalogger/jtag
+    simulator: nvc
+    waves:
+      formats: [fst]
+
+requirements: requirements.yml
+
+ips: []

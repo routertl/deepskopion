@@ -1,0 +1,46 @@
+# UART Message Payload Specification
+name: UART
+id: 0x01 # Matches the DOMAIN enum
+payload_size_bytes: 8
+description: "Represents a single decoded UART character."
+
+fields:
+  - name: uart_char
+    offset: 0
+    size: 1
+    type: uint8
+    description: "The decoded character"
+
+  - name: parity_error
+    offset: 1
+    size: 1
+    type: uint8 # Boolean
+    description: "1 if parity error was detected"
+
+  - name: frame_error
+    offset: 2
+    size: 1
+    type: uint8 # Boolean
+    description: "1 if stop bit was missing"
+
+  - name: reserved_0
+    offset: 3
+    size: 1
+    type: uint8
+    description: "Padding"
+
+  - name: oversample_period
+    offset: 4
+    size: 2
+    type: uint16
+    description: "Derived baud timing (bit duration in clock cycles)"
+
+  - name: reserved_1
+    offset: 6
+    size: 2
+    type: uint16
+    description: "Padding"
+
+notes:
+  - "Timestamp corresponds to the moment the start bit was detected."
+  - "oversample_period is the detected bit timing in clock cycles."

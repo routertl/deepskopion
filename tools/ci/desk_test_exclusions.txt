@@ -1,0 +1,21 @@
+# Tests public CI does not run, each with the reason. Everything else in
+# tools/tests, sw/stream/tests and tools/datalogger-builder/tests runs. These
+# tests still run in a checkout that has the tool or entitlement they need.
+# Format: <pytest node id or file>  # <reason>
+
+# Needs a VHDL simulator (nvc). CI installs GHDL for lint only.
+tools/tests/test_de25_shell_contract.py::test_axil_apb_behavior  # simulator
+tools/tests/test_de25_shell_contract.py::test_axil_demux_behavior  # simulator
+tools/tests/test_de25_shell_contract.py::test_axil_demux3_wedge_guard  # simulator
+tools/tests/test_de25_shell_contract.py::test_de25_top_boundary_analyzes  # simulator
+tools/tests/test_edge_agg_pipeline_latency_ds_p2_153.py::test_aggregator_input_pipeline_cocotb_suite_is_green  # simulator
+tools/tests/test_edge_wire_identity_sim_ds_t2_84.py  # simulator
+tools/tests/test_ip_standalone_closure_ds_p2_137.py  # simulator
+tools/tests/test_ip_standalone_closure_long_ds_p2_137.py  # simulator
+tools/tests/test_ip_standalone_closure_olo_ds_p2_137.py  # simulator
+tools/tests/test_multibit_cdc_coherence_ds_t1_21.py::test_ddr_commit_addr_uses_coherent_handshake  # simulator
+tools/tests/test_uart_rearm_powerup_state_ds_t1_16.py::test_uart_rearm_clears_powerup_calibration_state  # simulator
+
+# rr sim coverage-map needs the coverage entitlement; the free wheel refuses it.
+tools/tests/test_contract_mapping_drift_ds_p2_139.py  # coverage entitlement
+tools/tests/test_contract_mapping_drift_ds_p2_187.py  # coverage entitlement

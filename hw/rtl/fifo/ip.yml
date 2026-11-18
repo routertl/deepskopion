@@ -1,0 +1,42 @@
+# fifo_sync — deepskopion's portable synchronous FIFO boundary
+
+ip:
+  name: fifo_sync
+  library: tich
+  language: vhdl
+  description: |
+    Project-owned compatibility boundary around the registry-pinned
+    open-logic synchronous FIFO. Preserves the address-width depth,
+    threshold, reset-busy, FWFT, and registered-read contracts used by
+    the datalogger and responder RTL.
+
+hdl:
+  top_module: fifo_sync
+  top_sim:    fifo_sync
+
+# DS-P2.137: no `paths.sources: ..` scan scope. rr reconciles a manifest's
+# declared files against EVERY HDL file in its scan scope, and `..` is all of
+# hw/rtl — so loading this manifest (directly, or as a child of the uart /
+# arbiter / edge / responder manifests) failed with ~100 "unlisted on disk"
+# files. With no scan scope the source path is resolved from this directory.
+synthesis:
+  mode: rtl
+  sources:
+    - ../fifo_sync.vhd
+
+build:
+  simulation:
+    sources: []
+    test_dir: ../../sim/cocotb/tests/fifo
+    simulator: nvc
+
+# DS-P2.137: the open-logic FIFO is a REGISTRY package, so it is declared
+# under `dependencies:` (rr IP_MANIFEST_REFERENCE: registry-published IPs),
+# not `ips:`. rr's manifest resolver reads every `ips:` entry as a path to a
+# child ip.yml; `ips: [open-logic/olo_base_fifo_sync]` made it look for
+# hw/rtl/fifo/open-logic/olo_base_fifo_sync and refuse to load this manifest.
+# Targets still select the package explicitly (`packages:`); ip.lock pins it.
+dependencies:
+  open-logic/olo_base_fifo_sync: "^4.4.1"
+
+ips: []

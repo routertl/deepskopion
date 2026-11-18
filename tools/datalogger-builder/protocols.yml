@@ -1,0 +1,314 @@
+# Protocol Metadata Registry
+# Defines entity, generics, ports, and signal ordering for each protocol datalogger
+#
+# NAMING CONVENTION:
+#   Generics: G_{PROTO}_ID_WIDTH, G_{PROTO}_DEV_ID, G_{PROTO}_PINS, etc.
+#   Ports:    CLK, RST, {PROTO}_PINS, CONFIG, TIMESTAMP, {PROTO}_MSG_OUT, etc.
+#
+# All protocols must follow this standard for consistency.
+#
+# INPUT CONDITIONING (DS-T3.5):
+#   `max_freq_hz` is the highest fundamental frequency expected on ANY line of
+#   this protocol (the fastest clock/data edge). The generator emits it as
+#   C_<PROTO>_MAX_FREQ_HZ and the gather instantiates a tich.glitch_filter on
+#   every captured pin sized from it: the rejection window self-scales to
+#   clamp(2, G_MAX_GLITCH_CLKS, clk/(2·max_freq) − 1). Slow lines (UART, I2C)
+#   get real glitch rejection; fast lines (SPI/QSPI/JTAG clocks) floor the
+#   window at 2 — a pure 2-FF synchroniser that never eats a real edge. Use the
+#   FASTEST line's frequency so no real edge is ever filtered away.
+
+protocols:
+  # --- BURST PROTOCOLS (2-layer arbiter) ---
+  
+  I2C:
+    category: Burst
+    entity: tich.i2c_datalogger
+    signals: [SCL, SDA]
+    max_freq_hz: 1_000_000      # Fast-mode-plus SCL ceiling (1 MHz)
+    generics:
+      G_I2C_ID_WIDTH: C_DATALOGGER_ID_WIDTH
+      G_I2C_DEV_ID: "{id}"
+      G_TIMESTAMP_WIDTH: C_TIMESTAMP_WIDTH
+      G_CONFIG_WIDTH: C_DATALOGGER_CONFIG_WIDTH
+      G_ERROR_WIDTH: C_ERROR_WIDTH
+    ports:
+      CLK: CLK
+      RST: RST
+      I2C_PINS: "{mapped_pins}"
+      CONFIG: CONFIG
+      TIMESTAMP: TIMESTAMP
+      I2C_MSG_OUT: "{msg_out}"
+      I2C_MSG_VLD: "{req}"
+      I2C_MSG_RDY: "{ack}"
+      I2C_ERRORS: "{errors}"
+    arbiter_fifo_depth: 8
+
+  # SPI re-uses qspi_datalogger with G_QSPI_PINS=4 (just SCLK/CS/MOSI/MISO,
+  # no IO2/IO3). The QSPI framing engine handles 1-bit data lanes too.
+  # When a dedicated spi_datalogger entity lands, swap entity + names here.
+  SPI:
+    category: Burst
+    entity: tich.qspi_datalogger
+    signals: [SCLK, CS, MOSI, MISO]
+    max_freq_hz: 50_000_000     # SPI SCLK up to ~50 MHz → window floors at 2 (pure sync)
+    generics:
+      G_QSPI_ID_WIDTH: C_DATALOGGER_ID_WIDTH
+      G_QSPI_DEV_ID: "{id}"
+      G_QSPI_PINS: "4"
+      G_TIMESTAMP_WIDTH: C_TIMESTAMP_WIDTH
+      G_CONFIG_WIDTH: C_DATALOGGER_CONFIG_WIDTH
+      G_ERROR_WIDTH: C_ERROR_WIDTH
+    ports:
+      CLK: CLK
+      RST: RST
+      QSPI_PINS: "{mapped_pins}"
+      CONFIG: CONFIG
+      TIMESTAMP: TIMESTAMP
+      QSPI_MSG_OUT: "{msg_out}"
+      QSPI_MSG_VLD: "{req}"
+      QSPI_MSG_RDY: "{ack}"
+      QSPI_ERRORS: "{errors}"
+    arbiter_fifo_depth: 8
+
+  UART:
+    category: Burst
+    entity: tich.uart_datalogger
+    signals: [IN]  # Single RX line
+    max_freq_hz: 1_000_000      # UART auto-cal ceiling ~1 Mbaud at 100 MHz → window 4
+    generics:
+      # DS-P2.154: thread the gather's real clock (G_SYS_CLK, 50 MHz on DE25)
+      # — a 100 MHz literal here halves the datalogger's sampler resolution there
+      # (prescaler math in uart_pkg is derived from this generic).
+      G_SYSTEM_CLK_FREQ: G_SYS_CLK
+      G_UART_ID_WIDTH: C_DATALOGGER_ID_WIDTH
+      G_UART_DEV_ID: "{id}"
+      G_TIMESTAMP_WIDTH: C_TIMESTAMP_WIDTH
+      G_CONFIG_WIDTH: C_DATALOGGER_CONFIG_WIDTH
+      G_ERROR_WIDTH: C_ERROR_WIDTH
+    ports:
+      CLK: CLK
+      RST: RST
+      UART_IN: "{mapped_pins}(0)"
+      CONFIG: CONFIG
+      TIMESTAMP: TIMESTAMP
+      UART_MSG_OUT: "{msg_out}"
+      UART_MSG_VLD: "{req}"
+      UART_MSG_RDY: "{ack}"
+      UART_ERRORS: "{errors}"
+    arbiter_fifo_depth: 8
+
+  QSPI:
+    category: Burst
+    entity: tich.qspi_datalogger
+    signals: [SCLK, CS, IO0, IO1, IO2, IO3]
+    max_freq_hz: 50_000_000     # QSPI SCLK up to ~50 MHz → window floors at 2 (pure sync)
+    generics:
+      G_QSPI_ID_WIDTH: C_DATALOGGER_ID_WIDTH
+      G_QSPI_DEV_ID: "{id}"
+      G_QSPI_PINS: C_QSPI_PINS
+      G_TIMESTAMP_WIDTH: C_TIMESTAMP_WIDTH
+      G_CONFIG_WIDTH: C_DATALOGGER_CONFIG_WIDTH
+      G_ERROR_WIDTH: C_ERROR_WIDTH
+    ports:
+      CLK: CLK
+      RST: RST
+      QSPI_PINS: "{mapped_pins}"
+      CONFIG: CONFIG
+      TIMESTAMP: TIMESTAMP
+      QSPI_MSG_OUT: "{msg_out}"
+      QSPI_MSG_VLD: "{req}"
+      QSPI_MSG_RDY: "{ack}"
+      QSPI_ERRORS: "{errors}"
+    arbiter_fifo_depth: 8
+
+  # The "logic-analyzer" capture: raw edge events on a single line,
+  # timestamped, dropped into the burst arbiter. Entity uses ED_* prefix
+  # (not EDGE_*) per hw/rtl/datalogger/nonstd/edge_datalogger/edge_datalogger.vhd.
+  EDGE:
+    category: Burst
+    entity: tich.edge_datalogger
+    signals: [LINE]
+    max_freq_hz: 50_000_000     # Raw logic-analyzer capture — keep fast edges, sync only
+    # DS-P3.117: in-band max-frequency. G_MAXFREQ_WIDTH is the min-interval
+    # register width; it is echoed into the EVT_EDGE_MAXFREQ payload (SW sentinel
+    # mask) and MUST match the maxfreq_event_bank G_IVAL_WIDTH in deepskopion_top
+    # (C_EDGE_MAXFREQ_WIDTH there). G_MAXFREQ_MIN_INTERVAL is the glitch floor
+    # (intervals strictly below it are rejected so a runt can't forge a max).
+    maxfreq_width: 24
+    maxfreq_min_interval: 2
+    generics:
+      G_ED_ID_WIDTH: C_DATALOGGER_ID_WIDTH
+      G_ED_DEV_ID: "{id}"
+      G_TIMESTAMP_WIDTH: C_TIMESTAMP_WIDTH
+      G_CONFIG_WIDTH: C_DATALOGGER_CONFIG_WIDTH
+      G_ERROR_WIDTH: C_ERROR_WIDTH
+      G_MAXFREQ_WIDTH: "24"
+      G_MAXFREQ_MIN_INTERVAL: "2"
+    ports:
+      CLK: CLK
+      RST: RST
+      EDGE_IN: "{mapped_pins}(0)"
+      CONFIG: CONFIG
+      TIMESTAMP: TIMESTAMP
+      ED_MSG_OUT: "{msg_out}"
+      ED_MSG_VLD: "{req}"
+      ED_MSG_RDY: "{ack}"
+      ED_ERRORS: "{errors}"
+      # DS-P3.117: per-channel max-frequency taps. Re-exported on the gather's
+      # EDGE_MAX_IVALS / EDGE_MAX_NEW buses (one slot per edge instance), fed to
+      # the maxfreq_event_bank in deepskopion_top (4th framer-mux input).
+      ED_MAX_INTERVAL: "{max_interval}"
+      ED_MAX_NEW: "{max_new}"
+      # DS-T2.84: lifecycle-frame flag. The gather tags flagged words
+      # EVT_EDGE_LIFECYCLE so the core frames them on their own (0x0608)
+      # instead of batching them onto EDGE_EVENTS as S=1/E=0 "readbacks".
+      ED_MSG_LIFECYCLE: "{lifecycle}"
+      # DS-P2.16: Stream-RLE word flag. The gather tags flagged words
+      # EVT_EDGE_RLE so the core frames each on its own (0x0609).
+      ED_MSG_STREAM: "{stream}"
+    arbiter_fifo_depth: 7
+
+  JTAG:
+    category: Burst
+    entity: tich.jtag_datalogger
+    signals: [TCK, TMS, TDI, TDO]
+    max_freq_hz: 30_000_000     # JTAG TCK up to ~30 MHz → window floors at 2 (pure sync)
+    generics:
+      G_JTAG_ID_WIDTH: C_DATALOGGER_ID_WIDTH
+      G_JTAG_DEV_ID: "{id}"
+      G_JTAG_PINS: C_JTAG_PINS
+      G_TIMESTAMP_WIDTH: C_TIMESTAMP_WIDTH
+      G_CONFIG_WIDTH: C_DATALOGGER_CONFIG_WIDTH
+      G_ERROR_WIDTH: C_ERROR_WIDTH
+    ports:
+      CLK: CLK
+      RST: RST
+      JTAG_PINS: "{mapped_pins}"
+      CONFIG: CONFIG
+      TIMESTAMP: TIMESTAMP
+      JTAG_MSG_OUT: "{msg_out}"
+      JTAG_MSG_VLD: "{req}"
+      JTAG_MSG_RDY: "{ack}"
+      JTAG_ERRORS: "{errors}"
+    arbiter_fifo_depth: 8
+
+  MDIO:
+    category: Burst
+    entity: tich.mdio_datalogger
+    signals: [MDC, MDIO]
+    max_freq_hz: 2_500_000      # MDC up to 2.5 MHz (IEEE 802.3) → window 4
+    generics:
+      G_MDIO_ID_WIDTH: C_DATALOGGER_ID_WIDTH
+      G_MDIO_DEV_ID: "{id}"
+      G_MDIO_PINS: C_MDIO_PINS
+      G_TIMESTAMP_WIDTH: C_TIMESTAMP_WIDTH
+      G_CONFIG_WIDTH: C_DATALOGGER_CONFIG_WIDTH
+      G_ERROR_WIDTH: C_ERROR_WIDTH
+    ports:
+      CLK: CLK
+      RST: RST
+      MDIO_PINS: "{mapped_pins}"
+      CONFIG: CONFIG
+      TIMESTAMP: TIMESTAMP
+      MDIO_MSG_OUT: "{msg_out}"
+      MDIO_MSG_VLD: "{req}"
+      MDIO_MSG_RDY: "{ack}"
+      MDIO_ERRORS: "{errors}"
+    arbiter_fifo_depth: 8
+
+  ONEWIRE:
+    category: Burst
+    entity: tich.onewire_datalogger
+    signals: [DQ]
+    max_freq_hz: 1_000_000      # 1-Wire overdrive timing slot edges → window 4
+    generics:
+      G_ONEWIRE_ID_WIDTH: C_DATALOGGER_ID_WIDTH
+      G_ONEWIRE_DEV_ID: "{id}"
+      G_TIMESTAMP_WIDTH: C_TIMESTAMP_WIDTH
+      G_CONFIG_WIDTH: C_DATALOGGER_CONFIG_WIDTH
+      G_ERROR_WIDTH: C_ERROR_WIDTH
+    ports:
+      CLK: CLK
+      RST: RST
+      ONEWIRE_PIN: "{mapped_pins}(0)"
+      CONFIG: CONFIG
+      TIMESTAMP: TIMESTAMP
+      ONEWIRE_MSG_OUT: "{msg_out}"
+      ONEWIRE_MSG_VLD: "{req}"
+      ONEWIRE_MSG_RDY: "{ack}"
+      ONEWIRE_ERRORS: "{errors}"
+    arbiter_fifo_depth: 8
+
+  CAN:
+    category: Burst
+    entity: tich.can_datalogger
+    signals: [RX]               # passive: ONE post-transceiver line -> CAN_PINS(0). A
+                                # datalogger never drives TX (dominant='0'/recessive='1').
+    max_freq_hz: 1_000_000      # Classic CAN ≤1 Mbit/s bit edges → window 4
+    generics:
+      G_CAN_ID_WIDTH: C_DATALOGGER_ID_WIDTH
+      G_CAN_DEV_ID: "{id}"
+      G_CAN_PINS: C_CAN_PINS
+      G_TIMESTAMP_WIDTH: C_TIMESTAMP_WIDTH
+      G_CONFIG_WIDTH: C_DATALOGGER_CONFIG_WIDTH
+      G_ERROR_WIDTH: C_ERROR_WIDTH
+    ports:
+      CLK: CLK
+      RST: RST
+      CAN_PINS: "{mapped_pins}"
+      CONFIG: CONFIG
+      TIMESTAMP: TIMESTAMP
+      CAN_MSG_OUT: "{msg_out}"
+      CAN_MSG_VLD: "{req}"
+      CAN_MSG_RDY: "{ack}"
+      CAN_ERRORS: "{errors}"
+      DBG_BUS: "{dbg}"           # DS-P3.107: per-instance FSM/destuff debug bus → CAN_DBG_BUSSES
+    arbiter_fifo_depth: 8
+
+  TIMESTAMP:
+    category: Burst
+    entity: tich.timestamp_sync
+    signals: []  # No external pins
+    max_freq_hz: 100_000_000    # No external pins — unused (no conditioning emitted)
+    is_singleton: true
+    generics:
+      G_TIMESTAMP_ID_WIDTH: C_DATALOGGER_ID_WIDTH
+      G_TIMESTAMP_DEV_ID: C_TIMESYNC_ID
+      G_TIMESTAMP_WIDTH: C_TIMESTAMP_WIDTH
+      G_CONFIG_WIDTH: C_DATALOGGER_CONFIG_WIDTH
+      G_TIMESTAMP_BIT: C_TIMESTAMP_SYNC_BIT
+      G_TIMESTAMP_SLICE: C_TIMESTAMP_SLICE_LSB_BIT
+      G_ERROR_WIDTH: C_ERROR_WIDTH
+    ports:
+      CLK: CLK
+      RST: RST
+      CONFIG: CONFIG
+      TIMESTAMP: TIMESTAMP
+      TIMESTAMP_MSG_OUT: "{msg_out}"
+      TIMESTAMP_MSG_VLD: "{req}"
+      TIMESTAMP_MSG_RDY: "{ack}"
+      TIMESTAMP_ERRORS: "{errors}"
+    arbiter_fifo_depth: null  # Direct to 2nd layer
+
+  # --- STREAM PROTOCOLS (1-layer arbiter) ---
+  
+  I2S:
+    category: Stream
+    entity: tich.i2s_datalogger
+    signals: [SCK, WS, SD]
+    max_freq_hz: 25_000_000     # I2S SCK up to ~25 MHz → window floors at 2 (pure sync)
+    generics:
+      G_I2S_ID_WIDTH: C_DATALOGGER_ID_WIDTH
+      G_I2S_DEV_ID: "{id}"
+      G_I2S_MSG_WIDTH: C_DATALOGGER_MSG_WIDTH
+      G_CONFIG_WIDTH: C_DATALOGGER_CONFIG_WIDTH
+      G_ERROR_WIDTH: C_ERROR_WIDTH
+    ports:
+      CLK: CLK
+      RST: RST
+      I2S_PINS: "{mapped_pins}"
+      CONFIG: CONFIG
+      I2S_MSG_OUT: "{msg_out}"
+      I2S_MSG_VLD: "{req}"
+      I2S_MSG_RDY: "{ack}"
+      I2S_ERRORS: "{errors}"

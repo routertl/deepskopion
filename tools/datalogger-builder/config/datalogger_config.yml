@@ -1,0 +1,89 @@
+# Data logger configuration: the shipped default of the three products
+# (zybo_datalogger, de25_datalogger, pfsoc_datalogger read this one file).
+#
+# DS-P1.104 (owner ruling 2026-11-13 and its addenda): 2 UART, 2 I2C, 1 SPI,
+# 1 CAN FD and 3 EDGE data loggers, 14 inputs, every one on an EXTERNAL header
+# pin, the same pins on every board:
+#
+#   I2C#4  SCL JA0, SDA JA1        I2C#5  SCL JA2, SDA JA3
+#   SPI#8  CS JA4, MOSI JA5, MISO JA6, SCLK JA7
+#   UART#12 TX JB0                 UART#13 TX JB1
+#   EDGE#1 JB2   EDGE#2 JB3   EDGE#3 JB4
+#   CAN#20 RX JB5 (logic-level RX after the user's CAN transceiver)
+#
+# JA0..JB7 are deepskopion_core board pins (../board_pins.yml); each product
+# top wires them to its own header (Zybo PMOD JA/JB, DE25 GPIO_D on JP1,
+# PolarFire Raspberry Pi GPIOs). BoardPins pins every input by hand, so the
+# table does not depend on board_pins.yml order. JTAG stays out of the default
+# and stays selectable. EMIO_MUX_SEL resets to 0: every source is the header.
+#
+# SPI here uses the QSPI data logger in 4-pin mode (no IO2/IO3) via the
+# SPI->qspi_datalogger mapping in tools/datalogger-builder/protocols.yml.
+
+Design: Zybo Z7-20
+
+Constraints:
+  NumDataloggerPins: 64
+  MaxDataloggerID: 31
+
+Dataloggers:
+  # Burst protocols — per-protocol arbiter feeding the BURST output
+  Burst:
+    I2c:
+      4:
+        SCL: 12
+        SDA: 13
+      5:
+        SCL: 14
+        SDA: 15
+
+    Uart:
+      12:
+        TX: 36
+      13:
+        TX: 37
+
+    Spi:
+      8:
+        SCLK: 23
+        CS: 20
+        MOSI: 21
+        MISO: 22
+
+    # EDGE device_ids start at 1 — device_id 0 is RESERVED. CONFIG=0 is
+    # the idle/clear value (reset state, written between commands), and
+    # it is bit-identical to "disable device_id 0", so a live data logger at
+    # id 0 is silently disabled by every CONFIG clear (DS-T2.9). Ids are
+    # kept low and non-conflicting (4,5=I2C, 8=SPI, 12,13=UART) so the
+    # edge_batcher_aggregator sizes G_NUM_CHANNELS = max(edge id)+1
+    # (it demuxes EV_WORD[31:27] directly as the batcher index) instead
+    # of the full 5-bit 32-channel space — the DS-T10 capacity fix.
+    Edge:
+      1:
+        LINE: 42
+      2:
+        LINE: 43
+      3:
+        LINE: 44
+
+    # CAN FD data logger (project code, passive): one post-transceiver RX
+    # line. The CTU CAN FD controller is not part of the products.
+    Can:
+      20:
+        RX: 28
+
+BoardPins:
+  12: JA0
+  13: JA1
+  14: JA2
+  15: JA3
+  20: JA4
+  21: JA5
+  22: JA6
+  23: JA7
+  36: JB0
+  37: JB1
+  42: JB2
+  43: JB3
+  44: JB4
+  28: JB5

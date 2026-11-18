@@ -1,0 +1,8 @@
+# Keys that tools/ci/rr_schema_keys.py accepts although `rr schema --json`
+# does not list them. Each line: <dotted key> <ticket> <reason>.
+# A line whose key no longer appears, or that the schema now lists, is reported.
+linux.first_stage RTL-P2.2169 read by rr linux (u-boot step); missing from rr schema
+linux.sof_path RTL-P2.2169 read by rr linux (Agilex HPS steps, config flash); missing from rr schema
+linux.sdcard RTL-P2.2169 read by rr linux (PolarFire SoC SD image); missing from rr schema
+linux.kernel_config_fragments RTL-P2.2169 read by rr linux (PolarFire SoC kernel); missing from rr schema
+linux.dtb_disable_nodes RTL-P2.2169 read by rr linux (Agilex HPS device tree); missing from rr schema

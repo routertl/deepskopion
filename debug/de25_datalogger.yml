@@ -1,0 +1,56 @@
+# debug/de25_datalogger.yml — REA (RouteRTL Embedded Analyzer) core for the DE25
+# Agilex-5 deepskopion datalogger (DS-T2.75).
+#
+# WHY THIS FILE EXISTS: `rr hw bit-sha` on Altera/Intel reads the REA BUILD_ID
+# design-identity register (0xD4) over JTAG and compares it to the build stamp
+# (RTL-P2.1127). Its readback leg (`sdk.cli.commands.hw._run_rea_build_id_readback`
+# → `ila._resolve_debug_core`) can only resolve the on-chip node from a
+# `debug/<name>.yml` declaration. Before DS-T2.75 this project declared none, so
+# even a working Agilex REA readback had no node to address → UNCONFIRMED. This
+# file is that declaration. The project also declares the PolarFire SoC REA
+# cores (debug/pfsoc_*.yml), so `rr hw bit-sha` needs `--core de25_datalogger`;
+# without it rr refuses with "Multiple REA cores" (DS-P2.164 run 3).
+#
+# Per D.67 the FILENAME owns the core name (this declares core 'de25_datalogger');
+# per D.69 type 'rea'. project.yml/targets/de25_datalogger.yml carry the HW context
+# (vendor=altera, part=A5ED013BB32AE4SCS) — the A5E… part prefix routes
+# `rr ila identity` through the Quartus-native SDM-mediated SLD transport
+# (part_is_sdm_jtag, RTL-P3.745/P3.747), NOT the Arria-10 openocd bridge. Restating
+# vendor/part/clocks here is REJECTED by the loader (single source of truth).
+#
+# sample_width / depth / jtag_chain MUST match the `tich.rr_rea_intel`
+# instantiation `u_rea` in hw/rtl/de25/deepskopion_de25_top.vhd:
+#     generic map (G_SAMPLE_W => 32, G_DEPTH => 4096, G_TIMESTAMP_W => 0,
+#                  G_NUM_CHAN => 1, G_CTRL_CHAIN => 1)
+# A sample_width/bitstream mismatch is a hard REAClient error (rea-issp Rung 4),
+# so these are pinned to the silicon parameters, not guessed.
+
+type: rea
+sample_width: 32          # G_SAMPLE_W => 32
+depth: 4096               # G_DEPTH => 4096
+sample_clock_hz: 100000000 # sample_clk => clk_sys = CLOCK2_50 x2 IOPLL product (100 MHz, DS-P2.155)
+jtag_chain: 1             # G_CTRL_CHAIN => 1 (USER1)
+
+# rea_probe is the 32-bit sample word (deepskopion_de25_top.vhd:
+# `signal rea_probe : std_logic_vector(31 downto 0)`, driven by u_core's
+# rea_probe_o). BUILD_ID identity reads register 0xD4 and does not decode the
+# capture word, so the word is declared as one opaque 32-bit probe rather than
+# a fabricated per-lane breakdown.
+#
+# DS-T1.13: for the rr_ddr_stream 0.3.2-vs-0.3.1 write-plane A/B, u_core routes
+# rea_probe_o to the clk_sys WRITE-PLANE ARMING word (was the CAN destuff trace).
+# Every field is clk_sys (ddr_csr_o is IP-registered in clk_sys; the *_seen/dbg
+# bits are 2-FF synced) so it is coherent under sample_clk => clk_sys. LSB-first
+# decode (mirrors write_plane_dbg_word in deepskopion_core.vhd):
+#   [15:0]  commit-addr low (progress trend)
+#   [16]    rst_ddr ever-deasserted
+#   [17]    write-idle (DMA caught up)
+#   [23:18] seen {aw_valid(18), aw_hs(19), wvalid(20), bvalid(21), wr_active(22), wr_err(23)}
+#   [24]    chip_empty (CDC empty — uploader sees no data — KEY)
+#   [25]    pipe empty   [26] full   [27] write_error
+#   [31:28] dbg_reset_status {downloader_cs, uploader_cs, pipeBusyDdr, pipeBusy}
+# The SAME arming bits are mirrored into DDR_RESET_STATUS[16:3] (0x50) for the
+# trustworthy devmem readback — the channel that proved DS-T1.12 — since the
+# Altera REA capture readback is UNCONFIRMED until identity/selftest passes.
+probes:
+  - { signal: write_plane_arming, width: 32 }

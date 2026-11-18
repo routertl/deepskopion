@@ -1,0 +1,128 @@
+# sw/stream/testbench — PS-side end-to-end self-test contract (DS-P3.44)
+#
+# Each PS-LOOP-REQ-N is referenced by ≥1 scenario in
+# sw/stream/testbench/scenarios/*.py via @requires("PS-LOOP-REQ-N").
+# `rr sim coverage-map` doesn't reach here yet (no sim glue) — the
+# coverage check is enforced by run_self_test.py: every REQ must
+# have a matching scenario, every scenario must declare its REQ.
+#
+# Two layers:
+#
+#   Layer 0  — regbank self-check.  Isolates "PS↔PL talks" from "EMIO
+#              loop closes". A failure here makes Layer 1 noise — fix
+#              the basic AXI-Lite path first.
+#
+#   Layer 1  — EMIO injector loop.  Covers the chip-internal self-test
+#              path that DS-P2.51 Phase 1+2 built: PS drives /dev/* →
+#              EMIO_MUX_SEL routes the bus into the datalogger → daemon
+#              emits zs_msg → wave_events_v1 stream → assertion.
+#
+# v0.1 SCOPE: green-bar is necessary but not sufficient. The bug-finding
+# rule still applies — any layer-0 or layer-1 mismatch is a real defect
+# (regbank drift, ring locator wrong, datalogger + daemon path broken).
+# File T-tier and let the fixer agent close.
+
+ip: sw_stream_testbench
+version: 0.1
+
+functional_contract:
+
+  # ─────────────────────────── Layer 0 — regbank self-check ───────────────
+
+  - id: PS-LOOP-REQ-1
+    kind: behavioral
+    desc: >-
+      The identity slots (GIT_HASH, SYSTEM_VERSION, BUILD_DATE,
+      REGBANK_VERSION) are readable from /dev/mem and all non-zero.
+      Detects: AXI-Lite path silently dropping reads, regbank not
+      synthesised, BD address map misconfigured.
+
+  - id: PS-LOOP-REQ-2
+    kind: behavioral
+    desc: >-
+      Streaming-ROM read protocol works: REGBANK_NUM_WORDS returns N>0,
+      and N successive reads of REGBANK_DATA return the same byte
+      sequence as the `regbank_schema.hex` on disk. Detects: ROM init
+      mismatch (stale .hex baked in), pointer drift, BD readback
+      sequencing bugs.
+
+  - id: PS-LOOP-REQ-3
+    kind: behavioral
+    desc: >-
+      Ring locator slots match the design generics: RING_BASE_LOW =
+      0x10000000, RING_BASE_HIGH = 0, RING_BYTES = 0x10000000 (256 MB).
+      Detects: deepskopion_top G_DDR_BASE_ADDR / G_DDR_WIN_WIDTH drift,
+      ring locator wiring broken in telemetry_in.
+
+  - id: PS-LOOP-REQ-4
+    kind: behavioral
+    desc: >-
+      DATALOGGER_CONFIG round-trip: write 0x1234, read back 0x1234.
+      Detects: AXI-Lite write path broken, register storage not landing.
+
+  # ─────────────────────────── Layer 1 — EMIO injector loop ───────────────
+
+  - id: PS-LOOP-REQ-5
+    kind: behavioral
+    desc: >-
+      With EMIO_MUX_SEL.bit1=1, a UART round-trip on the EMIO UART0 tty (base
+      0xE0000000, resolved with emio_uart_dev()) at 9600
+      8N1 produces `uart_byte` events on wave_events_v1 matching the
+      transmitted payload, datalogger_id == UART #12, within a bounded
+      latency. PRECONDITIONS (DS-T2.20 — the gateware requires them; the
+      old "write byte 0x55" single-byte form is UNSATISFIABLE): (1) a
+      CALIBRATION PREAMBLE of ~150 RANDOM bytes precedes the payload —
+      the uart_datalogger auto-cal needs varied inter-edge timing and a
+      constant pattern (0x55) biases it (UART-REQ-1); (2) a short FLUSH
+      burst follows the payload — the playback FIFO holds the final
+      frame until more bytes arrive ('last byte not flushed', UART-REQ-
+      13). Ring-read reliability is governed by PS-LOOP-REQ-9. End-to-
+      end: PS → EMIO → capture_pin[36] → uart_datalogger → zs_msg → daemon.
+
+  - id: PS-LOOP-REQ-6
+    kind: behavioral
+    desc: >-
+      With EMIO_MUX_SEL.bit0=1 and I2C_INJ_CONTROL pre-configured for
+      address 0x50 + enable, an `ioctl(I2C_SLAVE, 0x50)` + read(N) on
+      /dev/i2c-0 — preceded by N pushes into I2C_INJ_DATAIN — produces
+      an `i2c_frame` event with body.payload_hex matching the pushed
+      bytes. Datalogger_id matches I2C #4.
+
+  - id: PS-LOOP-REQ-7
+    kind: behavioral
+    desc: >-
+      With EMIO_MUX_SEL.bit2=1 and SPI_INJ_CONTROL.enable=1, a full-
+      duplex transfer on /dev/spidev0.0 of N dummy MOSI bytes —
+      preceded by N pushes into SPI_INJ_DATAIN — returns those N
+      response bytes on MISO AND produces a `qspi_xact` event on
+      wave_events_v1 with the payload. Datalogger_id matches SPI #8.
+
+  - id: PS-LOOP-REQ-8
+    kind: behavioral
+    desc: >-
+      Negative gate: with EMIO_MUX_SEL=0 (mux disengaged), identical
+      master traffic (UART byte, I2C read, SPI transfer) does NOT
+      produce events on the EMIO-mux'd datalogger slots. The external
+      PMOD slot (I2C #5 / UART #13) stays externally driven and may
+      emit events from environmental noise — only assert ABSENCE on
+      the mux'd slots, not on the always-external siblings.
+
+  - id: PS-LOOP-REQ-9
+    kind: behavioral
+    desc: >-
+      DDR-RING-READ RELIABILITY (DS-T2.20 / Haz.59) — governs the
+      RingOracle used by REQ-5/6/7. The PS reader MUST: (a) walk the
+      ring only up to the DMA COMMIT pointer, NOT RING_WRITE_PTR — the
+      latter is an ENQUEUE counter (+6/frame at framer_out_valid) that
+      LEADS the actual DMA commit by up to the FIFO depth, so reading it
+      walks regions the DMA has not yet written; this requires exposing
+      ddr_stream_axi's commit / write-idle CSR (ddr_csr_o, currently
+      left `open` in deepskopion_top). And (b) read CACHE-COHERENTLY —
+      /dev/mem mmap of DDR is cached on the APU while HP0 DMA writes are
+      cache-incoherent, so a stale or re-read region returns old/zero
+      data. FALSIFIER: drive exactly N frames, then assert the oracle
+      recovers exactly N within a bounded latency using the commit
+      pointer + a fresh/invalidated read. Reading the enqueue pointer or
+      a cached mmap yields FALSE NEGATIVES — this drove the entire
+      DS-T2.18 / DS-T2.19 misdiagnosis. Until REQ-9 holds, REQ-5/6/7
+      verdicts are unreliable regardless of gateware correctness.

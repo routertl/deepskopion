@@ -1,0 +1,62 @@
+# =============================================================================
+# Level Datalogger Protocol Definition
+# Extracted from: hw/rtl/datalogger/nonstd/level_datalogger/level_datalogger.vhd
+# =============================================================================
+# HW<->SW protocol for the level_datalogger (parallel-bus level-change capture).
+# The message width is 32 bits total.
+# =============================================================================
+
+protocol:
+  name: level_datalogger
+  description: Parallel-bus level-change datalogger — emits a frame on any pin transition
+  message_width: 32
+  version: "1.0"
+
+constants:
+  device_id_width: 5
+  timestamp_width: 16
+  field_width: 8           # C_LEVEL_INJ_PINS (= number of captured lines)
+  num_pins: 8
+
+  # Message types (3-bit, after device_id)
+  level_type_payload: 0b000   # C_MSG_INJ_CODE — level snapshot
+  level_type_event:   0b100   # C_LEVEL_EVENT_TYPE — lifecycle
+
+  # Event codes (8-bit)
+  events:
+    enabled:  0x03            # ENABLE rising edge
+    disabled: 0x00            # ENABLE falling edge
+
+messages:
+  - name: level_payload
+    description: Pin-level snapshot, emitted on a level change
+    type_code: 0b000
+    total_bits: 32
+    fields:
+      - { name: device_id, bits: [31, 27], width: 5, description: Datalogger device id (G_LEVEL_DEV_ID) }
+      - { name: type,      bits: [26, 24], width: 3, value: 0b000, description: Level payload type }
+      - { name: timestamp, bits: [23, 8],  width: 16, description: Low 16 bits of TIMESTAMP, latched at the change instant (DS-T3.11) }
+      - { name: pins,      bits: [7, 0],   width: 8, description: LEVEL_PINS snapshot at the change instant }
+
+  - name: event
+    description: Lifecycle event (ENABLED / DISABLED)
+    type_code: 0b100
+    total_bits: 32
+    fields:
+      - { name: device_id,  bits: [31, 27], width: 5, description: Datalogger device id }
+      - { name: type,       bits: [26, 24], width: 3, value: 0b100, description: Event type }
+      - { name: timestamp,  bits: [23, 8],  width: 16, description: Low 16 bits of TIMESTAMP at the event instant }
+      - { name: event_code, bits: [7, 0],   width: 8, description: "0x03 ENABLED, 0x00 DISABLED" }
+
+config:
+  name: level_config
+  description: Configuration register for the level datalogger
+  width: 16
+  fields:
+    - { name: device_id, bits: [15, 11], width: 5, description: Target device id (must match G_LEVEL_DEV_ID) }
+    - { name: enable,    bits: [0],      width: 1, description: 1 = capture enabled, 0 = disabled }
+
+notes:
+  - LEVEL_ERRORS is hard-wired to all-zero (no error conditions).
+  - Disable drives the per-datalogger CAPTURE_RST (DS-P3.90 Phase 2); a re-enable re-emits the current level.
+  - Timestamp resolution 1 us @ 100 MHz; the 16-bit field wraps every ~65.5 ms.

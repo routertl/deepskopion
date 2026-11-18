@@ -1,0 +1,33 @@
+#!/bin/sh
+# Install owner-supplied SSH public keys from the first-boot serial console.
+set -eu
+
+ROOT_PREFIX="${DS_ROOT_PREFIX:-}"
+SSH_DIR="${ROOT_PREFIX}/root/.ssh"
+DEST="${SSH_DIR}/authorized_keys"
+TMP="${DEST}.new"
+SOURCE="${1:--}"
+
+mkdir -p "$SSH_DIR"
+if [ "$SOURCE" = "-" ]; then
+    cat > "$TMP"
+else
+    cp "$SOURCE" "$TMP"
+fi
+
+if ! grep -Eq '^(ssh-(ed25519|rsa)|ecdsa-sha2-nistp(256|384|521))[[:space:]]+[A-Za-z0-9+/]+=*([[:space:]]|$)' "$TMP"; then
+    echo "authorize-key: input contains no supported SSH public key" >&2
+    rm -f "$TMP"
+    exit 1
+fi
+if grep -Evq '^([[:space:]]*($|#)|(ssh-(ed25519|rsa)|ecdsa-sha2-nistp(256|384|521))[[:space:]]+[A-Za-z0-9+/]+=*([[:space:]].*)?)$' "$TMP"; then
+    echo "authorize-key: refusing non-key content" >&2
+    rm -f "$TMP"
+    exit 1
+fi
+
+chown 0:0 "${ROOT_PREFIX}/root" "$SSH_DIR" "$TMP" 2>/dev/null || true
+chmod 700 "${ROOT_PREFIX}/root" "$SSH_DIR" 2>/dev/null || true
+chmod 600 "$TMP"
+mv "$TMP" "$DEST"
+echo "authorize-key: owner key installed; run /etc/init.d/S49dropbear start"

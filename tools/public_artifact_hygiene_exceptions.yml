@@ -1,0 +1,91 @@
+# Reviewed exceptions for tools/public_artifact_hygiene.py: upstream constants
+# compiled into third-party runtimes of the Zybo images (class F of the image
+# hygiene triage). Owner ruling 2026-11-11: exact match only.
+#
+# Each entry excuses ONE literal in ONE archive member, and nothing else:
+#   member   the member path inside the image, compared whole: a finding matches
+#            when its name ends with "!" + member. No globs, no directories.
+#   kind     the finding kind the scanner prints.
+#   literal  the exact string, given as parts that are joined when loaded, so
+#            this file does not itself carry the strings the scanner refuses.
+#   source   where the string comes from upstream.
+# A listed string in any other member, any other string in a listed member, and
+# any new finding still fail. Adding an entry is a reviewed change.
+
+entries:
+  - member: usr/sbin/dropbear
+    kind: private key
+    literal: ["-----BEGIN RSA ", "PRIVATE KEY-----"]
+    source: dropbear 2024.86 src/keyimport.c, key-format header of the import parser
+  - member: usr/sbin/dropbear
+    kind: private key
+    literal: ["-----BEGIN EC ", "PRIVATE KEY-----"]
+    source: dropbear 2024.86 src/keyimport.c, key-format header of the import parser
+  - member: usr/sbin/dropbear
+    kind: private key
+    literal: ["-----BEGIN OPENSSH ", "PRIVATE KEY-----"]
+    source: dropbear 2024.86 src/keyimport.c, key-format header of the import parser
+  - member: usr/lib/libpython3.12.so
+    kind: developer home
+    literal: ["/Users", "/Barney"]
+    source: CPython 3.12 Lib/ntpath.py splitroot docstring, frozen into libpython
+  - member: usr/lib/libpython3.12.so.1.0
+    kind: developer home
+    literal: ["/Users", "/Barney"]
+    source: CPython 3.12 Lib/ntpath.py splitroot docstring, frozen into libpython
+  - member: usr/lib/python3.12/ntpath.pyc
+    kind: developer home
+    literal: ["/Users", "/Barney"]
+    source: CPython 3.12 Lib/ntpath.py splitroot docstring
+  - member: usr/lib/python3.12/ipaddress.pyc
+    kind: private-subnet assumption
+    literal: ["10.0", ".0.0"]
+    source: CPython 3.12 Lib/ipaddress.py, RFC 1918 network table
+  - member: usr/lib/python3.12/ipaddress.pyc
+    kind: private-subnet assumption
+    literal: ["172.16", ".0.0"]
+    source: CPython 3.12 Lib/ipaddress.py, RFC 1918 network table
+  - member: usr/lib/python3.12/ipaddress.pyc
+    kind: private-subnet assumption
+    literal: ["192.168", ".0.0"]
+    source: CPython 3.12 Lib/ipaddress.py, RFC 1918 network table
+  - member: usr/lib/python3.12/urllib/request.pyc
+    kind: private-subnet assumption
+    literal: ["192.168", ".0.1"]
+    source: CPython 3.12 Lib/urllib/request.py, proxy-bypass docstring example
+  - member: usr/lib/python3.12/ensurepip/_bundled/pip-25.0.1-py3-none-any.whl!pip/_internal/utils/urls.py
+    kind: developer home
+    literal: ["/Users", "/foo"]
+    source: pip 25.0.1 pip/_internal/utils/urls.py, Windows URL comment
+  - member: usr/lib/python3.12/ensurepip/_bundled/pip-25.0.1-py3-none-any.whl!pip/_vendor/requests/utils.py
+    kind: private-subnet assumption
+    literal: ["192.168", ".1.1"]
+    source: pip 25.0.1 vendored requests utils.py, address_in_network docstring
+  - member: usr/lib/python3.12/ensurepip/_bundled/pip-25.0.1-py3-none-any.whl!pip/_vendor/requests/utils.py
+    kind: private-subnet assumption
+    literal: ["192.168", ".1.0"]
+    source: pip 25.0.1 vendored requests utils.py, address_in_network docstring
+  - member: usr/lib/python3.12/ensurepip/_bundled/pip-25.0.1-py3-none-any.whl!pip/_vendor/requests/utils.py
+    kind: private-subnet assumption
+    literal: ["192.168", ".100.0"]
+    source: pip 25.0.1 vendored requests utils.py, address_in_network docstring
+  - member: usr/lib/python3.12/ensurepip/_bundled/pip-25.0.1-py3-none-any.whl!pip/_vendor/rich/highlighter.py
+    kind: private-subnet assumption
+    literal: ["192.168", ".1.4"]
+    source: pip 25.0.1 vendored rich highlighter.py, demo text
+  - member: usr/lib/python3.12/ensurepip/_bundled/pip-25.0.1-py3-none-any.whl!pip/_vendor/idna/idnadata.py
+    kind: bench cable serial
+    literal: ["21", "2600002127"]
+    source: pip 25.0.1 vendored idna idnadata.py, Unicode codepoint range constant
+  - member: usr/lib/python3.12/ensurepip/_bundled/pip-25.0.1-py3-none-any.whl!pip/_vendor/idna/idnadata.py
+    kind: bench cable serial
+    literal: ["21", "4E0000214F"]
+    source: pip 25.0.1 vendored idna idnadata.py, Unicode codepoint range constant
+  - member: usr/lib/python3.12/ensurepip/_bundled/pip-25.0.1-py3-none-any.whl!pip/_vendor/idna/idnadata.py
+    kind: bench cable serial
+    literal: ["21", "8400002185"]
+    source: pip 25.0.1 vendored idna idnadata.py, Unicode codepoint range constant
+  - member: usr/lib/python3.12/ensurepip/_bundled/pip-25.0.1-py3-none-any.whl!pip/_vendor/certifi/cacert.pem
+    kind: bench cable serial
+    literal: ["21", "ISGHKTN9T0"]
+    source: pip 25.0.1 vendored certifi cacert.pem, characters inside a base64 certificate block

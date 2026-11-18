@@ -1,0 +1,167 @@
+# i2c_datalogger — Requirements catalog (contract-first per ROUTERTL convention)
+#
+# Each I2C-REQ-N below is referenced by ≥1 cocotb test in
+# hw/sim/cocotb/tests/datalogger/i2c/test_*.py via @requires(I2C-REQ-N).
+# `rr sim coverage-map` enforces the mapping.
+#
+# Complementary to: hw/rtl/datalogger/i2c/i2c_datalogger_protocol.yml (HW
+# word format) and docs/standards/datalogger_compliance_checklist.md
+# section 8b (cross-datalogger rules + R1..R8).
+#
+# v0.1 SCOPE: only REQs that paired cocotb tests prove are declared.
+# Grow with paired tests in follow-up tickets — adversarial / negative
+# REQs, error event codes (STOP_ERROR, STRETCH_ERROR, REP_START_ERROR,
+# GLITCH_ERROR), 10-bit address mode, read-direction transactions,
+# clock-stretch tolerance.
+
+ip: i2c_datalogger
+version: 0.2
+schema_version: 1
+
+port_contract:
+  slaves: []
+  masters: []
+  scalars:
+    - { name: I2C_PINS,    dir: in,  width: "1 downto 0" }      # SDA(1) & SCL(0)
+    - { name: CONFIG,      dir: in,  width: "G_CONFIG_WIDTH-1 downto 0" }
+    - { name: TIMESTAMP,   dir: in,  width: "C_TIMESTAMP_WIDTH-1 downto 0" }
+    - { name: I2C_MSG_OUT, dir: out, width: "C_DATALOGGER_MSG_WIDTH-1 downto 0" }
+    - { name: I2C_MSG_VLD, dir: out, width: "1" }
+    - { name: I2C_MSG_RDY, dir: in,  width: "1" }
+    - { name: I2C_ERRORS,  dir: out, width: "G_ERROR_WIDTH-1 downto 0" }
+  clocks:
+    - { name: CLK }
+  resets:
+    - { name: RST, polarity: active_high }
+
+parameters:
+  - { name: G_I2C_ID_WIDTH,    default: 5 }
+  - { name: G_I2C_DEV_ID,      default: 28 }
+  - { name: G_TIMESTAMP_WIDTH, default: 16 }
+  - { name: G_CONFIG_WIDTH,    default: 16 }
+  - { name: G_ERROR_WIDTH,     default: 2 }
+  - { name: G_ILA_EN,          default: 1 }
+
+functional_contract:
+
+  # ── Control events (CONFIG-driven) ──────────────────────────────
+  - id: I2C-REQ-1
+    kind: behavioral
+    desc: >-
+      On CONFIG[0]=1 with addressed device_id, emits an ENABLED event
+      message (event_code=0x03) marking the start of capture.
+  - id: I2C-REQ-2
+    kind: behavioral
+    desc: >-
+      On CONFIG[0]=0 with addressed device_id, emits a DISABLED event
+      message (event_code=0x00) marking the end of capture.
+
+  # ── Bus-state events ────────────────────────────────────────────
+  - id: I2C-REQ-3
+    kind: behavioral
+    desc: >-
+      Detects a START condition (SDA falling while SCL is high) and
+      emits a START event message (event_code=0x09) with the
+      timestamp of the edge.
+    spec:
+      - doc: "NXP UM10204 I2C-bus specification and user manual"
+        clause: "START and STOP conditions"
+  - id: I2C-REQ-4
+    kind: behavioral
+    desc: >-
+      Detects a STOP condition (SDA rising while SCL is high) and
+      emits a STOP event message (event_code=0x0A) with the
+      timestamp of the edge.
+    spec:
+      - doc: "NXP UM10204 I2C-bus specification and user manual"
+        clause: "START and STOP conditions"
+  - id: I2C-REQ-5
+    kind: behavioral
+    desc: >-
+      Detects a REPEATED_START (a START condition occurring before a
+      STOP in an active transaction) and emits a REPEATED_START event
+      message (event_code=0x0B).
+    spec:
+      - doc: "NXP UM10204 I2C-bus specification and user manual"
+        clause: "Repeated START condition"
+
+  # ── Transaction-level integrity ─────────────────────────────────
+  - id: I2C-REQ-10
+    kind: behavioral
+    desc: >-
+      For a complete write transaction (START, address byte +
+      direction, N data bytes, STOP) the datalogger emits — in order —
+      the START event, the address/data PAYLOAD messages, and the
+      STOP event over `I2C_MSG_VLD` / `I2C_MSG_OUT`. Verified
+      end-to-end via i2c_master driver + scoreboard (signal access
+      is bundled in the cocotb VIP collector).
+    spec:
+      - doc: "NXP UM10204 I2C-bus specification and user manual"
+        clause: "Byte format; Acknowledge (ACK) and Not Acknowledge (NACK); the target address and R/W bit"
+
+  # ── Per-datalogger reset / reconfiguration (DS-P3.90 Phase 2) ──────
+  - id: I2C-REQ-11
+    kind: behavioral
+    desc: >-
+      Per-datalogger reset reaches the decode core (DS-P3.90 Phase 2). The i2c
+      datalogger takes its synchronous decode reset from config_control.CAPTURE_RST
+      (= global RST OR latched ENABLE=0; CC-REQ-51), so writing ENABLE=0 flushes
+      the decode FSM (back to I2C_DISABLED), the output-valids and the persistent
+      accumulators (shift register, sample count, ack, repeated-start). A
+      disable -> re-enable therefore yields a CLEAN transaction on `I2C_MSG_VLD`
+      / `I2C_MSG_OUT` — ENABLED + START with no spurious error events from stale
+      decode state. The lifecycle emitter and config_control stay on global RST,
+      so the DISABLED frame is never suppressed (H.96). Impact is smaller than
+      UART's (no calibration to flush) but uniform across the family. Verified by
+      test_i2c_datalogger.test_capture_rst_reconfig.
+
+  # ── Payload back-pressure hold (DS-P3.128) ─────────────────────
+  - id: I2C-REQ-12
+    kind: behavioral
+    desc: >-
+      Payload (data/address byte) frames MUST survive downstream
+      back-pressure. The byte PAYLOAD valid (`I2C_MSG_VLD` for a
+      C_I2C_TYPE_PAYLOAD message) is asserted once the ACK bit has been
+      sampled and MUST be HELD asserted, with `I2C_MSG_OUT` stable, until
+      `I2C_MSG_RDY = '1'` accepts it (the standard valid/ready handshake the
+      START/STOP events already rely on). The decode FSM MUST NOT advance past
+      the ACK-wait phase until the byte has been accepted. If the downstream
+      gather/FIFO is busy on the cycle the ACK bit is sampled, the byte frame
+      must still be delivered exactly once (no drop). Verified by
+      test_i2c_datalogger.test_payload_backpressure_hold (DS-P3.128): the
+      address-byte payload is captured byte-exact through a true VLD&RDY
+      handshake monitor while `I2C_MSG_RDY` is withheld across the ACK cycle.
+
+  - id: I2C-REQ-13
+    kind: behavioral
+    desc: >-
+      STOP and REPEATED_START event frames MUST survive downstream
+      back-pressure when they arrive while a byte PAYLOAD frame is already held.
+      If `I2C_MSG_RDY` is withheld across the byte ACK and subsequent STOP or
+      REPEATED_START condition, the datalogger must deliver the held payload byte
+      exactly once, then the event exactly once, in that order, with no duplicate
+      payload and no lost event. Verified by
+      test_i2c_datalogger.test_payload_event_backpressure_order (DS-T3.25).
+
+  # ── Input lines held low (DS-P2.309) ───────────────────────────
+  - id: I2C-REQ-14
+    kind: behavioral
+    desc: >-
+      INPUT DOMAIN: I2C_PINS may sit LOW with nothing driving them (an
+      undriven board input with no pull resistor reads low). With the logger
+      enabled and SCL held low, the datalogger emits exactly one STRETCH_ERROR
+      event per C_SCL_TIMEOUT_MS (25 ms) of SCL low, returns to waiting for a
+      START after each one, and emits no START and no byte. With both lines
+      idle high over the same window it emits nothing after ENABLED. DE25 C3
+      run 1 measured the storm on silicon at 40.5/s (1 per 25 ms). Verified by
+      test_i2c_stuck_low_ds_p2_309 (scaled G_CLK_FREQ_HZ).
+
+  - id: I2C-REQ-15
+    kind: behavioral
+    desc: >-
+      A switch of both lines from LOW to idle HIGH in one clock cycle (the
+      EMIO mux moving the logger from an undriven header input to the internal
+      idle-high lines) is reported as exactly one STOP_ERROR when SDA was low,
+      and as no event when SDA was already high (only SCL rises, which is not a
+      STOP condition). Either way the STRETCH_ERROR storm ends. Verified by
+      test_i2c_stuck_low_ds_p2_309.

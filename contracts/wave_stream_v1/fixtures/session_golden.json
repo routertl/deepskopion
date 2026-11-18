@@ -1,0 +1,920 @@
+{
+  "contract": "wave_stream_v1",
+  "name": "session_golden",
+  "expect": "accept",
+  "why": "One conformant session covering everything the golden path depends on: the HELO/HELO_OK handshake and its channel-descriptor negotiation, one SAMPLES batch with monotonic timestamps, the catch-up SYNC boundary, decoded annotations for EVERY protocol targets/canfd_demo.yml captures (CAN incl. an error event, UART incl. a 9-bit char and a status error, I2C with ACK and NACK, SPI MOSI/MISO pairing, JTAG IR shift and TAP state), raw EDGE_EVENTS carrying BOTH a packed batch and legacy words with the absolute anchor_ns that makes them placeable, the loss counters in both provenance flavours (precise in-band and synthesized out-of-band) plus an error_run storm collapse, the edge_maxfreq max-frequency datum of a captured line both measured and as the re-armed null sentinel, a STATS frame with the full counter set including the nulls that mean 'no regbank slot', a DIGEST with a CRITICAL verdict, the CONTROL / CONTROL_ACK back-channel, a RATE_HINT, an UNKNOWN tag that MUST be skipped without ending the session, and a graceful EOF. Annotations carry the HWTX event_id and text_res {long, short}; a long label shows the short resolution clipped to 32 characters, one annotation goes without either key because both are optional, and one event is sent a second time under its own event_id, as a late joiner's keyframe resends it.",
+  "frames": [
+    {
+      "dir": "p2c",
+      "tag": 0,
+      "payload": {
+        "ver": "wave_stream_v1",
+        "producer": "deepskopion-daemon/0.1.0",
+        "sample_clk_hz": 100000000,
+        "channels": [
+          {
+            "id": 8,
+            "name": "uart_rx",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 9,
+            "name": "uart_tx",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 10,
+            "name": "i2c_sda",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 11,
+            "name": "i2c_scl",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 12,
+            "name": "can_rx",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 13,
+            "name": "can_tx",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 100,
+            "name": "uart_byte",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 101,
+            "name": "i2c_frame",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 102,
+            "name": "spi_xact",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 103,
+            "name": "jtag_tap",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 105,
+            "name": "can_msg",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 202,
+            "name": "protocol_stats",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "DecimalUnsigned"
+          },
+          {
+            "id": 920,
+            "name": "edge_lane",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          }
+        ],
+        "channel_total_bits": 6
+      }
+    },
+    {
+      "dir": "c2p",
+      "tag": 1,
+      "payload": {
+        "consumer": "routewave/1.7.0",
+        "max_rate_hint_hz": 5000000
+      }
+    },
+    {
+      "dir": "p2c",
+      "tag": 2,
+      "payload": {
+        "seq": 0,
+        "samples": [
+          {
+            "ts": 0,
+            "value": 63
+          },
+          {
+            "ts": 40,
+            "value": 62
+          },
+          {
+            "ts": 80,
+            "value": 58
+          },
+          {
+            "ts": 120,
+            "value": 58
+          }
+        ]
+      }
+    },
+    {
+      "dir": "p2c",
+      "tag": 9,
+      "payload": {
+        "live": true
+      }
+    },
+    {
+      "dir": "p2c",
+      "tag": 6,
+      "payload": {
+        "seq": 1,
+        "annotations": [
+          {
+            "event_id": "a1_0",
+            "ts_start": 1000,
+            "ts_end": 1000,
+            "channel_id": 105,
+            "kind": "can_frame_begin",
+            "text": "SOF [",
+            "payload": {
+              "event": "frame_begin"
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "can_frame_begin: SOF [",
+              "short": "SOF ["
+            }
+          },
+          {
+            "event_id": "a1_1",
+            "ts_start": 1010,
+            "ts_end": 1090,
+            "channel_id": 105,
+            "kind": "can_control",
+            "text": "CTRL STD DLC=2",
+            "payload": {
+              "ide": false,
+              "rtr": false,
+              "dlc": 2
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "can_control: CTRL STD DLC=2",
+              "short": "CTRL STD DLC=2"
+            }
+          },
+          {
+            "event_id": "a1_2",
+            "ts_start": 1100,
+            "ts_end": 1180,
+            "channel_id": 105,
+            "kind": "can_id",
+            "text": "ID 0x01",
+            "payload": {
+              "id_byte": 1
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "can_id: ID 0x01",
+              "short": "ID 0x01"
+            }
+          },
+          {
+            "event_id": "a1_3",
+            "ts_start": 1180,
+            "ts_end": 1260,
+            "channel_id": 105,
+            "kind": "can_id",
+            "text": "ID 0x23",
+            "payload": {
+              "id_byte": 35
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "can_id: ID 0x23",
+              "short": "ID 0x23"
+            }
+          },
+          {
+            "event_id": "a1_4",
+            "ts_start": 1260,
+            "ts_end": 1340,
+            "channel_id": 105,
+            "kind": "can_data",
+            "text": "0xAB",
+            "payload": {
+              "data": 171
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "can_data: 0xAB",
+              "short": "0xAB"
+            }
+          },
+          {
+            "event_id": "a1_5",
+            "ts_start": 1340,
+            "ts_end": 1420,
+            "channel_id": 105,
+            "kind": "can_data",
+            "text": "0xCD",
+            "payload": {
+              "data": 205
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "can_data: 0xCD",
+              "short": "0xCD"
+            }
+          },
+          {
+            "event_id": "a1_6",
+            "ts_start": 1420,
+            "ts_end": 1500,
+            "channel_id": 105,
+            "kind": "can_crc",
+            "text": "CRC 0xAA",
+            "payload": {
+              "crc_byte": 170
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "can_crc: CRC 0xAA",
+              "short": "CRC 0xAA"
+            }
+          },
+          {
+            "event_id": "a1_7",
+            "ts_start": 1500,
+            "ts_end": 1500,
+            "channel_id": 105,
+            "kind": "can_ack_observed",
+            "text": "ACK",
+            "payload": {
+              "event": "ack_observed"
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "can_ack_observed: ACK",
+              "short": "ACK"
+            }
+          },
+          {
+            "event_id": "a1_8",
+            "ts_start": 1510,
+            "ts_end": 1510,
+            "channel_id": 105,
+            "kind": "can_frame_end",
+            "text": "] EOF",
+            "payload": {
+              "event": "frame_end"
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "can_frame_end: ] EOF",
+              "short": "] EOF"
+            }
+          },
+          {
+            "event_id": "a1_9",
+            "ts_start": 2000,
+            "ts_end": 2080,
+            "channel_id": 105,
+            "kind": "can_stuff_error",
+            "text": "STUFF-ERR",
+            "payload": {
+              "event": "stuff_error"
+            },
+            "color": "#cc3333",
+            "is_error": true,
+            "text_res": {
+              "long": "can_stuff_error: STUFF-ERR",
+              "short": "STUFF-ERR"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "dir": "p2c",
+      "tag": 6,
+      "payload": {
+        "seq": 2,
+        "annotations": [
+          {
+            "event_id": "a2_0",
+            "ts_start": 3000,
+            "ts_end": 3086,
+            "channel_id": 100,
+            "kind": "uart_byte",
+            "text": "0x55 'U'",
+            "payload": {
+              "byte": 85,
+              "ascii": "U"
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "uart_byte: 0x55 'U'",
+              "short": "0x55 'U'"
+            }
+          },
+          {
+            "event_id": "a2_1",
+            "ts_start": 3086,
+            "ts_end": 3172,
+            "channel_id": 100,
+            "kind": "uart_byte",
+            "text": "0x1A9 (9-bit)",
+            "payload": {
+              "byte": 169,
+              "nine_bit": true
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "uart_byte: 0x1A9 (9-bit)",
+              "short": "0x1A9 (9-bit)"
+            }
+          },
+          {
+            "event_id": "a2_2",
+            "ts_start": 3172,
+            "ts_end": 3258,
+            "channel_id": 100,
+            "kind": "uart_stop_error",
+            "text": "STOP ERROR",
+            "payload": {
+              "status": "stop_error"
+            },
+            "is_error": true,
+            "text_res": {
+              "long": "uart_stop_error: STOP ERROR",
+              "short": "STOP ERROR"
+            }
+          },
+          {
+            "event_id": "a2_3",
+            "ts_start": 4000,
+            "ts_end": 4000,
+            "channel_id": 101,
+            "kind": "i2c_start",
+            "text": "START",
+            "payload": {
+              "event": "start"
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "i2c_start: START",
+              "short": "START"
+            }
+          },
+          {
+            "event_id": "a2_4",
+            "ts_start": 4010,
+            "ts_end": 4100,
+            "channel_id": 101,
+            "kind": "i2c_byte",
+            "text": "0xA0 ACK",
+            "payload": {
+              "data": 160,
+              "ack": true
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "i2c_byte: 0xA0 ACK",
+              "short": "0xA0 ACK"
+            }
+          },
+          {
+            "event_id": "a2_5",
+            "ts_start": 4100,
+            "ts_end": 4190,
+            "channel_id": 101,
+            "kind": "i2c_byte",
+            "text": "0x55 NACK",
+            "payload": {
+              "data": 85,
+              "ack": false
+            },
+            "is_error": true,
+            "text_res": {
+              "long": "i2c_byte: 0x55 NACK",
+              "short": "0x55 NACK"
+            }
+          },
+          {
+            "event_id": "a2_6",
+            "ts_start": 4200,
+            "ts_end": 4200,
+            "channel_id": 101,
+            "kind": "i2c_stop",
+            "text": "STOP",
+            "payload": {
+              "event": "stop"
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "i2c_stop: STOP",
+              "short": "STOP"
+            }
+          },
+          {
+            "event_id": "a2_7",
+            "ts_start": 5000,
+            "ts_end": 5040,
+            "channel_id": 102,
+            "kind": "spi_event",
+            "text": "CS-DOWN",
+            "payload": {
+              "event": "cs_down"
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "spi_event: CS-DOWN",
+              "short": "CS-DOWN"
+            }
+          },
+          {
+            "event_id": "a2_8",
+            "ts_start": 5040,
+            "ts_end": 5120,
+            "channel_id": 102,
+            "kind": "spi_mosi",
+            "text": "MOSI 0x9F",
+            "payload": {
+              "mosi": 159
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "spi_mosi: MOSI 0x9F",
+              "short": "MOSI 0x9F"
+            }
+          },
+          {
+            "event_id": "a2_9",
+            "ts_start": 5040,
+            "ts_end": 5120,
+            "channel_id": 102,
+            "kind": "spi_miso",
+            "text": "MISO 0x20",
+            "payload": {
+              "miso": 32
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "spi_miso: MISO 0x20",
+              "short": "MISO 0x20"
+            }
+          },
+          {
+            "event_id": "a2_10",
+            "ts_start": 5200,
+            "ts_end": 5200,
+            "channel_id": 102,
+            "kind": "spi_event",
+            "text": "CS-UP",
+            "payload": {
+              "event": "cs_up"
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "spi_event: CS-UP",
+              "short": "CS-UP"
+            }
+          },
+          {
+            "event_id": "a2_11",
+            "ts_start": 6000,
+            "ts_end": 6000,
+            "channel_id": 103,
+            "kind": "jtag_ir_begin",
+            "text": "IR-SHIFT [",
+            "payload": {
+              "event": "ir_shift_begin"
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "jtag_ir_begin: IR-SHIFT [",
+              "short": "IR-SHIFT ["
+            }
+          },
+          {
+            "event_id": "a2_12",
+            "ts_start": 6010,
+            "ts_end": 6090,
+            "channel_id": 103,
+            "kind": "jtag_tdi",
+            "text": "TDI 0xA5",
+            "payload": {
+              "tdi": 165
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "jtag_tdi: TDI 0xA5",
+              "short": "TDI 0xA5"
+            }
+          },
+          {
+            "event_id": "a2_13",
+            "ts_start": 6010,
+            "ts_end": 6090,
+            "channel_id": 103,
+            "kind": "jtag_tdo",
+            "text": "TDO 0x3C",
+            "payload": {
+              "tdo": 60
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "jtag_tdo: TDO 0x3C",
+              "short": "TDO 0x3C"
+            }
+          },
+          {
+            "event_id": "a2_14",
+            "ts_start": 6100,
+            "ts_end": 6100,
+            "channel_id": 103,
+            "kind": "jtag_ir_end",
+            "text": "] IR-SHIFT (5b)",
+            "payload": {
+              "event": "ir_shift_end",
+              "bits": 5
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "jtag_ir_end: ] IR-SHIFT (5b)",
+              "short": "] IR-SHIFT (5b)"
+            }
+          },
+          {
+            "event_id": "a2_15",
+            "ts_start": 6200,
+            "ts_end": 6200,
+            "channel_id": 103,
+            "kind": "jtag_tap_state",
+            "text": "TAP=SHIFT_DR",
+            "payload": {
+              "tap_state": 2,
+              "state": "SHIFT_DR"
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "jtag_tap_state: TAP=SHIFT_DR",
+              "short": "TAP=SHIFT_DR"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "dir": "p2c",
+      "tag": 7,
+      "payload": {
+        "seq": 3,
+        "clk_mhz": 100,
+        "anchor_ticks": 845003,
+        "anchor_ns": 8450030,
+        "datalogger_id": 3,
+        "batch": {
+          "__bin__": "0100000002000000"
+        },
+        "words": [
+          268500992,
+          268501248
+        ]
+      }
+    },
+    {
+      "dir": "p2c",
+      "tag": 6,
+      "payload": {
+        "seq": 4,
+        "annotations": [
+          {
+            "event_id": "a4_0",
+            "ts_start": 7000,
+            "ts_end": 7000,
+            "channel_id": 920,
+            "kind": "loss",
+            "text": "! 37 edge event(s) lost (internal FIFO overflow) on ch 3",
+            "payload": {
+              "loss_stage": "internal_fifo_overflow",
+              "provenance_code": 240,
+              "lost_count": 37,
+              "domain": "edge",
+              "datalogger_id": 3,
+              "in_band": true
+            },
+            "color": "#cc3333",
+            "is_error": true,
+            "text_res": {
+              "long": "loss: ! 37 edge event(s) lost (internal FIFO overflow) on ch 3",
+              "short": "! 37 edge event(s) lost (intern\u2026"
+            }
+          },
+          {
+            "event_id": "a4_1",
+            "ts_start": 7100,
+            "ts_end": 7100,
+            "channel_id": 202,
+            "kind": "loss",
+            "text": "! 12 ring event(s) lost (ring full)",
+            "payload": {
+              "loss_stage": "ring_full",
+              "lost_count": 12,
+              "domain": "ring",
+              "in_band": false
+            },
+            "color": "#cc3333",
+            "is_error": true,
+            "text_res": {
+              "long": "loss: ! 12 ring event(s) lost (ring full)",
+              "short": "! 12 ring event(s) lost (ring f\u2026"
+            }
+          },
+          {
+            "ts_start": 7200,
+            "ts_end": 9800,
+            "channel_id": 100,
+            "kind": "error_run",
+            "text": "UART STOP-ERR x4809",
+            "payload": {
+              "run_of": "uart_stop_error",
+              "count": 4809,
+              "ongoing": true
+            },
+            "is_error": true
+          },
+          {
+            "event_id": "a4_3",
+            "ts_start": 7300,
+            "ts_end": 7300,
+            "channel_id": 920,
+            "kind": "edge_maxfreq",
+            "text": "max-freq ch3: 1.000 MHz (min ival 50 tk)",
+            "payload": {
+              "channel": 3,
+              "min_interval_ticks": 50,
+              "freq_hz": 1000000.0
+            },
+            "color": "#2a8c6a",
+            "is_error": false,
+            "text_res": {
+              "long": "edge_maxfreq: max-freq ch3: 1.000 MHz (min ival 50 tk)",
+              "short": "max-freq ch3: 1.000 MHz (min iv\u2026"
+            }
+          },
+          {
+            "event_id": "a4_4",
+            "ts_start": 7400,
+            "ts_end": 7400,
+            "channel_id": 920,
+            "kind": "edge_maxfreq",
+            "text": "max-freq ch3: no edge yet",
+            "payload": {
+              "channel": 3,
+              "min_interval_ticks": 16777215,
+              "freq_hz": null
+            },
+            "color": "#888888",
+            "is_error": false,
+            "text_res": {
+              "long": "edge_maxfreq: max-freq ch3: no edge yet",
+              "short": "max-freq ch3: no edge yet"
+            }
+          },
+          {
+            "event_id": "a1_0",
+            "ts_start": 1000,
+            "ts_end": 1000,
+            "channel_id": 105,
+            "kind": "can_frame_begin",
+            "text": "SOF [",
+            "payload": {
+              "event": "frame_begin"
+            },
+            "is_error": false,
+            "text_res": {
+              "long": "can_frame_begin: SOF [",
+              "short": "SOF ["
+            }
+          }
+        ]
+      }
+    },
+    {
+      "dir": "p2c",
+      "tag": 11,
+      "payload": {
+        "seq": 20,
+        "daemon_ver": "0.3.1-2-gabc1234",
+        "rtl_git_hash": "7d5e9058",
+        "rtl_build_date": "0x00012301",
+        "ring_bytes": 268435456,
+        "ring_used_bytes": 1048576,
+        "ddr_backpressure_cnt": 0,
+        "ring_alarm": {
+          "excursions": 2,
+          "active": false
+        },
+        "proto_stats": {
+          "can": {
+            "pkts": null,
+            "errs": null,
+            "drops": null
+          },
+          "edge": {
+            "pkts": 90210,
+            "errs": 37,
+            "drops": null
+          },
+          "i2c": {
+            "pkts": 44,
+            "errs": 0,
+            "drops": 0
+          },
+          "jtag": {
+            "pkts": null,
+            "errs": null,
+            "drops": null
+          },
+          "spi": {
+            "pkts": 18,
+            "errs": 0,
+            "drops": 0
+          },
+          "uart": {
+            "pkts": 1200,
+            "errs": 0,
+            "drops": 0,
+            "decode_errs": 4809
+          }
+        },
+        "proto_decode_errs": {
+          "i2c": 1,
+          "spi": 0,
+          "uart": 4809
+        },
+        "fifo_overflows": 1,
+        "fifo_high_watermark": 512,
+        "arb_grants": null,
+        "heartbeat": 918273,
+        "clk_ddr_ticks": 5000000,
+        "ddr_reset_status": 6
+      }
+    },
+    {
+      "dir": "p2c",
+      "tag": 12,
+      "payload": {
+        "seq": 21,
+        "schema": "wave_stream_digest_v1",
+        "window_s": 10.0,
+        "protocols": {
+          "uart": {
+            "pkts": 1200,
+            "errs": 530,
+            "pkt_rate": 120.0,
+            "err_pct": 44.2
+          },
+          "i2c": {
+            "pkts": 44,
+            "errs": 1,
+            "pkt_rate": 4.4,
+            "err_pct": 2.3
+          },
+          "can": {
+            "pkts": 10,
+            "errs": 1,
+            "pkt_rate": 1.0,
+            "err_pct": 10.0
+          }
+        },
+        "recent": [
+          {
+            "ts": 3172,
+            "kind": "uart_stop_error",
+            "text": "STOP ERROR",
+            "is_error": true
+          },
+          {
+            "ts": 2000,
+            "kind": "can_stuff_error",
+            "text": "STUFF-ERR",
+            "is_error": true
+          }
+        ],
+        "verdict": {
+          "status": "CRITICAL",
+          "headline": "UART error rate 44% - likely framing/baud fault",
+          "anomalies": [
+            {
+              "protocol": "uart",
+              "severity": "critical",
+              "metric": "err_pct",
+              "value": 44.2,
+              "message": "UART error rate 44% - likely framing/baud fault"
+            },
+            {
+              "protocol": "can",
+              "severity": "warning",
+              "metric": "err_pct",
+              "value": 10.0,
+              "message": "CAN stuff errors at 10%"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "dir": "c2p",
+      "tag": 8,
+      "payload": {
+        "op": "set_config",
+        "datalogger_id": 3,
+        "cfg_word": 9
+      }
+    },
+    {
+      "dir": "p2c",
+      "tag": 10,
+      "payload": {
+        "datalogger_id": 3,
+        "applied_cfg_word": 9,
+        "ok": true
+      }
+    },
+    {
+      "dir": "p2c",
+      "tag": 200,
+      "payload": {
+        "seq": 22,
+        "something": "from a newer producer"
+      }
+    },
+    {
+      "dir": "c2p",
+      "tag": 3,
+      "payload": {
+        "max_rate_hz": 1000000
+      }
+    },
+    {
+      "dir": "p2c",
+      "tag": 2,
+      "payload": {
+        "seq": 23,
+        "samples": [
+          {
+            "ts": 10000,
+            "value": 63
+          }
+        ]
+      }
+    },
+    {
+      "dir": "p2c",
+      "tag": 4,
+      "payload": {
+        "reason": "user_stop"
+      }
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+# responder/ — PL-side responders + injection wrappers for the chip-
+# internal EMIO testbench (DS-P2.51 Phase 2).
+#
+# Two parallel responders, one per protocol:
+#   * i2c_injector  — wraps tich.i2c_slave with a regbank-fed TX FIFO.
+#                     The slave answers to a configurable 7-bit address
+#                     and returns the FIFO contents on master-read txns.
+#   * spi_injector  — wraps tich.spi_slave (clean-room, in this dir)
+#                     with the same FIFO pattern. The slave drives MISO
+#                     with FIFO data when CS is asserted.
+#
+# i2c_slave lives in hw/rtl/datalogger/i2c/ — its ip.yml lists it under
+# `synthesis.sources` from Phase 2 onward.
+
+ip:
+  name: responder
+  library: tich
+  language: vhdl
+  description: |
+    PL-side I2C/SPI responders that feed slave TX paths from PS-written
+    FIFOs. Used by deepskopion_top to close the chip-internal EMIO
+    testbench loop — PS drives /dev/i2c-0 + /dev/spidev0, the responder
+    answers, the datalogger captures the dialogue. No external wiring.
+
+hdl:
+  top_module: i2c_injector
+
+paths:
+  sources: .
+
+synthesis:
+  mode: rtl
+  sources:
+    - spi_slave.vhd
+    - i2c_injector.vhd
+    - spi_injector.vhd
+
+requirements: requirements.yml
+
+build:
+  simulation:
+    test_dir: ../../sim/cocotb/tests/responder
+    simulator: nvc
+    waves:
+      formats: [fst]
+
+ips:
+  - ../fifo/ip.yml

@@ -1,0 +1,40 @@
+{
+  "contract": "wave_stream_v1",
+  "name": "reject_unregistered_channel_enum",
+  "expect": "reject",
+  "why": "A channel descriptor uses type 'Annotation' and radix 'Decimal' \u2014 neither is a registered member. The consumer does not fail on these: it falls back to Signal/Hexadecimal, so the producer's intent is dropped and NOBODY is told. That silence is why the contract checks the members on the producer side.",
+  "expect_fields": [
+    "frame[0][HELO].channels[1].type",
+    "frame[0][HELO].channels[1].radix"
+  ],
+  "frames": [
+    {
+      "dir": "p2c",
+      "tag": 0,
+      "payload": {
+        "ver": "wave_stream_v1",
+        "producer": "deepskopion-daemon/0.1.0",
+        "sample_clk_hz": 100000000,
+        "channels": [
+          {
+            "id": 8,
+            "name": "uart_rx",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 100,
+            "name": "uart_byte",
+            "width": 0,
+            "type": "Annotation",
+            "role": "Wire",
+            "radix": "Decimal"
+          }
+        ],
+        "channel_total_bits": 1
+      }
+    }
+  ]
+}

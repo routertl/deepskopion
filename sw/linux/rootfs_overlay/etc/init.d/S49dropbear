@@ -1,0 +1,65 @@
+#!/bin/sh
+# Start dropbear only after the owner supplies SSH access state (DS-C1).
+#
+# The public rootfs contains neither an authorized key nor a password login.
+# On first boot this script creates an empty, root-owned key file and stays
+# closed. The owner can provision from the serial console with:
+#
+#   deepskopion-authorize-key /path/to/public-key
+#   /etc/init.d/S49dropbear start
+#
+# An image builder may instead provide /etc/deepskopion/authorized_keys in a
+# private overlay; it is installed on first boot. That path is intentionally
+# absent from git and from public images.
+
+ROOT_PREFIX="${DS_ROOT_PREFIX:-}"
+DROPBEAR="${ROOT_PREFIX}/usr/sbin/dropbear"
+PIDFILE="${ROOT_PREFIX}/var/run/dropbear.pid"
+SSH_DIR="${ROOT_PREFIX}/root/.ssh"
+AUTHORIZED_KEYS="${SSH_DIR}/authorized_keys"
+SUPPLIED_KEYS="${ROOT_PREFIX}/etc/deepskopion/authorized_keys"
+
+prepare_access() {
+    mkdir -p "$SSH_DIR" "${ROOT_PREFIX}/etc/dropbear" "${ROOT_PREFIX}/var/run"
+    if [ -s "$SUPPLIED_KEYS" ]; then
+        cp "$SUPPLIED_KEYS" "$AUTHORIZED_KEYS"
+    elif [ ! -e "$AUTHORIZED_KEYS" ]; then
+        : > "$AUTHORIZED_KEYS"
+    fi
+    chown 0:0 "${ROOT_PREFIX}/root" "$SSH_DIR" "$AUTHORIZED_KEYS" 2>/dev/null || true
+    chmod 700 "${ROOT_PREFIX}/root" "$SSH_DIR" 2>/dev/null || true
+    chmod 600 "$AUTHORIZED_KEYS" 2>/dev/null || true
+}
+
+start() {
+    if [ ! -x "$DROPBEAR" ]; then
+        echo "dropbear: $DROPBEAR missing — run sw/linux/stage_dropbear_overlay.sh"
+        echo "          then 'rr linux rootfs' to rebuild the initramfs."
+        return 1
+    fi
+    prepare_access
+    if [ ! -s "$AUTHORIZED_KEYS" ]; then
+        echo "dropbear: no owner key provisioned; SSH remains disabled"
+        echo "          run deepskopion-authorize-key from the serial console"
+        return 0
+    fi
+    printf "Starting dropbear sshd on :22... "
+    # -R: generate host keys on first boot; -s: prohibit password login.
+    "$DROPBEAR" -R -s -p 22 -P "$PIDFILE" && echo "OK" || echo "FAIL"
+}
+
+stop() {
+    printf "Stopping dropbear sshd: "
+    if [ -f "$PIDFILE" ] && kill "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "OK"
+    else
+        echo "(not running)"
+    fi
+}
+
+case "$1" in
+    start)   start ;;
+    stop)    stop ;;
+    restart) stop; start ;;
+    *)       echo "usage: $0 {start|stop|restart}" >&2; exit 1 ;;
+esac

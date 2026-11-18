@@ -1,0 +1,75 @@
+# SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
+# DS-P3.156 (PF-R0): reference design manifest for the pfsoc_datalogger target.
+# uses: the registry packages of ip.lock whose files the pfsoc_datalogger build
+# compiled (reports/source_provenance.rpt of the 2026-11-05 build), with the
+# ip.lock requested_version. Local packages (routertl/edge_detector, infilter,
+# ram_dual_port) carry no registry version and are left out, as in the other
+# manifests; en_cl_fix_resize is not compiled by this target.
+ref_design:
+  org: routertl
+  name: deepskopion-pfsoc
+  version: "0.1.0"
+  description: "Deepskopion hardware datalogger on the Microchip PolarFire SoC Discovery Kit (MPFS095T)"
+  license: "CERN-OHL-W-2.0 AND MPL-2.0"
+  tags:
+    - deepskopion
+    - datalogger
+    - polarfire-soc
+    - mpfs095t
+    - libero
+    - packet-capture
+
+target:
+  board: polarfire-soc-discovery
+  vendor: microchip
+  family: polarfire-soc
+  part: MPFS095T-1FCSG325E
+  tool: "Libero SoC"
+  tool_version: "2025.2"
+
+project:
+  top_module: deepskopion_pfsoc_top
+  language: vhdl
+
+uses:
+  - ref: open-logic/olo_base_fifo_sync
+    version: "^4.4.1"
+  - ref: open-logic/olo_base_fifo_async
+    version: "^4.4.1"
+  - ref: open-logic/olo_base_wconv_n2xn
+    version: "^4.4.1"
+  - ref: open-logic/olo_base_wconv_xn2n
+    version: "^4.4.1"
+  - ref: routertl/rea
+    version: "==1.12.4"
+  - ref: routertl/rr_ddr_stream
+    version: "^0.3.6"
+
+source:
+  repo: https://github.com/routertl/deepskopion
+  commit: ae43dd3adba09568c2131d29e6e496b8dfde9971
+
+build:
+  command: "rr target set pfsoc_datalogger && rr synth run && rr bitstream"
+  # FlashPro programming job exported by routertl tcl/microchip/gen_bitstream.tcl.
+  expected_bitstream: "build/pfsoc_datalogger/bitstream/deepskopion.job"
+
+# Provisional. Libero SoC 2025.2 (Version 2025.2.0.14) compile netlist resources
+# report of the pfsoc_datalogger build, 2026-11-05, MPFS095T FCSG325 -1:
+# 4LUT 43149 / 93516, DFF 34845 / 93516, LSRAM 59 / 308 (bram_kbits = 59 x 20).
+# The two regbank ROM data files were missing in that build (DS-P1.88, regbank
+# ROM constant-folded), so these totals understate the real image. To be
+# recalibrated from the next clean pfsoc build. fmax_mhz is omitted: that build
+# directory holds no timing report.
+resources:
+  luts: 43149
+  ffs: 34845
+  bram_kbits: 1180
+
+verification:
+  last_verified_commit: "5d49620228374496ead1431365963a877d101235"
+  last_verified_tool_version: "2025.2"
+  last_verified_date: "2026-11-05"
+  status: claimed
+  blocker: "compile-only evidence: the pfsoc_datalogger build directory of 2026-11-05 holds Libero compile output only (no place-and-route output, timing report or programming job), and its regbank ROM data files were missing (DS-P1.88)"
+  notes: "Resources come from that build's compile netlist report (git 5d496202, worktree dirty). No bitstream from this manifest has been programmed or run on the board."

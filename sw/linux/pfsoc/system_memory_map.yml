@@ -1,0 +1,45 @@
+# PF-L0 (DS-P2.125) declarative userspace map for the PolarFire SoC (MPFS095T).
+#
+# Exposes the two fabric-side resources the sw/stream/ daemon needs at runtime,
+# reached across the two FIC ports the MSS enables (hw/libero/pfsoc/mss):
+#   * system_regs — the regbank CSR window, reached CPU->fabric over FIC0
+#     (32-bit AXI4 initiator). The daemon reads RING_BASE_LOW/HIGH/BYTES/
+#     WRITE_PTR out of it to locate the ring.
+#   * ddr_ring    — the DDR window the fabric ring DMA (ddr_stream_fic) fills
+#     over FIC1 (64-bit AXI4 target into MSS DDR); the daemon mmaps it read-only.
+#
+# PROVENANCE OF THE ADDRESSES. system_regs.base_addr is the ONE number pinned
+# today: it equals `ds_mmio_base=0x60000000` in targets/pfsoc_datalogger.yml's
+# committed bootargs, which is the FIC0 CPU-side base the MSS assigns
+# (PF-P0 §3.2). ddr_ring.base_addr is CPU 0xA000_0000 in the 32-bit cached
+# window, which is DDR 0x2000_0000..0x3000_0000. (The DE25-style `mem=512M`
+# split that first placed it there is gone since DS-P2.157.) The same DDR is
+# reachable through the 64-bit windows too, so it is kept away from Linux
+# at EVERY alias by the linux.dt_nodes overrides in targets/pfsoc_datalogger.yml
+# (DS-P1.62, guarded by tools/tests/test_pfsoc_ring_ddr_alias_ds_p1_62.py). Both
+# spans mirror the DE25/Zynq datalogger (64 KiB CSR, 256 MiB ring). The exact
+# FIC_BASE and the MSS_INT_F2M PLIC source numbers are read from the generated
+# MSS memory-map handoff at PF-B0 (hw/libero/pfsoc/mss/README.md §4); update this
+# file if Libero assigns FIC0 a base other than 0x6000_0000.
+version: "1.0.0"
+# PF-L0 boot session 2026-09-06: was `polarfire-soc-mpfs`, which is NOT a member
+# of rr's PolarFire SoC family table (_ARCH_TABLE in
+# sdk/cli/commands/linux_steps/_pfsoc.py) — every `rr linux` step for this target
+# died with "Unknown PolarFire SoC Linux target: 'polarfire-soc-mpfs'". The board
+# IS the Discovery Kit, so the correct family token is `mpfs-disco-kit`.
+target: mpfs-disco-kit
+
+devices:
+  # Regbank CSR window — FIC0 (MSS -> fabric AXI4 initiator), CPU base 0x60000000.
+  - name: system_regs
+    base_addr: 0x60000000
+    span: 0x10000                # 64 KiB — regbank RW + RO + telemetry windows
+    compatible: generic-uio
+    regbank_ref: ../../../project_regbank.yml
+
+  # DDR ring — filled by ddr_stream_fic over FIC1, drained by DdrRingDataSource.
+  # Reserved no-map here; its 64-bit aliases are kept out of Linux RAM (DS-P1.62).
+  - name: ddr_ring
+    base_addr: 0xA0000000
+    span: 0x10000000             # 256 MiB
+    compatible: generic-uio

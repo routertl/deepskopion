@@ -1,0 +1,265 @@
+# Build profiles for the datalogger-mix contract sweep (DS-P1.65).
+#
+# Read by `rr sim sweep <profile> --profiles <this file> --tests
+# test_datalogger_mix_sweep`; the cocotb module reads the active profile from
+# $RR_SIM_PROFILE. Keys beyond `generics` are the module's own:
+#
+#   dataloggers  instance count per protocol (the mix under test), numbered
+#                the way configurator.py numbers it (logical pins 0..N)
+#   config       project: build tools/datalogger-builder/config/
+#                datalogger_config.yml instead of a `dataloggers` mix
+#   allow_unwired  the mix needs more capture sources than deepskopion_core
+#                has; build the extra signals unwired (AllowUnwiredPins)
+#   bench        core (default) | gather | pkg | pinmap — the toplevel elaborated
+#   expect_board_pins  pinmap: {logical pin: board pin} the core must wire
+#   fixture      tools/tests/datalogger_mix/fixtures/<name>/ holding a frozen
+#                generator output for this mix
+#   frozen       which generated files come from the fixture (pkg, gather)
+#                instead of the live generator, so a bench isolates one
+#                mechanism from the generator mechanisms upstream of it
+#   checks       traffic, absent_telemetry (default: both)
+#   absent_checks  absent protocols whose telemetry slots must read zero
+#                (default: every absent protocol)
+
+# ── The ticket matrix: live generator, full core, every check ──────────────
+
+default:
+  generics: {}
+  dataloggers:
+    i2c: 2
+    uart: 2
+    spi: 1
+    jtag: 1
+    edge: 4
+
+zero_i2c:
+  generics: {}
+  dataloggers:
+    i2c: 0
+    uart: 2
+    spi: 1
+    jtag: 1
+    edge: 4
+
+zero_uart:
+  generics: {}
+  dataloggers:
+    i2c: 2
+    uart: 0
+    spi: 1
+    jtag: 1
+    edge: 4
+
+zero_spi:
+  generics: {}
+  dataloggers:
+    i2c: 2
+    uart: 2
+    spi: 0
+    jtag: 1
+    edge: 4
+
+zero_jtag:
+  generics: {}
+  dataloggers:
+    i2c: 2
+    uart: 2
+    spi: 1
+    jtag: 0
+    edge: 4
+
+zero_edge:
+  generics: {}
+  dataloggers:
+    i2c: 2
+    uart: 2
+    spi: 1
+    jtag: 1
+    edge: 0
+
+mix_5uart_2i2c:
+  generics: {}
+  dataloggers:
+    i2c: 2
+    uart: 5
+    spi: 0
+    jtag: 0
+    edge: 0
+
+mix_0uart_5i2c_1spi:
+  generics: {}
+  dataloggers:
+    i2c: 5
+    uart: 0
+    spi: 1
+    jtag: 0
+    edge: 0
+
+readme_example:
+  generics: {}
+  dataloggers:
+    i2c: 2
+    uart: 2
+    spi: 1
+    jtag: 0
+    edge: 4
+
+# 38 signals for 21 core capture sources (board_pins.yml): the first instance
+# of every protocol is wired and checked; 18 EDGE lines are built unwired.
+max_31_id:
+  generics: {}
+  dataloggers:
+    i2c: 1
+    uart: 1
+    spi: 1
+    jtag: 1
+    edge: 27
+  allow_unwired: true
+
+# ── Per-mechanism benches (one invariant each) ──────────────────────────────
+
+# Generator emits the IDs / PROTO_IDX / DOMAIN constants of an absent protocol
+# (datalogger_gather_gen.py). Live generator; EDGE present so no EDGE-only
+# mechanism is involved; absent-telemetry check off so the core guards are not.
+gen_absent_constants:
+  generics: {}
+  dataloggers:
+    i2c: 2
+    uart: 2
+    spi: 1
+    jtag: 0
+    edge: 4
+  checks: [traffic]
+
+# Generator emits C_EDGE_MAXFREQ_WIDTH with no EDGE instance. Package-only
+# probe: nothing but the live package is analysed.
+gen_edge_maxfreq_width:
+  generics: {}
+  dataloggers:
+    i2c: 2
+    uart: 2
+    spi: 1
+    jtag: 1
+    edge: 0
+  bench: pkg
+
+# Gather template declares the EDGE port interface with no EDGE instance.
+# Frozen package, live gather, no core.
+gather_edge_ports:
+  generics: {}
+  dataloggers:
+    i2c: 2
+    uart: 2
+    spi: 1
+    jtag: 1
+    edge: 0
+  bench: gather
+  fixture: zero_edge
+  frozen: [pkg]
+
+# Core skips the EDGE aggregator / error / max-frequency banks and ties the
+# EDGE telemetry slots to zero with no EDGE instance. Frozen package + gather.
+core_edge_pipeline:
+  generics: {}
+  dataloggers:
+    i2c: 2
+    uart: 2
+    spi: 1
+    jtag: 1
+    edge: 0
+  fixture: zero_edge
+  frozen: [pkg, gather]
+
+# Core ties an absent protocol's telemetry slots to zero instead of reading
+# the slot its fallback C_PROTO_IDX (0) aliases — here EDGE, the only present
+# protocol, so EDGE traffic would leak into the absent protocol's counters.
+# Frozen package, live gather; each bench checks one protocol only.
+core_telemetry_uart:
+  generics: {}
+  dataloggers: &edge_only
+    i2c: 0
+    uart: 0
+    spi: 0
+    jtag: 0
+    edge: 1
+  fixture: edge_only
+  frozen: [pkg]
+  absent_checks: [uart]
+
+core_telemetry_i2c:
+  generics: {}
+  dataloggers: *edge_only
+  fixture: edge_only
+  frozen: [pkg]
+  absent_checks: [i2c]
+
+core_telemetry_spi:
+  generics: {}
+  dataloggers: *edge_only
+  fixture: edge_only
+  frozen: [pkg]
+  absent_checks: [spi]
+
+core_telemetry_jtag:
+  generics: {}
+  dataloggers: *edge_only
+  fixture: edge_only
+  frozen: [pkg]
+  absent_checks: [jtag]
+
+edge_only:
+  generics: {}
+  dataloggers: *edge_only
+  fixture: edge_only
+  frozen: [pkg, gather]
+
+# ── DS-P1.66: the core wires the logical pins a config numbers ─────────────
+
+# The project's own config (the default mix) through the live generator: the
+# core must wire it exactly as the DS-P1.104 default mix's BoardPins.
+pinmap_default:
+  generics: {}
+  config: project
+  bench: pinmap
+  expect_board_pins:
+    12: JA0
+    13: JA1
+    14: JA2
+    15: JA3
+    20: JA4
+    21: JA5
+    22: JA6
+    23: JA7
+    28: JB5
+    36: JB0
+    37: JB1
+    42: JB2
+    43: JB3
+    44: JB4
+
+# The README's configurator mix (logical pins 0..13). Frozen package, so only
+# deepskopion_core's capture_pin assembly is on the path.
+pinmap_configurator:
+  generics: {}
+  dataloggers: &readme_mix
+    i2c: 2
+    uart: 2
+    spi: 1
+    jtag: 0
+    edge: 4
+  bench: pinmap
+  fixture: pinmap_readme
+  frozen: [pkg]
+
+# A configurator mix that also takes the internal taps (JTAG on the REA tap,
+# CAN on the fabric CAN bus). Live generator.
+pinmap_taps:
+  generics: {}
+  dataloggers:
+    i2c: 2
+    uart: 2
+    spi: 1
+    jtag: 1
+    can: 1
+    edge: 4
+  bench: pinmap

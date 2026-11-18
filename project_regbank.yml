@@ -1,0 +1,526 @@
+name: system_regs
+version: 0.3.0
+# DS-P2.317: every address below is a byte offset (0x0000, 0x0004, ...). routertl reads an undeclared mode as
+# word indices, which put the BUILD_DATE init into word 8 (DATALOGGER_CONFIG) and REGBANK_NUM_WORDS into word 16
+# (SPI_INJ_CONTROL), and the RO/ROM flags on the wrong words (RTL-P1.316).
+address_mode: bytes
+# DS-T2.64: scope the rr sim presim drift gate (RTL-P3.632/P3.633) to the artefacts it
+# can actually resolve for this project. hex_payload is excluded: the gate hardcodes the
+# SDK-canonical src/regbank/regbank_schema.hex, but this project regenerates its manifest
+# hex to hw/rtl/regbank/ via the regbank-regen pre_build hook (every build refreshes it).
+# vhdl_pkg is the canary — it drifts together with the hex, so dropping the unreachable
+# hex path costs no real coverage while removing a permanent false-positive abort.
+outputs:
+- vhdl_pkg
+- python_constants
+# DS-T2.87: every register declares what the hw-contract map-access preamble
+# (routertl map_preamble, RTL-P2.1213) may expect from it on a RUNNING board.
+# The preamble walks this map before every runtimes/hw.yml REQ; with nothing
+# declared it expects 0x00000000 everywhere, and the live registers below
+# failed it on the DE25 (DS-P2.165 witness, finding 3), forcing every receipt to
+# unexpected_fail. `expected:` is a value the silicon must read (a constant of
+# this design); `exempt:` is a register whose value is live, per build, per
+# target, or whose read has a side effect, so a read proves nothing about access.
+# A new register must declare one or the other (tools/tests/test_regbank_preamble_ds_t2_87.py).
+registers:
+  # ── Identity ───────────────────────────────────────────────────────────────
+  - name: GIT_HASH
+    address: 0x0000
+    access: RO
+    exempt: &build_stamp "build stamp, differs per bitstream (the capture chain confirms the REA build ID)"
+    description: Git commit hash of the build
+
+  - name: SYSTEM_VERSION
+    address: 0x0004
+    access: RO
+    exempt: *build_stamp
+    description: System firmware version (semantic versioning)
+
+  - name: BUILD_DATE
+    address: 0x0008
+    access: RO
+    exempt: *build_stamp
+    description: Build timestamp (Unix epoch)
+
+  - name: REGBANK_VERSION
+    address: 0x000C
+    access: RO
+    expected: "0x00030000"
+    description: Register bank version (encoded as major.minor.patch)
+
+  - name: REGBANK_NUM_WORDS
+    address: 0x0010
+    access: RO
+    exempt: &stream_port "read side effect: a read resets or advances a manifest stream pointer"
+    description: Number of words in the register bank schema (manifest). Reading this register also resets the streaming pointer for REGBANK_DATA to 0.
+
+  - name: REGBANK_DATA
+    address: 0x0014
+    access: RO
+    exempt: *stream_port
+    description: Streaming-read port for the regbank manifest ROM. Each read returns the next 32-bit word from regbank_schema.hex and advances the internal pointer. Read REGBANK_NUM_WORDS first to seed the count + reset pointer.
+
+  - name: CONFIG_NUM_WORDS
+    address: 0x0018
+    access: RO
+    exempt: *stream_port
+    description: Number of words in the build configuration manifest (which dataloggers + how many are baked into this bitstream). Reading this register also resets the streaming pointer for CONFIG_DATA to 0.
+
+  - name: CONFIG_DATA
+    address: 0x001C
+    access: RO
+    exempt: *stream_port
+    description: Streaming-read port for the build-config ROM (config_schema.hex). Each read returns the next 32-bit word and advances the pointer. See datalogger_gather_gen.py for the v0.1 encoding (magic 0xC0A1DE01 + count + per-instance words).
+
+  # ── Runtime Datalogger Control ───────────────────────────────────────────────
+  - name: DATALOGGER_CONFIG
+    address: 0x0020
+    access: RW
+    exempt: &sw_owned "software-owned configuration: reads what the last writer left"
+    description: Per-datalogger runtime control word. Low 16 bits drive datalogger_gather.CONFIG via the config_control demux. CONFIG[15:11] selects the addressed datalogger_id; CONFIG[10:0] is the per-datalogger payload (e.g. CONFIG[0]=enable). See docs/standards/datalogger_compliance_checklist.md section 4.
+
+  - name: EMIO_MUX_SEL
+    address: 0x0024
+    access: RW
+    exempt: *sw_owned
+    description: Per-protocol pre-gather source selector. Bit[0]=I2C #4 source (0=PMOD ja[1:0], 1=internal I2C). Bit[1]=UART #12 source (0=PMOD jb[0], 1=internal UART). Bit[2]=SPI #8 source (0=PMOD ja[7:4], 1=internal SPI). Bit[3]=EDGE×4 self-test: 1 routes the full injected SPI set into the 4 edge dataloggers (EDGE0←SCLK, 1←MOSI, 2←MISO, 3←CS), 2-FF synced. Bit[4]=EDGE0/1←I2C self-test: 1 routes the injected I2C bus into EDGE0(id=1)←SCL and EDGE1(id=2)←SDA (2-FF synced) so RouteWave sigrok i2c host-decode runs on real silicon edges; takes priority over bit[3] for EDGE0/1. Bit[7]=EDGE0←STIM edge/pulse source: 1 routes ds_stimulus_gen's free-running EDGE_O into EDGE0(id=1) in place of jb[2], lowest priority (yields to bits[3:4]/CAN/UART self-test when those are also set). Bits[11:8] choose which internal master the matching bit[2:0] path observes — 0 = legacy EMIO or ds_stimulus_gen loopback, 1 = PolarFire MSS fabric peripheral (bit8=I2C_0, bit9=MMUART_1, bit10=SPI_0, bit11=CAN_0). Edge/pulse stays on bit[7]; the MSS has no edge generator. Default 0 (all external; the "second instances" I2C #5, UART #13 and EDGE×4 stay on PMOD pads).
+
+  - name: CONTRACT_ABI_VER
+    address: 0x0028
+    access: RO
+    expected: "0x00020000"
+    description: RTL<->PS-software contract ABI version, driven by deepskopion_top from C_CONTRACT_ABI_VER. Mirror of sw.stream.testbench.provenance.CONTRACT_ABI_VER; run_self_test compares the two at startup and ERRORs (exit 2, harness-broken) on mismatch so version-skew can never be read as a DUT verdict. Reads 0 on bitstreams that predate ABI versioning (self-test treats 0 as "unversioned" -> warn, not error). Bump major on any breaking change to the EMIO injector load/edge-detect contract.
+
+  - name: EMIO_PROBE
+    address: 0x002C
+    access: RO
+    exempt: &live "live value on a running board (counter, pointer or status)"
+    description: EMIO-loop probe tap. Live snapshot of the EMIO loopback seam — the same 31-bit probe_word fed to the rr_rea_xilinx7 REA core in deepskopion_top, plus bit[31]=REA-triggered sticky. Read over AXI/devmem for a static "does the EMIO signal reach the injector/datalogger, does the injector drive back" check without a JTAG capture. Bit map (LSB-first) is documented in debug/emio_seam.yml; the REA core gives the cycle-accurate waveform of the same bits.
+
+  # ── Injector responders (DS-P2.51 Phase 2) ────────────────────────────────
+  # PL-side I2C/SPI responders feed slave TX paths from PS-written FIFOs.
+  # CONTROL = enable + address + fifo_reset; DATAIN = byte to push into
+  # the TX FIFO (write-strobe); STATUS = fifo_empty/prog_full/err + count.
+  # See hw/rtl/responder/{i2c,spi}_injector.vhd for bit layouts.
+
+  - name: I2C_INJ_CONTROL
+    address: 0x0030
+    access: RW
+    exempt: *sw_owned
+    description: I2C injector control. Bit[0]=enable. Bits[7:1]=slave 7-bit address. Bit[9]=fifo_reset (self-clearing). Remaining bits reserved.
+
+  - name: I2C_INJ_DATAIN
+    address: 0x0034
+    access: RW
+    exempt: *sw_owned
+    description: I2C injector TX-FIFO write strobe. Each PS write pushes the low 8 bits into the slave's TX FIFO; the slave returns those bytes on master-read transactions in FIFO order.
+
+  - name: I2C_INJ_STATUS
+    address: 0x0038
+    access: RO
+    exempt: *live
+    description: I2C injector status. Bit[0]=fifo_empty. Bit[1]=fifo_prog_full. Bit[2]=slave error sticky. Bits[9:3]=fifo data count (depth+1 wide).
+
+  - name: SPI_INJ_CONTROL
+    address: 0x0040
+    access: RW
+    exempt: *sw_owned
+    description: SPI injector control. Bit[0]=enable. Bit[9]=fifo_reset (self-clearing). Bits[8:1] + remaining reserved for future SPI mode bits.
+
+  - name: SPI_INJ_DATAIN
+    address: 0x0044
+    access: RW
+    exempt: *sw_owned
+    description: SPI injector TX-FIFO write strobe. Each PS write pushes the low 8 bits into the slave's TX FIFO; the slave drives MISO with those bytes on the next master transaction.
+
+  - name: SPI_INJ_STATUS
+    address: 0x0048
+    access: RO
+    exempt: *live
+    description: SPI injector status. Bit[0]=fifo_empty. Bit[1]=fifo_prog_full. Bits[9:3]=fifo data count. Bit[2] reserved (no slave-side error path in v1).
+
+  # ── Fabric-side stimulus generator (DS-P2.100, DS-D.38 option a) ──────────
+  # Replaces the DS-P2.95 tied-off DE25 EMIO seam with a real, regbank-driven
+  # master: UART TX + I2C master + SPI master + edge/pulse source, wired to
+  # the same core inputs ds_emio_mux captures and the injectors above answer.
+  # CONTROL = enable (+ per-protocol config); DATA = write-strobe that both
+  # supplies the payload AND triggers one frame/transaction (edge-detected
+  # in ds_stimulus_gen — one PS write, one trigger, per DS-T3.2/DS-T2.14).
+  # DESIGN HONESTY: every byte on the bus originates in fabric from these
+  # regbank writes — this is stimulus, not a proxy for an external bus or a
+  # real HPS peripheral. See hw/rtl/stimulus/ds_stimulus_gen.vhd.
+
+  - name: STIM_UART_CONTROL
+    address: 0x0220
+    access: RW
+    exempt: *sw_owned
+    description: Stimulus UART TX generator control. Bit[0]=enable. Bit[1]=break pattern (each DATA write sends DATA[15:0] breaks, 0=1, of Bits[15:8] low bit-times, 0=1, then one high bit-time). Remaining bits reserved.
+
+  - name: STIM_UART_BAUD_DIV
+    address: 0x0224
+    access: RW
+    exempt: *sw_owned
+    description: Stimulus UART TX bit period, in clk_sys cycles. Values <2 are floored to 2 in RTL. 8N1 framing, LSB-first.
+
+  - name: STIM_UART_DATA
+    address: 0x0228
+    access: RW
+    exempt: *sw_owned
+    description: Stimulus UART TX write-strobe, acted on while CONTROL[0]=1 and the generator is idle. With CONTROL[1]=0 each PS write sends its low 8 bits as one 8N1 frame. With CONTROL[1]=1 each write sends DATA[15:0] breaks (0=1), each the line low for CONTROL[15:8] bit-times (0=1) then high for one bit-time. A write landing while a frame or break pattern is in flight is dropped (no queue).
+
+  - name: STIM_I2C_CONTROL
+    address: 0x022C
+    access: RW
+    exempt: *sw_owned
+    description: Stimulus I2C master generator control. Bit[0]=enable. Bits[7:1]=target 7-bit I2C address. Remaining bits reserved.
+
+  - name: STIM_I2C_CLK_DIV
+    address: 0x0230
+    access: RW
+    exempt: *sw_owned
+    description: Stimulus I2C master SCL quarter-period, in clk_sys cycles. Values <2 are floored to 2 in RTL. No clock stretching support (v1).
+
+  - name: STIM_I2C_DATA
+    address: 0x0234
+    access: RW
+    exempt: *sw_owned
+    description: Stimulus I2C master write-strobe. Each PS write to the low 8 bits, while CONTROL[0]=1 and the generator is idle, runs one complete START + 7-bit-addr+W + data-byte + STOP write transaction against CONTROL[7:1]. A write landing mid-transaction is dropped (no queue).
+
+  - name: STIM_SPI_CONTROL
+    address: 0x0238
+    access: RW
+    exempt: *sw_owned
+    description: Stimulus SPI master generator control. Bit[0]=enable. Remaining bits reserved.
+
+  - name: STIM_SPI_CLK_DIV
+    address: 0x023C
+    access: RW
+    exempt: *sw_owned
+    description: Stimulus SPI master SCLK half-period, in clk_sys cycles. Mode 0 (CPOL=0/CPHA=0), MSB-first, 8 bits/transfer.
+
+  - name: STIM_SPI_DATA
+    address: 0x0240
+    access: RW
+    exempt: *sw_owned
+    description: Stimulus SPI master write-strobe. Each PS write to the low 8 bits, while CONTROL[0]=1 and the generator is idle, shifts one byte out MOSI framed by SS. A write landing mid-transfer is dropped (no queue).
+
+  - name: STIM_EDGE_CONTROL
+    address: 0x0244
+    access: RW
+    exempt: *sw_owned
+    description: Stimulus edge/pulse source control. Bit[0]=enable (free-running 50% duty toggle when set; held low when clear). Bits[19:4]=half-period in clk_sys cycles (0 floored to 1 in RTL). Feeds deepskopion_core's EDGE0 self-test tap when EMIO_MUX_SEL bit[7]=1.
+
+  # ── DS-T2.18 DDR-commit observers ──────────────────────────────────────────
+  - name: CLK_DDR_TICKS
+    address: 0x004C
+    access: RO
+    exempt: *live
+    description: clk_ddr (fclk_clk1, 125 MHz) liveness edge-count. A free-running divide-by-256 toggle in the clk_ddr domain (NO rst_ddr dependence) is CDC'd to clk_sys and edge-counted. Read twice ~100 ms apart - a nonzero delta proves clk_ddr is running; a stuck value means the HP0 DMA write clock is dead. Distinguishes 'dead clock' from 'stuck reset' (see DDR_RESET_STATUS).
+
+  - name: DDR_RESET_STATUS
+    address: 0x0050
+    access: RO
+    exempt: *live
+    description: rst_ddr (HP0 DMA-domain reset) observed in clk_sys. Bit[0]=live rst_ddr (1=asserted/held in reset). Bit[1]=sticky 'rst_ddr ever deasserted since config' (latches 1 the first time reset releases; never clears). Bit[2]=ddr_write_idle - the DMA write side is IDLE, all enqueued frames are committed to DRAM; when set, the PS may safely read the ring up to RING_WRITE_PTR (the robust RingOracle 'caught up' signal, PS-LOOP-REQ-9). If bit[1]=0 the DDR write FSM never came out of reset. Write-plane arming (previously-reserved upper bits, backward-compatible - old readers masked them as 0). Bit[6:3]=dbg_reset_status_o synced {downloader_cs, uploader_cs, pipeBusyDdr, pipeBusy}. Bit[7]=chip_empty - the CDC empty flag the uploader uses to decide there is data to write; STUCK 1 means the uploader sees no data and never arms (the key divergence probe). Bit[8]=pipe empty. Bit[9]=user FIFO full. Bit[10]=write_error (BRESP/=OKAY sticky). Bit[16:11]=sticky 'ever seen since rst_ddr' {aw_valid(11), aw_handshake(12), wvalid(13), bvalid(14), write_active/idle-ever-0(15), write_error(16)} - aw_valid=0 forever is the 'no AW ever issued' wedge; a working 0.3.1 build sets aw_valid/aw_handshake/bvalid/write_active. Bit[31:17]=reserved 0.
+
+  # ── Telemetry Counters (Dashboard) ─────────────────────────────────────────
+  # See: docs/hardware/telemetry_counters.md
+  # Spec: hw/rtl/datalogger/infra/telemetry_counters_spec.yml
+
+  - name: HEARTBEAT_CNT
+    address: 0x00C0
+    access: RO
+    exempt: *live
+    description: Free-running PL heartbeat counter (liveness check)
+
+  - name: FIFO_OVERFLOW_CNT
+    address: 0x00C4
+    access: RO
+    exempt: *live
+    description: FIFO overflow event count (persistent)
+
+  - name: FIFO_OVERFLOW_CNT_RSVD
+    address: 0x00C8
+    access: RO
+    expected: "0x00000000"
+    description: RESERVED — deprecated Stream-tier FIFO overflow count (D.4 single-tier arbiter); reads 0; slot retained for address stability (remove in a future migration)
+
+  - name: PKT_CNT_I2C
+    address: 0x00D0
+    access: RO
+    exempt: *live
+    description: I2C accepted message count
+
+  - name: PKT_CNT_SPI
+    address: 0x00D4
+    access: RO
+    exempt: *live
+    description: SPI accepted message count
+
+  - name: PKT_CNT_UART
+    address: 0x00D8
+    access: RO
+    exempt: *live
+    description: UART accepted message count
+
+  - name: PKT_CNT_QSPI
+    address: 0x00DC
+    access: RO
+    exempt: *live
+    description: QSPI accepted message count
+
+  - name: PKT_CNT_EDGE
+    address: 0x00E0
+    access: RO
+    exempt: *live
+    description: Edge detector event count
+
+  - name: PKT_CNT_I2S
+    address: 0x00E4
+    access: RO
+    exempt: *live
+    description: I2S stream sample count
+
+  - name: PKT_CNT_CAN
+    address: 0x00E8
+    access: RO
+    exempt: *live
+    description: CAN accepted message count
+
+  - name: PKT_CNT_JTAG
+    address: 0x00EC
+    access: RO
+    exempt: *live
+    description: JTAG accepted message count
+
+  - name: ERR_CNT_I2C
+    address: 0x00F0
+    access: RO
+    exempt: *live
+    description: I2C protocol error count
+
+  - name: ERR_CNT_SPI
+    address: 0x00F4
+    access: RO
+    exempt: *live
+    description: SPI protocol error count
+
+  - name: ERR_CNT_UART
+    address: 0x00F8
+    access: RO
+    exempt: *live
+    description: UART frame/parity error count
+
+  - name: ERR_CNT_QSPI
+    address: 0x00FC
+    access: RO
+    exempt: *live
+    description: QSPI protocol error count
+
+  - name: ERR_CNT_EDGE
+    address: 0x0100
+    access: RO
+    exempt: *live
+    description: Edge detector error count
+
+  - name: ERR_CNT_CAN
+    address: 0x0104
+    access: RO
+    exempt: *live
+    description: CAN protocol error count
+
+  - name: ERR_CNT_JTAG
+    address: 0x0108
+    access: RO
+    exempt: *live
+    description: JTAG protocol error count
+
+  - name: ARB_GRANT_CNT
+    address: 0x0110
+    access: RO
+    exempt: *live
+    description: Arbiter total grant count
+
+  - name: ARB_GRANT_CNT_RSVD
+    address: 0x0114
+    access: RO
+    expected: "0x00000000"
+    description: RESERVED — deprecated Stream-tier arbiter grant count (D.4); reads 0; slot retained for address stability
+
+  - name: DROP_CNT_I2C
+    address: 0x0120
+    access: RO
+    exempt: *live
+    description: I2C messages dropped (VLD && !RDY)
+
+  - name: DROP_CNT_SPI
+    address: 0x0124
+    access: RO
+    exempt: *live
+    description: SPI messages dropped (VLD && !RDY)
+
+  - name: DROP_CNT_UART
+    address: 0x0128
+    access: RO
+    exempt: *live
+    description: UART messages dropped (VLD && !RDY)
+
+  - name: FIFO_HIGH_WATERMARK
+    address: 0x0130
+    access: RO
+    exempt: *live
+    description: Peak FIFO occupancy since reset
+
+  - name: FIFO_HIGH_WATERMARK_RSVD
+    address: 0x0134
+    access: RO
+    expected: "0x00000000"
+    description: RESERVED — deprecated Stream-tier peak FIFO occupancy (D.4); reads 0; slot retained for address stability
+
+  - name: TELEMETRY_CTRL
+    address: 0x0140
+    access: RW
+    exempt: *sw_owned
+    description: Write bit[0]=1 to clear all telemetry counters. Self-clearing.
+
+  - name: TELEMETRY_SNAPSHOT_TRIGGER
+    address: 0x0144
+    access: RW
+    exempt: *sw_owned
+    description: Write bit[0]=1 to latch all counters atomically. Self-clearing.
+
+  # ── DDR Ring Buffer Locator (DS-P3.27 Phase B) ─────────────────────────────
+  # The PL streams datalogger messages into a ring buffer in PS DDR via the
+  # rr-ddr-stream u_ddr_burst block. PS firmware (DdrRingDataSource) locates
+  # the ring through these read-only slots + drains zs_msg_header_t frames.
+  # RING_READ_PTR is the software-managed ring DRAIN pointer (DS-P2.59): the PS
+  # writes the byte offset it has consumed up to and the PL feeds it into
+  # ddr_stream_axi.csr_rd_ptr_addr_i, freeing ring space so the DMA write
+  # pointer auto-wraps. With the read plane elided this is the ONLY thing that
+  # advances the ring's read side — without it the ring fills once and stalls.
+
+  - name: RING_WRITE_PTR
+    address: 0x0150
+    access: RO
+    exempt: *live
+    description: Number of 32-bit messages written into the ring since reset (free-running, wraps at 2^32). PS computes byte offset = (RING_WRITE_PTR * 4) mod RING_BYTES.
+
+  - name: RING_READ_PTR
+    address: 0x0154
+    access: RW
+    exempt: *sw_owned
+    description: Software-managed ring DRAIN pointer (byte offset, mod RING_BYTES — NOT the old message count). SW writes the byte offset it has CONSUMED up to, same frame/units as RING_COMMIT_PTR. Wired to ddr_stream_axi.csr_rd_ptr_addr_i (load strobe held high); the IP frees the corresponding ring space so the DMA write pointer auto-wraps — continuous, lossless SPSC drain, no double-read (the PS already has the data from mmap; it only advances the pointer). Defaults to 0 at reset → ring fills once and stalls (legacy write-only behaviour) until SW starts advancing it. If the PS falls behind, the producer stalls correctly (see DROP_CNT / ring-full feedback).
+
+  - name: RING_BASE_LOW
+    address: 0x0158
+    access: RO
+    exempt: &per_target "per-target generic (G_DDR_BASE_ADDR)"
+    description: Physical base address of the ring buffer in PS DDR, low 32 bits. Matches deepskopion_top.G_DDR_BASE_ADDR (default 0x10000000).
+
+  - name: RING_BASE_HIGH
+    address: 0x015C
+    access: RO
+    expected: "0x00000000"
+    description: Physical base address of the ring buffer in PS DDR, high 32 bits. Always 0 on Zynq-7 (32-bit physical address space).
+
+  - name: RING_BYTES
+    address: 0x0160
+    access: RO
+    expected: "0x10000000"
+    description: Size of the ring buffer in bytes. Matches 2^deepskopion_top.G_DDR_WIN_WIDTH (default 2^28 = 256 MB).
+
+  - name: RING_COMMIT_PTR
+    address: 0x0164
+    access: RO
+    exempt: *live
+    description: PS-LOOP-REQ-9. The live DMA write (commit) DDR address from ddr_stream_axi.wr_commit_addr_o — where the HP0 DMA has ACTUALLY written, not where the enqueue counter (RING_WRITE_PTR) has reached. The RingOracle MUST walk the ring only up to (RING_COMMIT_PTR - RING_BASE_LOW), not RING_WRITE_PTR*4, to avoid reading un-committed regions. NOTE - 2-FF-synced from clk_ddr so it may bit-skew mid-transition; combine with DDR_RESET_STATUS bit2 (ddr_write_idle, the DMA-caught-up flag) for the exact tail. Reads 0 until the first write.
+
+  - name: DDR_BACKPRESSURE_CNT
+    address: 0x0168
+    access: RO
+    exempt: *live
+    description: Free-running 32-bit count of clk_sys cycles where the framer has a frame to write but the DDR DMA can't accept it (framer_out_valid && !ddr_s_axis_ready) — i.e. the ring is FULL and incoming real-time datalogger traffic is being silently lost UPSTREAM of the per-protocol DROP_CNT/ERR_CNT (which stay 0 because the datalogger can't even form a frame). A climbing value is the out-of-band 'consumer fell behind, losing data NOW' signal that no handshake-level counter sees. Pairs with the per-protocol DROP_CNT (arbiter backpressure) and the ring-fill watermark IRQ (RING_ALARM_CNT). Reads 0 while a consumer keeps the ring draining (commit wraps forever).
+
+  - name: RING_ALARM_CNT
+    address: 0x016C
+    access: RO
+    exempt: *live
+    description: Ring-fill watermark alarm. bits[30:0] = number of times the ring fill crossed the HIGH watermark (75% of RING_BYTES) — exactly one increment per fill excursion thanks to the hysteresis latch (set at 75%, cleared only after the consumer drains below the LOW watermark = 50%). bit[31] = the LIVE alarm level (the same signal wired to IRQ_F2P[0], level-high → GIC SPI #29): 1 while the ring is between a 75% crossing and the subsequent drain below 50%. This is the EARLY-WARNING complement to DDR_BACKPRESSURE_CNT: the alarm fires BEFORE overflow so the PS can drain ahead of loss, whereas DDR_BACKPRESSURE_CNT counts loss that already happened. Silicon-observable via devmem independent of the Linux interrupt path: flood with no consumer → bit[31] sets and bits[30:0] increments once; drive a drain → bit[31] clears below 50%.
+
+  - name: EMIT_VALID_CNT
+    address: 0x0170
+    access: RO
+    exempt: *live
+    description: Probe. Saturating count of clk_sys cycles where error_event_emitter holds a pending in-band loss frame (err_fr_valid=1). >0 proves the emitter latched a SEV_ERROR report on silicon when the edge FIFO overflowed; =0 means it never latched (emitter/ERR_CNT-wiring issue). Pairs with EMIT_DONE_CNT to localise where piece-3's loss frame is lost (framer→uploader→DDR).
+
+  - name: EMIT_DONE_CNT
+    address: 0x0174
+    access: RO
+    exempt: *live
+    description: Probe. Saturating count of emitter→framer input handshakes (err_fr_valid AND err_fr_ready=framer IN_READY). >0 proves the framer ACCEPTED the loss frame → the loss is DOWNSTREAM in the ddr_stream_axi uploader; =0 with EMIT_VALID_CNT>0 proves the framer never accepted it (the framer is never in S_IDLE while err_fr_valid holds — mux/idle starvation). Read both after forcing an overflow (pin RING_READ_PTR ahead of commit) to discriminate.
+
+  # ── Per-EDGE-instance max-frequency (DS-P3.117) ────────────────────────────
+  # The per-edge max-frequency datum is surfaced IN-BAND on the edge stream as
+  # EVT_EDGE_MAXFREQ (DOMAIN_EDGE | event_id 0x02), NOT via a regbank CSR. The
+  # earlier MAXFREQ_IVAL_EDGE0..3 CSR slots (0x0180..0x018C) were the wrong,
+  # out-of-band channel and have been removed; the value travels with the edge
+  # event stream so RouteWave can correlate it in time with the live edges.
+  # See edge_datalogger.vhd (ED_MAX_INTERVAL/ED_MAX_NEW) + sw/stream/zs_msg.py
+  # (pack/parse_edge_maxfreq) + the EVT_EDGE_MAXFREQ emitter in deepskopion_top.
+
+  # ── Eye-scan / BERT instrument (DS-P2.66, DOMAIN_EYE) ──────────────────────
+  # One-point BERT measurement engine (hw/rtl/eye/eye_engine.vhd) measuring the
+  # BER of a PMOD loopback at one (frequency, sample-phase) grid point. The PS
+  # daemon (sw/stream/eye_sweep.py) sets freq_sel→clk_drp and phase_sel→
+  # idelay_scan, pulses START, polls DONE, reads the 48-bit error/bit counters,
+  # and computes BER = ERR/BIT — the cell of the bathtub/eye rendered live in
+  # RouteWave. A dead/disconnected loopback never locks → BIT=0 → "no
+  # measurement", never a false BER=0 (adversarial-safe, bug-finding-is-success).
+
+  - name: EYE_CONTROL
+    address: 0x0200
+    access: RW
+    exempt: *sw_owned
+    description: Eye-scan control word. Bit[0]=start — a 0→1 transition launches one measurement (CSR-pulse idiom; write 0 then 1 to re-arm). Bit[1]=aggressor_en — drive the adjacent PMOD pin with an uncorrelated PRBS (crosstalk mode) for the duration of the run. Bit[2]=selftest — internal TX→RX loopback (bypass PMOD+IDELAY). Bits[9:4]=phase_sel — IDELAYE2 tap (0..31, fine sub-step phase axis) feeding idelay_scan on the RX loopback pin. Bits[15:12]=freq_sel — clk_drp MMCM-DRP frequency-profile index (the eye's frequency axis). Bits[18:16]=sample-clock phase-shift command (full-UI axis) — bit[16]=ps_step — a 0→1 transition advances the CLKOUT1 sample_clk phase by one MMCM fine step (≈17.86 ps); bit[17]=ps_incdec (1=advance/0=retard); bit[18]=ps_rst — a 0→1 transition zeroes the fabric phase-step counter (EYE_PHASE_STATUS). Poll EYE_PHASE_STATUS.ps_busy=0 between steps. A freq_sel change relocks the MMCM and re-zeroes the actual sample phase. Remaining bits reserved (read 0).
+
+  - name: EYE_BIT_TARGET
+    address: 0x0204
+    access: RW
+    exempt: *sw_owned
+    description: Eye-scan measurement length. Number of PRBS bit periods to DRIVE for one (freq,phase) point. The self-syncing checker accrues BIT_COUNT only post-lock, so the measured EYE_BIT_COUNT is BIT_TARGET minus the lock latency (~ORDER+lock-threshold+loopback-delay). Larger targets lower the measurable BER floor (floor ≈ 1/BIT_COUNT). 0 = defined no-op (engine DONEs with no measurement).
+
+  - name: EYE_STATUS
+    address: 0x0208
+    access: RO
+    exempt: *live
+    description: Eye-scan engine status. Bit[0]=busy (a measurement is in flight). Bit[1]=done (the last measurement finished; counters frozen and valid to read). Bit[2]=locked (the checker self-synchronised to the loopback PRBS this run — 0 with done=1 means the link was dead/too-closed at this point, i.e. a genuine eye-closed cell, NOT a tooling error). Poll until done=1, then read the counters.
+
+  - name: EYE_ERR_COUNT_LO
+    address: 0x020C
+    access: RO
+    exempt: *live
+    description: Eye-scan bit-error count, low 32 bits. Detected received-bit errors over the post-lock window of the last measurement. Combine with EYE_ERR_COUNT_HI for the full 48-bit count. Each isolated line error appears as (taps+1)=3 detected errors via the self-syncing descrambler — the host's BER = ERR/BIT inherits the same factor consistently across all cells, so relative eye shape is exact.
+
+  - name: EYE_ERR_COUNT_HI
+    address: 0x0210
+    access: RO
+    exempt: *live
+    description: Eye-scan bit-error count, high 16 bits in bits[15:0]; bits[31:16] read 0. Forms the upper half of the 48-bit error counter with EYE_ERR_COUNT_LO.
+
+  - name: EYE_BIT_COUNT_LO
+    address: 0x0214
+    access: RO
+    exempt: *live
+    description: Eye-scan measured-bit count, low 32 bits. Bits actually checked post-lock in the last measurement (the BER denominator). Combine with EYE_BIT_COUNT_HI for the full 48-bit count. A value of 0 with EYE_STATUS.done=1 means the engine never locked → no measurement for this (freq,phase) cell (eye fully closed / link dead), distinct from a measured BER of 0.
+
+  - name: EYE_BIT_COUNT_HI
+    address: 0x0218
+    access: RO
+    exempt: *live
+    description: Eye-scan measured-bit count, high 16 bits in bits[15:0]; bits[31:16] read 0. Forms the upper half of the 48-bit bit counter with EYE_BIT_COUNT_LO.
+
+  - name: EYE_PHASE_STATUS
+    address: 0x021C
+    access: RO
+    exempt: *live
+    description: Eye-scan sample-clock phase-shift status. Bits[15:0]=ps_count — the net number of MMCM fine phase steps applied to the CLKOUT1 sample_clk since the last ps_rst / freq reconfig (a signed-magnitude walk, +1 per advance step and −1 per retard, two's-complement in 16 bits). Multiply by ~17.86 ps (VCO_period/56 at the 1000 MHz VCO) for the absolute sample-phase offset; one full UI = (1000/D)·... ≈ 56·D/10 steps. Bit[16]=ps_busy — a phase step (EYE_CONTROL.ps_step) is in flight; poll until 0 before issuing the next step or trusting ps_count. ADD-only slot — shared system_regbank, canfd_demo unaffected.

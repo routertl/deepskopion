@@ -1,0 +1,706 @@
+# ── Which Python tests a commit runs (DS-P2.220) ──
+#
+# This hook runs FIXED legs: the guard modules named below, each for its own
+# subject. It does not select tests from the staged files, so a change can
+# break a suite none of these legs runs.
+#
+# Selection by the change happens at land, in the bench's git-land retest
+# (the orchestration repository's tools/land_rebase_retest.py; deepskopion is
+# opted in under `incoming_closure` in its admin/land_retest.yml, TIC-P2.742). With no
+# upstream change it retests every test that imports a changed .py module,
+# directly or through an import chain; cocotb benches stay out.
+#
+# Not covered until TIC-P2.742's extension lands: a change to a data file only
+# (a YAML declaration, VHDL, requirements.yml) seeds no import closure, so the
+# tests that read that file are not selected. Measured 2026-11-07 by replaying
+# select(): e7715359 (tools/preflight/supported_environment.yml) selected no
+# tools/golden_path/tests file, and 8ebcce01 (hw/rtl, stimulus requirements)
+# did not select tools/tests/test_contract_mapping_drift_ds_p2_187.py; both
+# reached main red. Until then, run the affected suites by hand before READY
+# (tools/ds_python_suite.py's own selection, as the nightly does).
+
+# Resolve ROUTERTL_ROOT from pip-installed SDK (no vendor submodule)
+export ROUTERTL_ROOT
+ROUTERTL_ROOT="$(rr sdk-path 2>/dev/null)"
+export GHDL_EXTRA_FLAGS="${GHDL_EXTRA_FLAGS:--frelaxed}"
+
+if command -v .venv/bin/python3 >/dev/null 2>&1; then
+    while IFS= read -r req; do
+        if ! output=$(.venv/bin/python3 -c "from sdk.cli.requirements import load_requirements; load_requirements('$req')" 2>&1); then
+            echo "ERROR: requirements.yml schema validation failed: $req" >&2
+            echo "$output" >&2
+            exit 1
+        fi
+    done < <(find hw/ -name 'requirements.yml' -not -path '*/libs/*' -not -path '*/.git/*')
+    echo "✓ requirements.yml schema validation passed"
+fi
+
+# ── DS-X1 (DS-P1.27) — bench-local path pollution guard ──
+#
+# The golden path is clone-and-build, and it dies the moment a tracked lock,
+# hook or generated source names a path that exists only on this bench. The
+# sweep lives in tools/tests/test_no_local_path_pollution.py; THIS leg is what
+# arms it. project.yml's target has `hooks.pre_commit.tests: []` and there is
+# no CI, so without this the guard was a file nobody ran while two docs claimed
+# it gated commits — the exact false-green the golden path documents.
+#
+# It reads the INDEX, so it judges what the commit will actually contain (see
+# that module's docstring for why the worktree is the wrong thing to scan).
+# Cheap: five `git grep --cached` sweeps, ~0.2 s.
+#
+# Fails CLOSED. A guard that could not run is not a green guard, so a missing
+# pytest / collection error refuses the commit too — it just says so honestly
+# rather than blaming the staged files (the run_gate doctrine in
+# .routertl/hooks/project-pre-commit).
+#
+# Everything below prints to STDOUT, deliberately. The routertl multiplexer
+# .routertl/hooks/pre-commit runs `exec 9>"$lock" 2>/dev/null` (RTL-P3.959) —
+# an `exec` with no command, so that redirect is PERMANENT for the rest of the
+# hook and is inherited by the project-pre-commit it exec's. Measured here
+# 2026-08-12: with this guard failing, `pre-commit 2>err 1>out` leaves err at
+# 0 bytes. A refusal explained only on stderr is a silent exit-1. (Worth
+# fixing routertl-side; not this repo's file.)
+if [ -x ".venv/bin/python3" ]; then
+    DS_GUARD_PY=".venv/bin/python3"
+else
+    DS_GUARD_PY="python3"
+fi
+echo "🚧 Sweeping the index for bench-local paths (DS-X1)..."
+ds_guard_rc=0
+ds_guard_out=$("$DS_GUARD_PY" -m pytest -q --no-header -p no:cacheprovider \
+    tools/tests/test_no_local_path_pollution.py 2>&1) || ds_guard_rc=$?
+if [ "$ds_guard_rc" -ne 0 ]; then
+    printf '%s\n' "$ds_guard_out"
+    echo ""
+    case "$ds_guard_rc" in
+        1)
+            echo "❌ Bench-local path pollution (DS-X1 / DS-P1.27). Commit aborted."
+            echo "   A staged file names a path that exists only on this bench,"
+            echo "   so a lone clone could not resolve it. Neutralize the path"
+            echo "   (project-root-relative, or an in-repo vendored copy) and"
+            echo "   re-stage. Exemptions are exact paths in _EXEMPT_FILES."
+            ;;
+        *)
+            echo "❌ GATE COULD NOT RUN: bench-local path guard (exit $ds_guard_rc)."
+            echo "   It never inspected your code, so this is NOT a finding about"
+            echo "   the staged files. Interpreter: $DS_GUARD_PY"
+            echo "   Usual cause: pytest missing from that interpreter, or a"
+            echo "   collection error in the guard module."
+            echo "   Commit aborted — a gate that cannot run is not a green gate."
+            ;;
+    esac
+    exit 1
+fi
+echo "✓ No bench-local paths in the index (DS-X1)"
+
+# ── DS-T1.17 — golden-path preflight suite ──
+#
+# tools/preflight/tests proves the pre_build preflight agrees with the
+# committed targets and datalogger config. Nothing ran it: DS-P2.121 removed
+# CAN datalogger id 20 from datalogger_config.yml with this suite red, and
+# every Zybo build then stopped in preflight before Vivado (DS-T1.17), so the
+# launch timing audit had no Zybo constraint or report_cdc evidence at all.
+# ~15 s. Fails CLOSED, like the legs above.
+echo "🚧 Judging the committed targets against the golden-path preflight (DS-T1.17)..."
+ds_preflight_rc=0
+ds_preflight_out=$("$DS_GUARD_PY" -m pytest -q --no-header -p no:cacheprovider \
+    tools/preflight/tests 2>&1) || ds_preflight_rc=$?
+if [ "$ds_preflight_rc" -ne 0 ]; then
+    printf '%s\n' "$ds_preflight_out"
+    echo ""
+    case "$ds_preflight_rc" in
+        1)
+            echo "❌ Golden-path preflight disagrees with the tree (DS-T1.17). Commit aborted."
+            echo "   A target, datalogger_config.yml or supported_environment.yml"
+            echo "   change would stop the build in pre_build. Bring the"
+            echo "   declaration and the design back into agreement."
+            ;;
+        *)
+            echo "❌ GATE COULD NOT RUN: golden-path preflight suite (exit $ds_preflight_rc)."
+            echo "   It never inspected your code. Interpreter: $DS_GUARD_PY"
+            echo "   Commit aborted — a gate that cannot run is not a green gate."
+            ;;
+    esac
+    exit 1
+fi
+echo "✓ Golden-path preflight agrees with the committed tree (DS-T1.17)"
+
+# ── DS-P2.12 — doc link checker guard ──
+#
+# Scans markdown documentation for broken relative links via the pytest guard
+# tools/tests/test_doc_lint_regression_ds_p2_13.py (which runs
+# tools/doc-lint/check_links.py). Catches broken doc links at commit time.
+#
+# Fails CLOSED like every other leg here.
+# Everything prints to STDOUT (see the DS-X1 comment on routertl's permanent
+# exec 9> redirect).
+echo "🚧 Checking documentation links (DS-P2.12)..."
+ds_doclint_rc=0
+ds_doclint_out=$("$DS_GUARD_PY" -m pytest -q --no-header -p no:cacheprovider \
+    tools/tests/test_doc_lint_regression_ds_p2_13.py 2>&1) || ds_doclint_rc=$?
+if [ "$ds_doclint_rc" -ne 0 ]; then
+    printf '%s\n' "$ds_doclint_out"
+    echo ""
+    case "$ds_doclint_rc" in
+        1)
+            echo "❌ doc-lint: broken documentation link found (DS-P2.12). Commit aborted."
+            echo "   One or more relative links in docs/, datalogger markdown files, or"
+            echo "   README.md point to non-existent targets. Run 'make doc-lint' or"
+            echo "   '$DS_GUARD_PY tools/doc-lint/check_links.py' to inspect and fix"
+            echo "   broken links."
+            ;;
+        *)
+            echo "❌ GATE COULD NOT RUN: doc-lint checker guard (exit $ds_doclint_rc)."
+            echo "   It never inspected your docs, so this is NOT a finding about"
+            echo "   the staged files. Interpreter: $DS_GUARD_PY"
+            echo "   Usual cause: pytest missing from that interpreter, or a"
+            echo "   collection error in the guard module."
+            echo "   Commit aborted — a gate that cannot run is not a green gate."
+            ;;
+    esac
+    exit 1
+fi
+echo "✓ Documentation links OK (DS-P2.12)"
+
+# ── DS-P2.197 — the public CI workflow stays honest ──
+#
+# test_public_ci_ds_p2_197.py and test_ci_routertl_floor_leg_ds_p2_209.py read
+# .github/workflows/ci.yml and tools/ci/. They ran only in public CI, so a
+# change to the workflow's install line turned one red on main unseen
+# (DS-P2.209, 8399e64f). test_de25_canfd_target_ds_p2_135.py and
+# test_pfsoc_mss_fabric_selftest_ds_p2_126.py are cross-target / core-mux text
+# guards that also broke on main when target/core commits did not run the full
+# public desk suite (2a8e1eb6, 8ebcce01). All four take well under a second.
+# Fails CLOSED like every other leg here.
+echo "🚧 Checking the public CI workflow (DS-P2.197)..."
+ds_ci_rc=0
+ds_ci_out=$("$DS_GUARD_PY" -m pytest -q --no-header -p no:cacheprovider \
+    tools/tests/test_public_ci_ds_p2_197.py \
+    tools/tests/test_ci_routertl_floor_leg_ds_p2_209.py \
+    tools/tests/test_de25_canfd_target_ds_p2_135.py \
+    tools/tests/test_pfsoc_mss_fabric_selftest_ds_p2_126.py \
+    tools/tests/test_pfsoc_gpt_build_job_ds_p2_149.py \
+    tools/tests/test_pfsoc_fit_e2e_leg_ds_t3_39.py \
+    tools/tests/test_de25_gate_ds_p3_177.py \
+    2>&1) || ds_ci_rc=$?
+if [ "$ds_ci_rc" -ne 0 ]; then
+    printf '%s\n' "$ds_ci_out"
+    echo ""
+    case "$ds_ci_rc" in
+        1)
+            echo "❌ the public CI workflow breaks a rule its guards hold (DS-P2.197)."
+            echo "   Commit aborted."
+            ;;
+        *)
+            echo "❌ GATE COULD NOT RUN: public CI workflow guard (exit $ds_ci_rc)."
+            echo "   Interpreter: $DS_GUARD_PY"
+            echo "   Commit aborted — a gate that cannot run is not a green gate."
+            ;;
+    esac
+    exit 1
+fi
+echo "✓ Public CI workflow guards pass (DS-P2.197)"
+
+# ── DS-P3.184 — pinned write plane is the silicon-witnessed one ──
+#
+# A commit moved the rr_ddr_stream pin past the image the DE25 gate witnessed and
+# passed this hook, because the guard that refuses it was not a leg here. The
+# witness record stays in the private tree, so a public clone has nothing to
+# compare and skips this leg; context.json is the same switch DS-P1.77 uses.
+if git cat-file -e :context.json 2>/dev/null; then
+    echo "🚧 Checking the rr_ddr_stream pin against the DE25 witness (DS-P3.184)..."
+    ds_witness_rc=0
+    ds_witness_out=$("$DS_GUARD_PY" -m pytest -q --no-header -p no:cacheprovider \
+        tools/tests/test_ds_p1_79_de25_silicon_witness.py::test_pinned_write_plane_is_the_silicon_witnessed_one 2>&1) \
+        || ds_witness_rc=$?
+    if [ "$ds_witness_rc" -ne 0 ]; then
+        printf '%s\n' "$ds_witness_out"
+        echo ""
+        case "$ds_witness_rc" in
+            1)
+                echo "❌ the pinned rr_ddr_stream write plane is not the one witnessed on DE25"
+                echo "   silicon (DS-P3.184). Commit aborted. Re-run the DE25 cold-boot gate"
+                echo "   and record the new image in its manifest."
+                ;;
+            *)
+                echo "❌ GATE COULD NOT RUN: DE25 witness guard (exit $ds_witness_rc)."
+                echo "   It never compared the pin, so this is NOT a finding about the"
+                echo "   staged files. Interpreter: $DS_GUARD_PY"
+                echo "   Commit aborted — a gate that cannot run is not a green gate."
+                ;;
+        esac
+        exit 1
+    fi
+    echo "✓ rr_ddr_stream pin matches the DE25 witness (DS-P3.184)"
+fi
+
+# ── DS-P2.206 — RouteWave renders the PolarFire known-answer captures ──
+#
+# Two tests open the PolarFire silicon captures (VCD and CSV) in RouteWave and
+# assert the rendered values. No check ran them, and both sat red on a
+# test-side race for days. They and their evidence stay in the private tree, so
+# a public clone skips this leg (context.json, as above). A skipped test (no
+# RouteWave binary found) refuses the commit: a render check that did not run
+# is not a pass.
+if git cat-file -e :context.json 2>/dev/null; then
+    echo "🚧 Checking RouteWave renders the PolarFire known-answer captures (DS-P2.206)..."
+    ds_rw_rc=0
+    ds_rw_out=$("$DS_GUARD_PY" -m pytest -q --no-header -p no:cacheprovider -rs \
+        tools/tests/test_pfsoc_mmio_routewave_p2_128.py::test_routewave_renders_known_answer_pattern \
+        tools/tests/test_pfsoc_rea_mmio_rr_capture_ds_p2_128.py::test_routewave_renders_the_rr_capture \
+        2>&1) || ds_rw_rc=$?
+    if [ "$ds_rw_rc" -eq 0 ] && printf '%s\n' "$ds_rw_out" | grep -q " skipped"; then
+        ds_rw_rc=5
+    fi
+    if [ "$ds_rw_rc" -ne 0 ]; then
+        printf '%s\n' "$ds_rw_out"
+        echo ""
+        case "$ds_rw_rc" in
+            1)
+                echo "❌ RouteWave did not render the PolarFire known-answer captures as the"
+                echo "   witness records them (DS-P2.206). Commit aborted."
+                ;;
+            *)
+                echo "❌ GATE COULD NOT RUN: RouteWave render check (exit $ds_rw_rc; 5 = skipped,"
+                echo "   no RouteWave binary). Set ROUTEWAVE_BIN or put routewave on PATH."
+                echo "   Interpreter: $DS_GUARD_PY"
+                echo "   Commit aborted — a gate that cannot run is not a green gate."
+                ;;
+        esac
+        exit 1
+    fi
+    echo "✓ RouteWave renders the PolarFire known-answer captures (DS-P2.206)"
+fi
+
+# ── DS-T3.38 — DE-G0 released-binary witness ──
+#
+# tools/golden_path/tests/test_deg0_released_witness.py judges both the
+# provenance/drift rules and the live re-run of the unpacked released
+# routewave_cli against the committed DE-G0 captures. It and its evidence stay
+# in the private tree (context.json, as above). A skipped test refuses the
+# commit: a witness re-run that did not execute is not a pass.
+if git cat-file -e :context.json 2>/dev/null; then
+    echo "🚧 Checking DE-G0 released-binary witness (DS-T3.38)..."
+    ds_deg0_rw_rc=0
+    ds_deg0_rw_out=$("$DS_GUARD_PY" -m pytest -q --no-header -p no:cacheprovider -rs \
+        tools/golden_path/tests/test_deg0_released_witness.py \
+        2>&1) || ds_deg0_rw_rc=$?
+    if [ "$ds_deg0_rw_rc" -eq 0 ] && printf '%s\n' "$ds_deg0_rw_out" | grep -q " skipped"; then
+        ds_deg0_rw_rc=5
+    fi
+    if [ "$ds_deg0_rw_rc" -ne 0 ]; then
+        printf '%s\n' "$ds_deg0_rw_out"
+        echo ""
+        case "$ds_deg0_rw_rc" in
+            1)
+                echo "❌ DE-G0 released-binary witness failed (DS-T3.38). Commit aborted."
+                ;;
+            *)
+                echo "❌ GATE COULD NOT RUN: DE-G0 released-binary witness (exit $ds_deg0_rw_rc; 5 = skipped,"
+                echo "   no released routewave_cli). Set DS_T3_33_ROUTEWAVE_CLI or unpack the released AppImage."
+                echo "   Interpreter: $DS_GUARD_PY"
+                echo "   Commit aborted — a gate that cannot run is not a green gate."
+                ;;
+        esac
+        exit 1
+    fi
+    echo "✓ DE-G0 released-binary witness passes unskipped (DS-T3.38)"
+fi
+
+# ── DS-T3.36 — DE25 U-Boot binman FIT rebuild ──
+#
+# sw/linux/de25/test_de25_linux_image.py::test_rebuild_uboot_with_emac0_phy_fix_ships_a_real_binman_fit_ds_p2_94
+# stages the bench u-boot-socfpga checkout into tmp_path and runs a real
+# incremental `make` + binman build for both the unpatched (reg=<0>, rejected)
+# and patched (reg=<1>, accepted) control DTB. It needs the bench U-Boot build
+# tree and cross-compiler, so a public clone skips this leg (context.json, as
+# above). A skipped test refuses the commit: a rebuild check that did not
+# execute is not a pass.
+if git cat-file -e :context.json 2>/dev/null; then
+    echo "🚧 Checking DE25 U-Boot binman FIT rebuild (DS-T3.36)..."
+    ds_uboot_fit_rc=0
+    ds_uboot_fit_out=$("$DS_GUARD_PY" -m pytest -q --no-header -p no:cacheprovider -rs \
+        sw/linux/de25/test_de25_linux_image.py::test_rebuild_uboot_with_emac0_phy_fix_ships_a_real_binman_fit_ds_p2_94 \
+        sw/linux/de25/test_de25_linux_image.py::test_resolve_uboot_src_and_stage_build_tree_ds_t3_36 \
+        sw/linux/de25/test_de25_linux_image.py::test_precommit_gate_runs_de25_uboot_binman_fit_unskipped_ds_t3_36 \
+        2>&1) || ds_uboot_fit_rc=$?
+    if [ "$ds_uboot_fit_rc" -eq 0 ] && printf '%s\n' "$ds_uboot_fit_out" | grep -q " skipped"; then
+        ds_uboot_fit_rc=5
+    fi
+    if [ "$ds_uboot_fit_rc" -ne 0 ]; then
+        printf '%s\n' "$ds_uboot_fit_out"
+        echo ""
+        case "$ds_uboot_fit_rc" in
+            1)
+                echo "❌ DE25 U-Boot binman FIT rebuild failed (DS-T3.36). Commit aborted."
+                ;;
+            *)
+                echo "❌ GATE COULD NOT RUN: DE25 U-Boot binman FIT rebuild (exit $ds_uboot_fit_rc; 5 = skipped,"
+                echo "   no u-boot-socfpga build tree or cross-compiler). Set DS_T3_36_UBOOT_SRC or run 'rr linux uboot'."
+                echo "   Interpreter: $DS_GUARD_PY"
+                echo "   Commit aborted — a gate that cannot run is not a green gate."
+                ;;
+        esac
+        exit 1
+    fi
+    printf '%s\n' "$ds_uboot_fit_out"
+    echo "✓ DE25 U-Boot binman FIT rebuild passes unskipped (DS-T3.36)"
+fi
+
+# ── DS-P3.177 — DE25 image and toolchain-stage suites ──
+#
+# Eight tests across sw/linux/de25/test_de25_linux_image.py and
+# sw/linux/de25/test_de25_toolchain_stage.py went stale unseen (DS-T2.90)
+# because no gate ran the two files, and sfdisk/mke2fs/debugfs in sbin on PATH
+# hid missing sbin_tool() resolution. Run both suites under an unprivileged
+# PATH (every sbin entry stripped). Fails CLOSED like every other leg here.
+echo "🚧 Running DE25 image and toolchain-stage suites under an unprivileged PATH (DS-P3.177)..."
+ds_de25_unpriv_path=""
+ds_de25_old_ifs="$IFS"
+IFS=:
+for ds_de25_dir in $PATH; do
+    case "/$ds_de25_dir/" in
+        */sbin/*|//) ;;
+        *) ds_de25_unpriv_path="${ds_de25_unpriv_path:+$ds_de25_unpriv_path:}$ds_de25_dir" ;;
+    esac
+done
+IFS="$ds_de25_old_ifs"
+ds_de25_rc=0
+# DS-P1.103: the bench sibling of test_de25_linux_image.py (absent from the export, which drops it).
+ds_de25_bench=()
+[ -f sw/linux/de25/test_de25_linux_image_bench.py ] && ds_de25_bench+=(sw/linux/de25/test_de25_linux_image_bench.py)
+ds_de25_out=$(PATH="$ds_de25_unpriv_path" "$DS_GUARD_PY" -m pytest -q --no-header -p no:cacheprovider -rs \
+    sw/linux/de25/test_de25_linux_image.py \
+    ${ds_de25_bench[@]+"${ds_de25_bench[@]}"} \
+    sw/linux/de25/test_de25_toolchain_stage.py \
+    2>&1) || ds_de25_rc=$?
+if [ "$ds_de25_rc" -ne 0 ]; then
+    printf '%s\n' "$ds_de25_out"
+    echo ""
+    case "$ds_de25_rc" in
+        1)
+            echo "❌ DE25 image or toolchain-stage suite failed (DS-P3.177). Commit aborted."
+            ;;
+        *)
+            echo "❌ GATE COULD NOT RUN: DE25 image and toolchain-stage suites (exit $ds_de25_rc)."
+            echo "   Interpreter: $DS_GUARD_PY"
+            echo "   Commit aborted — a gate that cannot run is not a green gate."
+            ;;
+    esac
+    exit 1
+fi
+printf '%s\n' "$ds_de25_out"
+echo "✓ DE25 image and toolchain-stage suites pass under unprivileged PATH (DS-P3.177)"
+
+# ── DS-P2.205 — deployment contract ──
+#
+# stage_daemon.sh runs deployment_contract.py --check before every rootfs, so a
+# document or overlay that disagrees with the declaration aborts the Linux
+# build. A hand edit of the generated section reached main this way because no
+# gate ran the check. Fails CLOSED like every other leg here.
+echo "🚧 Checking the deployment contract (DS-P2.205)..."
+ds_contract_rc=0
+ds_contract_out=$("$DS_GUARD_PY" -m pytest -q --no-header -p no:cacheprovider \
+    sw/linux/tests/test_deployment_contract.py 2>&1) || ds_contract_rc=$?
+if [ "$ds_contract_rc" -ne 0 ]; then
+    printf '%s\n' "$ds_contract_out"
+    echo ""
+    case "$ds_contract_rc" in
+        1)
+            echo "❌ deployment contract: the tree disagrees with sw/linux/deployment_contract.yml"
+            echo "   (DS-P2.205). Commit aborted. The generated section of"
+            echo "   docs/DEPLOYMENT_CONTRACT.md comes from that file; change the file, then run"
+            echo "   '$DS_GUARD_PY sw/linux/deployment_contract.py --write'."
+            ;;
+        *)
+            echo "❌ GATE COULD NOT RUN: deployment contract guard (exit $ds_contract_rc)."
+            echo "   It never inspected the contract, so this is NOT a finding about"
+            echo "   the staged files. Interpreter: $DS_GUARD_PY"
+            echo "   Commit aborted — a gate that cannot run is not a green gate."
+            ;;
+    esac
+    exit 1
+fi
+echo "✓ Deployment contract holds (DS-P2.205)"
+
+# ── DS-P2.189 — RR-CDC-002 design-closure gate ──
+#
+# DS-T1.21 made the whole design RR-CDC-002 clean, then the REA re-vendor
+# 30c53d04 (DS-P3.174) overwrote the vendored rr_rea_cdc.vhd and with it the
+# inline waivers on rr_rea_sync_word s1/s2. Main stayed red for 4 days because
+# no gate ran the check. Waivers for vendored files now live in
+# cdc_lint_waivers.yml; this leg runs the same check as the DS-T1.21 tests,
+# so a re-vendor that reintroduces a finding (or leaves a waiver stale) is
+# refused at commit time. Cheap: one structural lint pass, ~0.3 s.
+# DS-P2.188: the same check also runs RR-CDC-005 (unsynchronized multi-bit
+# capture, e.g. a handshake capturing a register not launched with the request).
+# Fails CLOSED like every other leg here.
+echo "🚧 Checking the design closure for unwaived RR-CDC-002/RR-CDC-005 findings (DS-P2.189/DS-P2.188)..."
+ds_cdc_rc=0
+ds_cdc_out=$("$DS_GUARD_PY" tools/cdc_lint_waivers.py check 2>&1) || ds_cdc_rc=$?
+if [ "$ds_cdc_rc" -ne 0 ]; then
+    printf '%s\n' "$ds_cdc_out"
+    echo ""
+    case "$ds_cdc_rc" in
+        1)
+            echo "❌ RR-CDC-002/RR-CDC-005 finding or refused waiver in the design closure (DS-P2.189/DS-P2.188). Commit aborted."
+            echo "   Fix the crossing, or (vendored source only) add a waiver anchored on"
+            echo "   path/entity/signals with its evidence to cdc_lint_waivers.yml (RR-CDC-002)."
+            ;;
+        *)
+            echo "❌ GATE COULD NOT RUN: RR-CDC-002/RR-CDC-005 design-closure gate (exit $ds_cdc_rc)."
+            echo "   It never inspected your code. Interpreter: $DS_GUARD_PY"
+            echo "   Commit aborted — a gate that cannot run is not a green gate."
+            ;;
+    esac
+    exit 1
+fi
+printf '%s\n' "$ds_cdc_out"
+
+# ── DS-P2.109 — cocotb dependency-floor consistency ──
+# deepskopion and routertl share ONE interpreter's site-packages. When
+# requirements.txt pinned cocotb==2.0.1 against routertl pyproject's
+# cocotb>=2.1 floor, the two gates downgraded/upgraded the shared cocotb in
+# turn and broke each other (measured 2026-09-03). This leg arms the guard so
+# a `==`-against-a-moving-floor pin can never re-enter: the test drives
+# tools/cocotb_dependency_floor.py's check-constraints AND guard-install at the
+# CLI, and pins the exact historical defect as a synthetic RED case. It reads
+# the committed requirements.txt and the INSTALLED routertl floor, no
+# bench-local paths. Fails CLOSED like every other leg here.
+echo "🚧 Checking cocotb dependency-floor consistency (DS-P2.109)..."
+# Judge the INDEX, not the worktree: the commit contains what is STAGED, so the
+# gate exports the staged requirements.txt (`git show :requirements.txt`) and
+# hands THAT file to both legs. A defect pin that is staged while the worktree
+# still reads floor-safe is refused (the reviewer reproduced the inverse on the
+# first two deliveries).
+ds_staged_reqs="$(mktemp)"
+if ! git show :requirements.txt > "$ds_staged_reqs" 2>/dev/null; then
+    echo "❌ GATE COULD NOT RUN: cannot read the STAGED requirements.txt (git show :requirements.txt)."
+    echo "   The cocotb floor gate judges the index; commit aborted."
+    rm -f "$ds_staged_reqs"
+    exit 1
+fi
+ds_cocotb_rc=0
+ds_cocotb_out=$(DS_COCOTB_REQUIREMENTS="$ds_staged_reqs" "$DS_GUARD_PY" -m pytest -q --no-header -p no:cacheprovider \
+    tools/tests/test_cocotb_dependency_floor_p2_109.py 2>&1) || ds_cocotb_rc=$?
+if [ "$ds_cocotb_rc" -ne 0 ]; then
+    printf '%s\n' "$ds_cocotb_out"
+    echo ""
+    case "$ds_cocotb_rc" in
+        1)
+            echo "❌ cocotb dependency-floor inconsistency (DS-P2.109). Commit aborted."
+            echo "   requirements.txt's cocotb constraint conflicts with the routertl"
+            echo "   pyproject floor (cocotb>=2.1). A shared-interpreter downgrade would"
+            echo "   break the routertl gate. Track the floor: cocotb>=2.1,<3."
+            ;;
+        *)
+            echo "❌ GATE COULD NOT RUN: cocotb dependency-floor guard (exit $ds_cocotb_rc)."
+            echo "   It never evaluated the constraints — usual cause: pytest missing"
+            echo "   or routertl not installed (its floor is unreadable). Commit aborted;"
+            echo "   a gate that cannot run is not a green gate. Interpreter: $DS_GUARD_PY"
+            ;;
+    esac
+    exit 1
+fi
+echo "✓ cocotb tracks the routertl floor (DS-P2.109)"
+
+# Run the EXACT bare command the README (docs) tells users to run before
+# installing requirements.txt into the shared interpreter — no flags, so the
+# gate and the doc can never disagree (the prior delivery's gate only ever
+# exercised the --no-installed-check path, so the documented command could go
+# red while the gate stayed green). This judges what the install WOULD DO
+# (requirements.txt vs the routertl floor), so a floor-violating cocotb already
+# installed with a floor-safe requirements.txt is ALLOWED — that install is the
+# fix. RED only if requirements.txt itself admits a floor-violating version.
+ds_gi_rc=0
+ds_gi_out=$("$DS_GUARD_PY" tools/cocotb_dependency_floor.py guard-install \
+    --requirements "$ds_staged_reqs" 2>&1) || ds_gi_rc=$?
+if [ "$ds_gi_rc" -ne 0 ]; then
+    printf '%s\n' "$ds_gi_out"
+    echo ""
+    echo "❌ guard-install refused the documented install (DS-P2.109, exit $ds_gi_rc)."
+    echo "   requirements.txt admits a cocotb below the routertl floor cocotb>=2.1."
+    echo "   Track the floor: cocotb>=2.1,<3. Commit aborted."
+    exit 1
+fi
+rm -f "$ds_staged_reqs"
+echo "✓ documented guard-install permits the real requirements.txt (DS-P2.109)"
+
+# DS-P3.150 — exercise the real package installer against the exact staged
+# tree, once per committed target. The test creates its own temporary Git
+# repository from `git write-tree` so the final `git status --short`
+# assertion judges what this commit would ship, not stale HEAD or a
+# developer-populated libs/ directory. RouteRTL 4.9.3 (RTL-T2.288) must
+# leave every vendor's aux files in place.
+# DS-P2.180: the per-target replays run concurrently inside the module. Run
+# one after another they took 37-44 min at load 95-100 and outlasted the
+# dispatch budget; every target is still replayed, none is skipped.
+echo "🚧 Replaying packages in a clean staged clone (DS-P3.150)..."
+ds_pkg_rc=0
+# DS-P1.103: the bench sibling (the can-opt-in replay), absent from the export.
+ds_pkg_bench=()
+[ -f tools/tests/test_pkg_install_clean_clone_p3_150_bench.py ] && ds_pkg_bench+=(tools/tests/test_pkg_install_clean_clone_p3_150_bench.py)
+ds_pkg_out=$("$DS_GUARD_PY" -m pytest -q --no-header -p no:cacheprovider \
+    tools/tests/test_pkg_install_clean_clone_p3_150.py \
+    ${ds_pkg_bench[@]+"${ds_pkg_bench[@]}"} 2>&1) || ds_pkg_rc=$?
+if [ "$ds_pkg_rc" -ne 0 ]; then
+    printf '%s\n' "$ds_pkg_out"
+    echo ""
+    echo "❌ Clean-clone package replay failed (DS-P3.150). Commit aborted."
+    echo "   The staged ip.lock/libs state must survive rr pkg install and"
+    echo "   rr target set without deletions, rewrites, or other git-status"
+    echo "   output on those paths."
+    exit 1
+fi
+printf '%s\n' "$ds_pkg_out"
+
+# ── DS-C1 (DS-P1.32) — public artifact hygiene ──
+# The public boundary includes every index blob, binary/generated payload and
+# nested archive. The same command accepts built RTL, provenance, Linux images
+# and captured transcripts as path arguments after the build. Missing inputs
+# fail closed; seeded-red tests live beside the scanner.
+echo "🚧 Scanning public artifacts for bench identity and credentials (DS-C1)..."
+ds_artifact_rc=0
+ds_artifact_out=$("$DS_GUARD_PY" tools/public_artifact_hygiene.py 2>&1) \
+    || ds_artifact_rc=$?
+if [ "$ds_artifact_rc" -ne 0 ]; then
+    printf '%s\n' "$ds_artifact_out"
+    echo ""
+    echo "❌ Public artifact hygiene failure (DS-C1 / DS-P1.32)."
+    echo "   Remove bench identity, fixed private topology, access keys and"
+    echo "   secrets from the staged artifact; deployment state stays local."
+    exit 1
+fi
+printf '%s\n' "$ds_artifact_out"
+
+# ── DS-P1.77 — public export gate ──
+# The same drop list and patterns as tools/export_github.py, on what this commit
+# would publish. It has no opt-out: the opt-in it replaces was off by default,
+# and the export went from 0 to 3630 findings without one commit being refused.
+# A public clone has no private source or restricted-names file; context.json is
+# in the private tree only, so there the export gate has nothing to protect.
+# That makes context.json the switch for this leg, so a private tree cannot drop
+# it: HEAD having the file and the index not having it is a refusal. A public
+# clone never has it in HEAD.
+if git cat-file -e HEAD:context.json 2>/dev/null \
+    && ! git cat-file -e :context.json 2>/dev/null; then
+    echo "❌ This commit removes context.json, which is what turns on the public"
+    echo "   export gate (DS-P3.180). Commit aborted. Restore it with:"
+    echo "     git restore --staged --worktree context.json"
+    exit 1
+fi
+if git cat-file -e :context.json 2>/dev/null; then
+    echo "🚧 Running public export gate on the staged tree (DS-P1.77)..."
+    ds_exp_rc=0
+    ds_exp_out=$("$DS_GUARD_PY" tools/export_github.py --staged 2>&1) \
+        || ds_exp_rc=$?
+    if [ "$ds_exp_rc" -ne 0 ]; then
+        printf '%s\n' "$ds_exp_out"
+        echo ""
+        # Only the gate's own FAIL line is a finding about the staged files. A
+        # crash and an incomplete scan also exit 1.
+        case "$ds_exp_out" in
+            *"SCAN INCOMPLETE"*|*Traceback*)
+                ds_exp_verdict="could-not-run" ;;
+            *"PUBLIC EXPORT GATE FAIL"*)
+                ds_exp_verdict="finding" ;;
+            *)
+                ds_exp_verdict="could-not-run" ;;
+        esac
+        if [ "$ds_exp_verdict" = "finding" ]; then
+            echo "❌ Public export gate failure (DS-P1.77). Commit aborted."
+            echo "   Each line above is file:line: kind in the tree this commit would"
+            echo "   publish. Rewrite the text as a fact, or give the file a DROP"
+            echo "   verdict in docs/REDISTRIBUTION.md."
+        else
+            echo "❌ GATE COULD NOT RUN: public export gate (exit $ds_exp_rc)."
+            echo "   It did not finish judging the staged files."
+            echo "   Commit aborted — a gate that cannot run is not a green gate."
+        fi
+        exit 1
+    fi
+    printf '%s\n' "$ds_exp_out"
+fi
+
+# ── DS-X2 (DS-P1.31) — deterministic generated-source reconstruction ──
+# Re-run the project-owned generators into an empty scratch tree and compare
+# every tracked family with the INDEX. A hand-edited generated byte must be a
+# commit-blocking finding, not something a later build silently consumes.
+echo "🚧 Reconstructing tracked generated sources from clean (DS-X2)..."
+ds_generated_rc=0
+ds_generated_out=$("$DS_GUARD_PY" tools/generated_source_contract.py \
+    check --actual index 2>&1) || ds_generated_rc=$?
+if [ "$ds_generated_rc" -ne 0 ]; then
+    printf '%s\n' "$ds_generated_out"
+    echo ""
+    echo "❌ Generated-source reconstruction drift (DS-X2 / DS-P1.31)."
+    echo "   Regenerate and stage every affected family; a stale committed"
+    echo "   output is not evidence that a clean clone can rebuild it."
+    exit 1
+fi
+printf '%s\n' "$ds_generated_out"
+
+# DS-P2.106 / RTL-T2.286 — lint consumes this runtime-generated VHDL package
+# through sources.libraries, but the clean-index reconstruction above correctly
+# does not track or install runtime outputs. Materialize a lint-only design-ID
+# package before the outer RouteRTL hook invokes `rr lint`; the target-specific
+# pre_build/pre_sim hooks remain authoritative and overwrite it with the flavor
+# required by the actual build or simulation.
+echo "🚧 Materializing runtime REA build-ID package for lint (DS-P2.106)..."
+ds_build_id_rc=0
+ds_build_id_out=$("$DS_GUARD_PY" tools/hooks/run_sdk_generator.py rea-build-id \
+    --design-identity deepskopion \
+    --out generated/rr_rea_build_id_pkg.vhd 2>&1) || ds_build_id_rc=$?
+if [ "$ds_build_id_rc" -ne 0 ]; then
+    printf '%s\n' "$ds_build_id_out"
+    echo ""
+    echo "❌ Runtime REA build-ID generation failed (DS-P2.106 / RTL-T2.286)."
+    echo "   Lint would otherwise report a false unresolved-package closure."
+    exit 1
+fi
+printf '%s\n' "$ds_build_id_out"
+
+# DS-P2.231 — rom_info_pkg.vhd is a gitignored build output (pre_build
+# regbank-regen and pre_sim rom-info-sim write it), and `rr lint` runs no
+# hooks, so a fresh checkout would lint a tree without it. Same pattern as the
+# DS-P2.106 REA package above; build and sim hooks overwrite it.
+echo "🚧 Materializing rom_info_pkg.vhd for lint (DS-P2.231)..."
+ds_rom_info_rc=0
+ds_rom_info_out=$(PYTHON="$DS_GUARD_PY" bash tools/ci/materialize_lint_packages.sh 2>&1) \
+    || ds_rom_info_rc=$?
+if [ "$ds_rom_info_rc" -ne 0 ]; then
+    printf '%s\n' "$ds_rom_info_out"
+    echo ""
+    echo "❌ rom_info_pkg.vhd generation failed (DS-P2.231)."
+    echo "   Lint would otherwise report rom_info_pkg not found in library tich."
+    exit 1
+fi
+printf '%s\n' "$ds_rom_info_out"
+
+# ── DS-P3.187 — routertl.lock stays in step with the tree ──
+#
+# The lock went 12 days stale (written on 5.1.0, ten differences) because no leg
+# ran `rr lock --check`. tools/lock_check_leg.py runs it when the commit stages a
+# path the lock covers, and refuses when those paths carry unstaged changes,
+# since rr judges the working tree. About 8 s when it runs. Fails CLOSED.
+echo "🚧 Checking routertl.lock against the tree (DS-P3.187)..."
+ds_lock_rc=0
+ds_lock_out=$("$DS_GUARD_PY" tools/lock_check_leg.py 2>&1) || ds_lock_rc=$?
+if [ "$ds_lock_rc" -ne 0 ]; then
+    printf '%s\n' "$ds_lock_out"
+    echo ""
+    case "$ds_lock_rc" in
+        1)
+            echo "❌ routertl.lock is stale for this commit (DS-P3.187). Commit aborted."
+            echo "   Run 'rr lock --update', review the diff, and stage routertl.lock."
+            ;;
+        *)
+            echo "❌ GATE COULD NOT RUN: routertl.lock check (exit $ds_lock_rc)."
+            echo "   It never compared the lock, so this is NOT a finding about the"
+            echo "   staged files. Interpreter: $DS_GUARD_PY"
+            echo "   Commit aborted — a gate that cannot run is not a green gate."
+            ;;
+    esac
+    exit 1
+fi
+printf '%s\n' "$ds_lock_out"

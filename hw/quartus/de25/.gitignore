@@ -1,0 +1,8 @@
+# Quartus/Platform Designer working databases; frozen inputs remain tracked.
+/db/
+/dni/
+/incremental_db/
+/qdb/
+/*.qpf
+/*.qsf
+/*.qws

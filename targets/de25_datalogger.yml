@@ -1,0 +1,741 @@
+# targets/de25_datalogger.yml — proposed by DE-P0; created by DE-H0/DE-L0.
+project:
+  name: deepskopion
+  top_module: deepskopion_de25_top
+  output_dir: build/de25_datalogger
+# DS-P1.72: application clock contracts. clk_ddr is intentionally the same
+# physical 100 MHz PLL product as clk_sys in this target; reg_clk is the Intel
+# JTAG/TCK domain reported by STA.
+# RTL-P1.175 is closed: the board master.sdc clock guards use get_ports -nowarn.
+synthesis:
+  fail_on_unmatched_constraints: true
+implementation:
+  fail_on_unmatched_constraints: true
+declared_clocks:
+  - name: CLOCK2_50
+    freq_hz: 50000000
+    assert_drift: false
+  - name: clk_sys
+    freq_hz: 100000000
+    assert_drift: false
+  - name: clk_ddr
+    freq_hz: 100000000
+    assert_drift: false
+  - name: reg_clk
+    freq_hz: 33333333
+    assert_drift: false
+cdc:
+  # Measured Yosys elaboration time on deepskopion_de25_top: 1778.15s (~29.6m).
+  # Timeout configured with headroom (DS-P3.174).
+  elaborate_timeout_s: 2400
+hardware:
+  vendor: altera
+  part: A5ED013BB32AE4SCS        # pending DE-B0 physical verification — see §5.2
+  language: vhdl
+  platform: de25-standard
+  platform_strict: true
+  tool: quartus_pro
+  tool_path: /opt/altera_pro/25.3
+  tool_version: '25.3'
+  idcode: '0x4364C0DD'           # read from the live chain 2026-08-21 (bench hw.yml)
+  # DE-B0: the committed board-pinout subscription — every port of
+  # `deepskopion_de25_top`, exhaustively (guarded by
+  # `tools/tests/test_de25_pinout_contract.py::test_every_top_port_is_subscribed`).
+  # This is EXPLICIT-mode `hardware.pins` (rr resolves each entry against
+  # boards/de25-standard's registry and raises if one doesn't exist), kept
+  # deliberately exhaustive rather than switching to inferred subscription:
+  # LEDR and GPIO_D are listed per-bit because the board registry carries
+  # more bits (LEDR[0..9], GPIO_D[0..35]) than this top exposes (LEDR[3:0],
+  # GPIO_D[15:0]) — a bare bus name would over-subscribe and hand the
+  # Assembler location assignments for ports that don't exist, the same
+  # failure class this ticket fixes in reverse. Every other vector port's
+  # top width matches the board's exactly, so the bare bus name expands
+  # cleanly. Before this list covered only LEDR/GPIO_D/CLOCK2_50 (21
+  # entries): the DDR4_*/HPS_* conduit ports DE-H0 added were real
+  # instantiated top ports that never got subscribed, so they never got a
+  # location/IO-standard assignment — the Assembler's Critical Warning
+  # 25196 class ("user pins missing pin location assignments").
+  #
+  # CLOCK0_50 is a new port (see deepskopion_de25_top.vhd): boards/
+  # de25-standard's master.sdc unconditionally `create_clock`s all three
+  # board oscillators, and a name with no matching port is the Critical
+  # Warning 25207 class ("pins have missing I/O Standard assignments") —
+  # reproduced empirically (job 379d436b345f) with CLOCK0_50/CLOCK1_50
+  # present as ports but unsubscribed. CLOCK1_50 is deliberately NOT added
+  # as a port.
+  #
+  # DS-P3.143 ran the DE-P0 §5.2 schematic cross-check this exclusion was
+  # waiting on: the DE25-Standard revD User Manual's Table 3-9 confirms
+  # CLOCK1_50 = PIN_D8, 1.8V verbatim, matching the registry exactly — so
+  # D8/LVCMOS18 was never a bad guess, it is the real, unique, fixed PCB
+  # trace for this signal (there is no alternate location to "re-derive" to).
+  # That does not change the Fitter outcome: re-queued after the DE-F0
+  # fitter cure (v13.0.0 agilex_hps.ip regen + f2sdram R-channel keep-alive
+  # sink, RTL-P3.737) to test whether that cure had incidentally freed up
+  # the conflicting region, job a68149b2dab5 reproduced the EXACT SAME
+  # "Error (175020): The Fitter cannot place logic pin in region (108, 53)
+  # ... no valid locations ... that supports the 1.8-V standard" as the
+  # original job 3d510c77d9bd — same region, same pin (D8), same error. This
+  # design's real HPS DDR4 EMIF permanently and reproducibly occupies that
+  # I/O bank's 1.2-V VCCIO on this SKU; CLOCK1_50's confirmed-correct pin has
+  # no room in the fit while the EMIF is present. Leaving CLOCK1_50 out of
+  # the top lets its `create_clock` target nothing — confirmed harmless
+  # here: the queued build (job 143337099b45) reaches Assembler 0 errors/0
+  # warnings and "Timing requirements were met" with CLOCK0_50 bound and
+  # CLOCK1_50 absent.
+  pins:
+  - CLOCK2_50
+  - CLOCK0_50
+  - LEDR[3]
+  - LEDR[2]
+  - LEDR[1]
+  - LEDR[0]
+  - DDR4_CKE
+  - DDR4_ODT
+  - DDR4_CS_n
+  - DDR4_A
+  - DDR4_BA
+  - DDR4_BG
+  - DDR4_ACT_n
+  - DDR4_PAR
+  - DDR4_DQ
+  - DDR4_DQS
+  - DDR4_DQS_n
+  - DDR4_DBI_n
+  - DDR4_ALERT_n
+  - DDR4_CK
+  - DDR4_CK_n
+  - DDR4_RESET_n
+  - DDR4_RZQ
+  - DDR4_REFCLK_p
+  - HPS_CLK_25
+  - HPS_SD_CLK
+  - HPS_SD_CMD
+  - HPS_SD_DATA
+  - HPS_UART_TX
+  - HPS_UART_RX
+  - HPS_ENET_MDC
+  - HPS_ENET_MDIO
+  - HPS_ENET_RX_CLK
+  - HPS_ENET_RX_CTL
+  - HPS_ENET_RX_DATA
+  - HPS_ENET_TX_CLK
+  - HPS_ENET_TX_CTL
+  - HPS_ENET_TX_DATA
+  - HPS_USB_CLK
+  - HPS_USB_STP
+  - HPS_USB_DIR
+  - HPS_USB_NXT
+  - HPS_USB_DATA
+  - HPS_I2C_SCL
+  - HPS_I2C_SDA
+  - HPS_LCM_SPIM_CLK
+  - HPS_LCM_SPIM_MOSI
+  - HPS_LCM_SPIM_SS
+  - HPS_LCM_D_C
+  - HPS_GPIO
+  - HPS_LCM_RST_n
+  - HPS_LCM_BK
+  - HPS_KEY
+  - HPS_LED
+  - HPS_GSENSOR_INT
+  - GPIO_D[15]
+  - GPIO_D[14]
+  - GPIO_D[13]
+  - GPIO_D[12]
+  - GPIO_D[11]
+  - GPIO_D[10]
+  - GPIO_D[9]
+  - GPIO_D[8]
+  - GPIO_D[7]
+  - GPIO_D[6]
+  - GPIO_D[5]
+  - GPIO_D[4]
+  - GPIO_D[3]
+  - GPIO_D[2]
+  - GPIO_D[1]
+  - GPIO_D[0]
+simulation:
+  test_dir: hw/sim/cocotb/tests
+  waves_dir: hw/sim/waves
+  logs_dir: hw/sim/logs
+  simulator: nvc
+  tags:
+    de25_baseline:
+    # identical membership to canfd_demo's xilinx_baseline — the tag exists
+    # so DE-R0/DE-H0 can run "the same baseline, resolved for altera" and
+    # diff results test-by-test against the Xilinx record.
+    - test_i2c_datalogger
+    - test_uart_precommit
+    - test_qspi_capture
+    - test_jtag_datalogger
+    - test_can_datalogger
+    - test_edge_datalogger
+    - test_datalogger_gather
+    - test_datalogger_gather_crossproto
+    - test_datalogger_gather_i2c
+    - test_datalogger_gather_i2c_dual
+    - test_datalogger_gather_uart
+    - test_datalogger_gather_spi
+    - test_datalogger_gather_jtag
+    - test_datalogger_gather_edge
+    - test_demo_axilite_bfm_conformance
+    - test_regbank_datalogger_config_seam
+    - test_zs_msg_framer
+    - test_framer_axistream_conformance
+    - test_arbiter
+    - test_error_event_bank
+    - test_error_event_emitter
+    - test_emit_framer_integration
+    - test_datalogger_to_ddr
+    # DS-P2.100 landing-review (fourth pass) Finding 4: the 9 shard tests'
+    # docstrings documented "rr sim tag stimulus_gen_loop" as the batch
+    # invocation before this tag existed anywhere in targets/ or
+    # project.yml (grep empty) — and the CLI flag is actually `--tag`, not
+    # a `tag` subcommand (sdk/cli/commands/sim.py: `--tag`/_run_tag()).
+    # Each member below runs as its own `_run_sim_direct()` call — its own
+    # nvc/cocotb session — so this does NOT reintroduce the multi-
+    # @cocotb.test()-per-session hang Finding A split away from; verified
+    # by actually running `rr sim --tag stimulus_gen_loop` to completion.
+    # DS-P2.110 landing-review (auto-revise): the product-geometry write-path
+    # guard MUST live in a tag so it runs as a batch, not only as a hand-typed
+    # `rr sim run`. It is DELIBERATELY its own DE25-specific tag and NOT a
+    # member of de25_baseline: that tag is equality-pinned to canfd_demo's
+    # xilinx_baseline (tools/tests/test_de25_core_baseline_contract.py:79), and
+    # this test is DE25-only (256-bit f2sdram, base 0xA0000000) so it does not
+    # belong in the shared Xilinx set. tools/tests/test_tb_datalogger_ddr_base_
+    # generic_guard.py pins this membership so the guard cannot silently drift
+    # out of the batch again. Runs as its own `_run_sim_direct()` session.
+    de25_product_geometry:
+    - test_datalogger_to_ddr_product_base
+    stimulus_gen_loop:
+    - test_stimulus_uart_frame
+    - test_stimulus_uart_idle
+    - test_stimulus_uart_drop_write
+    - test_stimulus_i2c_ack
+    - test_stimulus_i2c_nack
+    - test_stimulus_spi
+    - test_stimulus_edge_period
+    - test_stimulus_edge_canonical
+    - test_stimulus_edge_disabled
+    - test_stimulus_edge_muxsel
+paths:
+  sources:
+  - hw/rtl
+  - libs
+  # DS-T2.75: the build-flow-GENERATED design-identity package
+  # (generated/rr_rea_build_id_pkg.vhd) must be DISCOVERABLE by the dependency
+  # resolver — rr_rea_regbank now `use`s it to surface C_REA_BUILD_ID at the
+  # BUILD_ID register (0xD4). Without generated/ on the source path the resolver
+  # cannot attribute the package and the closure preflight fails for BOTH synth
+  # and sim (sources.libraries only pins a file's LIBRARY, it does not add an
+  # out-of-tree file to the discovered set). The file is regenerated before
+  # every build (pre_build rr_rea_build_id hook) and every sim (pre_sim
+  # rr_rea_build_id_sim hook below), so it is present in a fresh clone / CI lane.
+  - generated
+  simulation: hw/sim
+  # DS-T1.15: the DE25 (Quartus) target owns a QUARTUS-ONLY constraints dir.
+  # paths.constraints AUTO-DISCOVERS every *.sdc under the dir, so a flat
+  # hw/sdc/ shared with the PolarFire SoC (Libero/Synplify) targets leaked
+  # pfsoc_timing.sdc / pfsoc_ka_timing.sdc — which use Vivado/Synplify
+  # `get_cells -hierarchical -filter {...}` syntax Quartus Pro's read_sdc
+  # rejects ("Unknown option: -filter" → Read_sdc failed → Fitter failed) —
+  # into this build. That broke the DE25 bitstream fit on main the moment the
+  # PF-H0/PF-T9 pfsoc SDCs landed (DS-P2.124/132), independent of any CAN work.
+  # Scoping the dir to hw/sdc/de25 (de25_timing.sdc uses Quartus get_registers)
+  # fixes it in both directions and cannot be re-contaminated by a new pfsoc
+  # SDC dropped in hw/sdc/. Guarded by tools/tests/test_de25_sdc_scope_ds_t1_15.py.
+  constraints: hw/sdc/de25
+  verification: hw/verif
+sources:
+  # DS-P1.88: deepskopion_core's regbank ROMs read these at elaboration (VHDL
+  # textio, sized from the files, DS-P1.82), so they key the build cache.
+  # Staging them into the tool's run directory is rr's job (RTL-P1.297).
+  data:
+  - hw/rtl/regbank/regbank_schema.hex
+  - hw/rtl/regbank/config_schema.hex
+  # DS-P2.155 / RTL-P2.2101: the fabric IOPLL (CLOCK2_50 x2 -> 100 MHz clk_sys)
+  # is declared in ip.yml vendor_ip_variants; rr generates it and adds its .qip
+  # to IP_FILES, so no ip: entry is listed here.
+  sdc:
+  # DS-T1.19: package-owned REA JTAG constraints ordered before de25_timing.sdc
+  # so altera_reserved_tck is created before de25_timing.sdc cuts HPS JTAG CDC paths.
+  - libs/routertl/rea/constraints/rr_rea_scoped.sdc
+  - hw/sdc/de25/de25_timing.sdc  # DS-T10 CDC set_max_delay re-derived for Quartus
+  libraries:
+    ctu_can_fd_rtl:
+    - tools/sim/vendor_stubs/ctu_can_fd/can_top_apb_stub.vhd
+  library_precedence:
+    olo:
+      authoritative: libs/open-logic/olo_base_fifo_sync/
+      suppress: libs/open-logic/olo_base_fifo_async/
+build_options:
+  tool_version: '25.3.1'         # BOM/lock provenance tag (patch level in §5.1)
+# DS-P1.45 (DE-G0): what this build ACTUALLY costs, so rr's admission gate
+# judges it on a measurement instead of on a table guess.
+#
+# Without these, `eda_peak_estimate_mb` has no measurement for a `large` part
+# and returns the class-scaled default — 27000 MB for `fit` against a peak this
+# build has never exceeded 6.0 GB reaching. On the 128 GB bench that guess is
+# merely wasteful; on the 16 GB off-bench rehearsal host it is the difference
+# between "runs" and "impossible", and the override rr prints when it refuses
+# (RR_ALLOW_CONCURRENT=1) disables the whole gate — count and memory, every
+# stage. A wrong number is a reason to fix the number, not to stop counting.
+#
+# Values are peak PROCESS RSS (`[monitor] DONE … peak_proc`, rr's own
+# instrumentation) plus 1024 MB of revision headroom, measured off-bench on
+# 2026-08-30 by the Record N build that produced the SOF the DE-G0 hardware leg
+# programmed: Quartus Prime Pro 26.1.0 Build 110, A5ED013BB32AE4SCS, syn
+# 10.2 GB/102 s, fit 6.0 GB/403 s, bitstream 3.8 GB/43 s. They are a property
+# of this DESIGN on this DEVICE, not of the host that measured them, which is
+# why they belong here and the host-scoped knobs do not — see
+# tools/golden_path/deg0_memory_policy.py, and
+# tools/golden_path/tests/test_deg0_memory_policy.py, which fails if this block
+# and that module's measurements ever drift apart.
+eda_memory:
+  peaks:
+    quartus_sh:
+      syn: 11469
+      fit: 7168
+      bitstream: 4915
+features:
+  regbank: true
+system_config: tools/datalogger-builder/config/datalogger_config.yml
+auto_sources: true
+hooks:
+  pre_commit:
+    enabled: true
+    lint: true
+    check_yaml: true
+    check_docs: true
+    tests: []
+    exclude:
+      lint:
+      - hw/rtl/datalogger/infra/datalogger_gather/datalogger_gather.vhd
+      tests: []
+  pre_sim:
+  # DS-P2.231: rom_info_pkg.vhd is a gitignored build output; a fresh clone has
+  # none until a hook writes it. Sims list it as a source, so generate it here
+  # from the tracked regbank memory images (pre_build regbank-regen does the
+  # full regeneration before synth).
+  - name: rom-info-sim
+    script: tools/regen_regbank.sh
+    args:
+    - --rom-info-only
+    - --output-dir
+    - hw/rtl/pkg
+    - --regbank-dir
+    - hw/rtl/regbank
+    - --library
+    - tich
+    idempotent_outputs: true
+    expected_outputs:
+    - hw/rtl/pkg/rom_info_pkg.vhd
+  # DS-T2.75: regenerate the design-identity BUILD_ID package before sim, exactly
+  # as the pre_build hook does before synth. rr_rea_regbank `use`s it (0xD4 =
+  # C_REA_BUILD_ID), and it is gitignored, so a fresh clone / CI lane has no copy
+  # until this runs — without it the closure preflight fails "rr_rea_build_id_pkg
+  # not found in library tich". No --sidecar here: the sidecar is a bitstream
+  # readback artefact (build/.../bitstream/), irrelevant to and absent during sim.
+  - name: rr_rea_build_id_sim
+    script: tools/hooks/run_sdk_generator.py
+    args:
+    - rea-build-id
+    - --design-identity
+    - deepskopion
+    - --out
+    - generated/rr_rea_build_id_pkg.vhd
+    idempotent_outputs: true
+    expected_outputs:
+    - generated/rr_rea_build_id_pkg.vhd
+  - name: pre-sim-seed-libs
+    script: tools/sim/pre_sim_seed_libs.py
+    args: []
+  pre_build:
+  # golden-path-preflight (tools/preflight/ds_preflight.py) is deliberately
+  # NOT wired here: its single committed declaration
+  # (tools/preflight/supported_environment.yml) is the Xilinx/Zybo golden
+  # path and explicitly lists "Altera / DE25" under `unsupported` (DS-E0).
+  # Every one of its board/tool_version/traffic_source checks is judged
+  # against Zynq/Vivado-2024.1/PS-CAN facts that this target can never
+  # satisfy, at any host — wiring it here would make every de25_datalogger
+  # build fail closed unconditionally, not gate a real prerequisite. A DE25
+  # supported-environment declaration is DE-G0's job (DE-P0 §5.1, "named in
+  # docs/SUPPORTED_ENVIRONMENT.md by DE-G0"); until it exists this target
+  # carries no preflight hook rather than a permanently-failing one.
+  - name: rr_rea_build_id
+    script: tools/hooks/run_sdk_generator.py
+    # DS-T2.75: stamp the commit+target DESIGN IDENTITY into BUILD_ID (0xD4),
+    # NOT the REA source-hash. The old `--ip-yml libs/local/rr_rea/ip.yml` mode
+    # baked `compute_rea_build_id_declared` = the REA source-tree hash
+    # (0x9406F737) — a CONSTANT across every design on this REA fork version
+    # (the "design hash is insufficient" trap, Haz.165 shape). `rr hw bit-sha`
+    # (sdk/engine/bit_sha.py:expected_rea_build_id) instead expects the
+    # vendor-neutral `identity_usr_access(git HEAD, project.name)` — the SAME
+    # stamp the Xilinx leg bakes into USR_ACCESS — so the source-hash could NEVER
+    # match and a REA readback was doomed to MISMATCH → UNCONFIRMED, blocking
+    # DS-P1.44 clause 1 / DS-P1.59 clause 1.
+    #
+    # The project.name argument is `deepskopion`, NOT the target stem
+    # `de25_datalogger`: `rr hw bit-sha` resolves `name = project.name`
+    # (sdk/cli/commands/hw.py) and computes BOTH the expected git-head identity
+    # AND the `<name>.rea_build_id` sidecar filename from it. Stamping the target
+    # stem would only self-match via the sidecar and MISMATCH the git-head
+    # fallback (measured: deepskopion→0x3551f7f0 vs de25_datalogger→0x36a21337); the
+    # documented expected value 0xe318b8ce IS the deepskopion identity. The
+    # sidecar therefore also lands at `<output_dir>/bitstream/deepskopion.rea_build_id`,
+    # exactly where `expected_rea_build_id` reads it at readback time.
+    args:
+    - rea-build-id
+    - --design-identity
+    - deepskopion
+    - --sidecar
+    - build/de25_datalogger/bitstream/deepskopion.rea_build_id
+    - --out
+    - generated/rr_rea_build_id_pkg.vhd
+    # No `watch:` — the design identity is derived from the git HEAD + project
+    # name, NOT from the REA .vhd sources, so a watch keyed on those files would
+    # SKIP regeneration when HEAD moves and stale the stamp. The generator is a
+    # sub-second pure hash and write-if-changed, so running it every build is
+    # cheap and keeps BUILD_ID + sidecar tracking the actual commit.
+    idempotent_outputs: true
+    expected_outputs:
+    - generated/rr_rea_build_id_pkg.vhd
+  - name: datalogger-builder
+    script: tools/datalogger-builder/datalogger_gather_gen.py
+    args:
+    - tools/datalogger-builder/config/datalogger_config.yml
+    - --pkg-dir
+    - hw/rtl/pkg
+    - --rtl-dir
+    - hw/rtl/datalogger/infra/datalogger_gather
+    - --regbank-dir
+    - hw/rtl/regbank
+    idempotent_outputs: true
+    expected_outputs:
+    - hw/rtl/pkg/datalogger_config_pkg.vhd
+    - hw/rtl/datalogger/infra/datalogger_gather/datalogger_gather.vhd
+    - hw/rtl/regbank/config_schema.hex
+  - name: regbank-regen
+    script: tools/regen_regbank.sh
+    args:
+    - --output-dir
+    - hw/rtl/pkg
+    - --regbank-dir
+    - hw/rtl/regbank
+    - --library
+    - tich
+    idempotent_outputs: true
+    expected_outputs:
+    - hw/rtl/pkg/rom_info_pkg.vhd
+    - hw/rtl/pkg/system_regbank_pkg.vhd
+    - hw/rtl/regbank/regbank_schema.bin
+    - hw/rtl/regbank/regbank_schema.hex
+    - hw/rtl/regbank/system_regbank.vhd
+# DS-P2.231: no lock.exclude for hw/rtl/pkg/rom_info_pkg.vhd any more — the
+# file is gitignored, and routertl.lock leaves gitignored files out (RTL-P2.2095).
+tcl_hooks:
+  gen_project:
+  - hw/quartus/de25/de25_project_options.tcl  # rr 4.8.1 Altera hook dispatcher
+                                          # DS-P1.52: the HPS/io96b subsystem
+                                          # used to be generated by a second
+                                          # entry here (de25_hps_subsys.tcl,
+                                          # add_component-by-file qsys-script)
+                                          # — retired; it produced a fit that
+                                          # passed 0 errors/0 warnings but
+                                          # still had NO real HPS partition
+                                          # (quartus_pfg Error 20809). The HPS
+                                          # is now declared in the project-root
+                                          # ip.yml (`hps_regenerate: true`) and
+                                          # generated by rr's own pre-synth HPS
+                                          # generator, not by a tcl hook.
+  synthesis:
+  - hw/quartus/de25/de25_project_options.tcl         # DE-F0 (DS-P1.42): `tcl_hooks.
+                                                      # gen_project` (above) is documented
+                                                      # by `rr schema` but the installed
+                                                      # SDK (4.8.1) never threads it into
+                                                      # gen_project.tcl's tcl_files for the
+                                                      # bitstream/queue flow — a `--force`
+                                                      # build's own gen_project.tcl
+                                                      # invocation logs confirm an EMPTY
+                                                      # tcl_files arg, so this hook's
+                                                      # DEVICE_INITIALIZATION_CLOCK
+                                                      # assignment was never applied there.
+                                                      # `tcl_hooks.synthesis` IS reliably
+                                                      # sourced (via a separate
+                                                      # g_synthesis_hooks path in
+                                                      # gen_synthesis.tcl) for this flow, so
+                                                      # re-list the SAME hook here as the
+                                                      # working channel; gen_project's own
+                                                      # copy stays for when the upstream gap
+                                                      # closes. (DS-P1.52: this hook no
+                                                      # longer also generates the HPS
+                                                      # subsystem — that moved to the
+                                                      # project-root ip.yml + rr's native
+                                                      # pre-synth HPS generator.)
+  - hw/quartus/de25/stage_regbank_roms_pre.tcl       # DE-F0: clone-relative
+                                                      # ROM hex I/O, Quartus's
+                                                      # run-dir Vivado analogue
+                                                      # (hw/bd/stage_regbank_roms_pre.tcl)
+  - hw/quartus/de25/de25_exclude_vendor_mismatch.tcl # DE-F0: rr_rea_jtag_xilinx7
+                                                      # exclusion + GEN_XPM
+                                                      # binder stubs (DE-R0 gap,
+                                                      # see the hook's own header)
+  # DS-T1.22: make Quartus Design Assistant CDC findings blocking and preserve
+  # the signoff DRC report as launch timing/CDC evidence.
+  post_implementation:
+  - hw/quartus/de25/ds_drc_evidence_impl.tcl
+linux:
+  # DS-P1.53 (revised): rr's _find_project_sof only accepts a .sof whose
+  # STEM matches the active target identity (output_dir basename
+  # "de25_datalogger" / target stem "de25_datalogger") — see
+  # sdk/cli/commands/linux_steps/_socfpga.py. This project's bitstream is
+  # named after project.name ("deepskopion"), not the target, so the
+  # auto-match misses.
+  #
+  # A first attempt pointed sof_path straight at the Quartus-named
+  # artifact (build/de25_datalogger/bitstream/deepskopion.sof). That made
+  # `rr linux sof` succeed, but `run_socfpga_sof_hps` writes
+  # `out/{sof.stem}_hps.sof`, so the bootable output was
+  # `deepskopion_hps.sof` — not the `de25_datalogger_hps.sof` this ticket's
+  # close artifact and tools/de25_linux_image.py's SOF_HPS_ARTIFACT both
+  # require. Landing was refused on that basename split.
+  #
+  # Fix: point sof_path at a target-identity-STEMMED copy that
+  # tools/de25_linux_image.py stages (see _stage_target_stem_sof) from the
+  # real Quartus output right before `rr linux sof` runs. That makes
+  # `sof.stem` == "de25_datalogger", so the HPS-bootable output rr writes is
+  # exactly "de25_datalogger_hps.sof" — one name end-to-end, pinned by
+  # tools/tests/test_de25_hps_sof_artifact_name_p1_53.py.
+  sof_path: build/de25_datalogger/bitstream/de25_datalogger.sof
+  # The Agilex-5 boot chain is version-coupled: ATF, U-Boot and Linux all use
+  # this GSRD release.  HEAD is not a reproducible boot input.
+  gsrd_version: '25.3'
+  # DS-P1.55: the kernel is pinned SEPARATELY from the GSRD tag, to the
+  # silicon-proven tree. Measured 2026-08-23 A/B on DE25 silicon (boot4/5/6
+  # transcripts): with identical de25_datalogger_hps.sof, identical u-boot.itb
+  # and identical card layout, the Image+dtb built from the GSRD-25.3 kernel
+  # tag (QPDS25.3_REL_GSRD_PR = linux 6.12.33, commit 3234b1ed8 — the tag
+  # gsrd_version above resolves to) die BEFORE earlycon prints, even with
+  # proven bootargs sourced by hand; swapping ONLY the kernel trio for the
+  # rr-ddr-stream de25_agilex5_ddr_validator's set — built from
+  # altera-opensource/linux-socfpga tag rel_socfpga-6.18.2-lts_26.04.01_pr
+  # (linux 6.18.2-lts, commit be94a41df) — boots to a shell in 1.5 s. ATF and
+  # U-Boot stay on QPDS25.3_REL_GSRD_PR (the proven boot used this exact
+  # u-boot.itb). kernel_branch outranks the GSRD tag in rr's kernel step
+  # (run_socfpga_kernel, sdk/cli/commands/linux_steps/_socfpga.py — an
+  # explicit linux.kernel_branch wins over resolve_gsrd_tag(); verified in
+  # the installed 4.8.1 editable SDK. The key is consumed by the code but
+  # missing from `rr schema` — an rr docs gap, not a guessed key).
+  # The board DTB is built from this same tree (kernel `dtbs` target), so
+  # this one pin swaps BOTH halves of the convicted Image+dtb pair.
+  kernel_branch: rel_socfpga-6.18.2-lts_26.04.01_pr
+  hps_fpga_bridges: all
+  # UART1 is the only DE25 HPS UART routed to USB.  Linux owns the lower 512 MiB
+  # of DDR; /reserved-memory below owns the 256 MiB fabric ring above it.
+  # ds_mmio_base and ds_clk_hz are consumed by the staged init script, keeping
+  # the daemon's vendor-specific CSR address and 100 MHz fabric clock
+  # declarative instead of hard-coded in Python or the shared rootfs overlay.
+  # DS-P2.155: ds_clk_hz is now 100000000 — clk_sys is the CLOCK2_50 x2 IOPLL
+  # product (10 ns/tick), matching the DTB deepskopion-clk clock-frequency and
+  # the RTL G_SYS_CLK_HZ. At the old 50000000 the daemon reconstructed every
+  # UART/EDGE timestamp at 20 ns/tick — 2x wrong against the 100 MHz silicon.
+  # DS-P1.55: two bootargs classes were missing.
+  #   • root=/dev/mmcblk0p2 rootwait rw — sdcard.rootfs below is `partition`
+  #     (P2 ext4), but the old cmdline named NO root device at all, so even a
+  #     live kernel could never have mounted the rootfs and reached a shell.
+  #     rootwait covers slow SD probe ordering.
+  #   • nosmp kvm-arm.mode=nvhe — parity with the silicon-proven validator
+  #     cmdline (rr-ddr-stream de25_agilex5_ddr_validator, boot6 transcript;
+  #     nosmp is the Intel GSRD bring-up default for the Agilex 5 A55+A76
+  #     cluster). The A/B did not isolate these as the mute-death cause
+  #     (boot4/5 died with the proven cmdline too), but "built like the
+  #     validator's" means shipping the proven set, not a novel subset.
+  # DS-D.39: S40network consumes ds_ip= (not bench_ip=), but the address is
+  # deployment identity and must not live in this public target.  The DE25
+  # image wrapper resolves de25_bench's bench_ip resource and prefix from the
+  # deployment's runtimes/hw.local.yml, then passes the composed command line to
+  # `rr linux dtb --bootargs` so the shipped DTB still carries the token.
+  # DS-P2.98: init=/init is REQUIRED on this target. DE25 boots straight to
+  # its real disk root (boot.cmd's `booti ${kernel_addr_r} - ${fdt_addr_r}` —
+  # the "-" is an explicit no-initrd), so the kernel's `rdinit=/init` default
+  # never applies (that only fires for an initrd) and with no `init=` on the
+  # cmdline the kernel falls back to its bare search order, which finds
+  # /sbin/init -> busybox BEFORE ever trying the deepskopion overlay's /init
+  # at the root. busybox then runs the stock /etc/inittab (mount + respawn
+  # /bin/sh) instead of the overlay /init's boot chain, so /etc/init.d/S* —
+  # S40network (ds_ip), S99deepskopion-stream — NEVER RUNS on a cold boot.
+  # Measured on silicon 2026-08-25 (DS-P2.98): three clean cold boots with
+  # ds_ip= already in bootargs all landed at a bare shell with eth0 down and
+  # no deepskopion-stream process; /etc/init.d/S40network run BY HAND at the
+  # console then worked immediately, proving the script logic was fine and
+  # the boot-chain wiring was the defect. Zynq targets (classic_eye,
+  # canfd_demo) don't need this token because their boot uses a real initrd,
+  # where the kernel's rdinit default already finds /init.
+  bootargs: "console=ttyS1,115200 earlycon=uart8250,mmio32,0x10c02100,115200n8 root=/dev/mmcblk0p2 rootwait rw nosmp kvm-arm.mode=nvhe mem=512M uio_pdrv_genirq.of_id=generic-uio ds_source=ddr ds_ring_word_bytes=32 ds_mmio_base=0x20000000 ds_clk_hz=100000000 init=/init"
+  # FPGA-first is the DE25 flow proven by the HPS shell: the SD payload carries
+  # no core.rbf and U-Boot must not try to reconfigure the live fabric.
+  # rootfs: partition emits a real P2 ext4 rootfs partition instead of the
+  # embedded-initramfs default (routertl _ROOTFS_MODE_DEFAULT) — matching the
+  # proven rr-ddr-stream de25_agilex5_ddr_validator BENCH_RUNBOOK.md CHILD-1
+  # step 4 recipe ("... in the boot partition + rootfs"). The prior single
+  # 256 MiB FAT32-only sdcard.img (embedded-initramfs) is what DS-P1.49
+  # measured cold-booting to total UART silence on real hardware; there is no
+  # type-A2 raw partition in either layout on this Agilex 5 / SDM chain — the
+  # SDM boots from FAT files, not a BootROM+A2 raw loader area (routertl
+  # sdk/cli/commands/linux_steps/_socfpga.py SocfpgaSdLayout, RTL-P2.668).
+  sdcard:
+    config_order: fpga-first
+    rootfs: partition
+    # The staged rootfs (busybox + the AArch64 Python/msgpack overlay, ~1150
+    # files) does not fit the SocfpgaSdLayout 256 MiB ext4 default — measured
+    # directly: mke2fs -d failed "Could not allocate block" at 256 MiB.
+    # 0 = autosize to contents + headroom (rootfs_headroom_mib default 64).
+    rootfs_mib: 0
+  rootfs:
+    # The project stage command pins/checksums python-build-standalone for
+    # AArch64.  RouteRTL 4.8.1's socfpga arch is spelled "arm64" while its
+    # auto-Python gate accepts only "aarch64", so the declarative explicit
+    # overlay is required until that SDK spelling defect is fixed.
+    python_overlay: sw/linux/de25/python_overlay
+    stage_command: ./sw/linux/stage_daemon.sh && python3 tools/de25_linux_image.py stage
+  kernel_config_fragments:
+  - sw/linux/de25/kernel_de25.config-fragment
+  # The SoCDK DT describes peripherals the DE25 HPS pinmux leaves dark.
+  dtb_disable_nodes:
+  - spi@108d2000
+  - ethernet@10830000
+  dt_nodes:
+  # Keep NAND out of dtb_disable_nodes: the kernel calls it
+  # nand-controller@10b80000 while U-Boot's control DT uses a different path,
+  # and the shared shorthand would emit an invalid U-Boot path reference.
+  - path: /soc@0/nand-controller@10b80000
+    properties:
+      status: disabled
+  - path: /reserved-memory/deepskopion-ring@a0000000
+    create: true
+    properties:
+      reg: [0, 0xA0000000, 0, 0x10000000]
+      no-map: ""
+  - path: /clocks/deepskopion-clk
+    create: true
+    properties:
+      compatible: fixed-clock
+      "#clock-cells": 0
+      clock-frequency: 100000000
+      phandle: 0x7F01
+  - path: /soc@0/ring-watermark@20000000
+    create: true
+    properties:
+      compatible: generic-uio
+      reg: [0x20000000, 0x1000]
+      interrupts: [0, 17, 4]
+      interrupt-names: ring-watermark
+  # DS-T2.71 re-enables these two nodes. The full arc, because the first
+  # root cause was wrong and the second is what actually kills a board:
+  #
+  # Measured 2026-08-23 (boot7/boot8 transcripts): with these nodes enabled
+  # the ctucanfd probe hung the kernel byte-reproducibly right after "CAN
+  # device driver interface", console dead, recoverable only by a cold power
+  # cycle. That was NOT a missing decode:
+  # u_demux decodes all three lwh2f apertures — CSR at 0x20000000, CAN0 at
+  # 0x20010000, CAN1 at 0x20020000
+  # (hw/rtl/de25/axil_demux3.vhd selects on awaddr(17 downto 16); only
+  # selector 3 / 0x20030000 is DECERR). DS-P1.56/DE-C0a read both CAN
+  # DEVICE_ID registers as 0xCAFD on silicon.
+  #
+  # DS-T1.7 settled the real mechanism, silicon-reproduced 2026-08-24:
+  # axil_demux3 asserted the upstream write response (s_bvalid_o)
+  # unconditionally in WR_RESP instead of gating it on the selected slave's
+  # own m_bvalid_i, so the FIRST WRITE to either CAN aperture deadlocked the
+  # lwh2f bridge — and the mainline driver probe writes registers, so it hit
+  # this immediately. Fixed in d2ee177 by gating s_bvalid_o on
+  # m_bvalid_i(wr_sel_r), mirroring the read path's existing gate.
+  #
+  # What DS-P3.144's interim `status: disabled` bought was time, not a fix.
+  # The lasting fix is that the build now REFUSES to emit a dtb whose enabled
+  # dt_node reg window is not declared in sw/linux/de25/system_memory_map.yml
+  # and decoded by the RTL — see check_lwh2f_dt_nodes_are_decoded() in
+  # tools/de25_linux_image.py, which build() runs before any `rr linux` step.
+  # These two nodes were enabled here BECAUSE that map declares canfd0 and
+  # canfd1; strip either declaration and the build stops, rather than the
+  # board.
+  #
+  # DS-P2.121: de25_datalogger is CAN-free by default; the CTU CAN nodes are
+  # omitted so the kernel does not attempt to probe them against stubbed registers.
+  #
+  # DS-T1.15 UNBLOCKED (does not reverse) this: the on-silicon boot hang that the
+  # DS-T1.11 interim guard was refusing enabled ctucanfd nodes around is now
+  # bounded by the axil_demux3 completion watchdog (wd_cycles_g=4096 in
+  # deepskopion_de25_top). The guard in tools/de25_linux_image.py is re-aimed
+  # from "no enabled ctucanfd node" to "an enabled ctucanfd node is allowed only
+  # when the fabric carries the watchdog", so a CAN opt-in DE25 target (the DE25
+  # analogue of canfd_demo) may now enable these nodes safely. This target stays
+  # CAN-free by DS-P2.121 product choice; the silicon witness that a from-head
+  # real-CTU + watchdog DE25 build boots the CAN-enabled dtb to userspace with
+  # can0/can1 up is recorded in the private measurement history.
+  # DE25 routes EMAC0 to a KSZ9031 strapped at MDIO address 1.  The SoCDK
+  # base instead enables EMAC2 and points EMAC0's existing phy node at 0.
+  - path: /soc@0/ethernet@10810000
+    properties:
+      status: okay
+      # rgmii-id was the June 2026 direct-cable verdict (rr-ddr-stream
+      # 04f2e3d). Through the bench switch it links at 1G but passes ZERO
+      # frames either way (boot13: ARP never learned host-side, ping 100%
+      # loss); a U-Boot in-RAM fdt sweep on 2026-08-23 (boot14) measured
+      # plain rgmii passing ping at <1ms RTT on the same path. The KSZ9031
+      # gets its delays from strap/defaults on this PCB; adding PHY delays
+      # on top over-delays the switch path.
+      phy-mode: rgmii
+  - path: /soc@0/ethernet@10810000/mdio0/ethernet-phy@0
+    properties:
+      reg: 1
+  # DS-P1.55: Linux-side SD vqmmc fix — the proven boot6 kernel still logged
+  # "mmc0: error -110 whilst initialising SD card", so the card was invisible
+  # to Linux (no mmcblk0). Same family as rr-ddr-stream commit 1143589 (the
+  # silicon-validated AXE5-Eagle U-Boot sd-vqmmc fix): the SoCDK base DTB's
+  # sd_io_1v8_reg (/soc@0/regulator-1p8v) is a regulator-gpio voltage SELECT
+  # with states <1v8→gpio=1, 3v3→gpio=0>; on this board family the gpio is
+  # effectively the SD I/O rail ENABLE and the card runs 3.3 V signalling —
+  # so when the mmc core requests 3.3 V, the stock mapping drives the gpio
+  # LOW, cuts the rail, and every SD command times out (-110). SPL/U-Boot
+  # read the same card fine because U-Boot's SPL never drives this gpio
+  # (rail stays at its pull-up default). Mirror the proven fix in the KERNEL
+  # DTB: pin min==max==3.3 V (regulator_autoset fires set_value at probe)
+  # and remap 3.3 V→gpio HIGH, boot-on/always-on, so the rail is driven HIGH
+  # at probe and held HIGH through SD init. The gpios property (portb 3) is
+  # left untouched from the base DTB.
+  - path: /soc@0/regulator-1p8v
+    properties:
+      regulator-min-microvolt: 3300000
+      regulator-max-microvolt: 3300000
+      states: [3300000, 1, 1800000, 0]
+      regulator-boot-on: ""
+      regulator-always-on: ""
+  # DS-T2.71 witness (boot11/boot12, 2026-08-23): with the rail pinned at
+  # 3.3 V above, the mmc core still attempted the UHS 1.8 V signalling
+  # switch (the SoCDK node advertises sd-uhs-sdr104) — "Switching to 1.8V
+  # signalling voltage failed" then -110. no-1-8-v makes sdhci discard the
+  # 1.8 V/UHS modes entirely; silicon-verified via a U-Boot in-RAM fdt
+  # patch: with it the card enumerates (mmcblk0/p1/p2) and the ext4 rootfs
+  # mounts from mmcblk0p2. The card runs high-speed 3.3 V — plenty.
+  - path: /soc@0/mmc0@10808000
+    properties:
+      no-1-8-v: ""
+memory_map: sw/linux/de25/system_memory_map.yml
+packages:
+  routertl/edge_counter: local
+  routertl/edge_detector: local
+  routertl/infilter: local
+  routertl/infilter_array: local
+  routertl/lfsr: local
+  routertl/phase_accumulator: local
+  routertl/ram_dual_port: local
+  routertl/ram_lut: local
+  open-logic/olo_base_fifo_sync: {version: ^4.4.1, library: olo}
+  open-logic/olo_base_fifo_async: {version: ^4.4.1, library: olo}
+  open-logic/olo_base_wconv_n2xn: {version: ^4.4.1, library: olo}
+  open-logic/olo_base_wconv_xn2n: {version: ^4.4.1, library: olo}
+  enclustra/en_cl_fix_resize: ^d2ce1a617bc8
+  routertl/rea: "==1.12.4"
+  routertl/rr_ddr_stream: {version: ^0.3.6, library: rr}

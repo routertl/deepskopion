@@ -1,0 +1,393 @@
+# =============================================================================
+# QSPI Datalogger Protocol Definition
+# Extracted from: hw/rtl/datalogger/qspi/qspi_datalogger.vhd
+# =============================================================================
+# This file defines the HW<->SW protocol for the QSPI datalogger module.
+# The message width is 32 bits total.
+# =============================================================================
+
+protocol:
+  name: qspi_datalogger
+  description: QSPI raw data datalogger protocol (supports SPI/Dual-SPI/Quad-SPI)
+  message_width: 32
+  version: "1.0"
+
+# =============================================================================
+# Identity — domain
+# =============================================================================
+# system_ids.yml is the source of truth for protocol domain codepoints.
+identity:
+  domain: 0x5
+  # qspi_datalogger also emits DOMAIN_SPI=0x3 in 4-pin mode; see system_ids.yml.
+
+# =============================================================================
+# Constants
+# =============================================================================
+constants:
+  # Widths
+  device_id_width: 5
+  timestamp_width: 16
+  event_code_width: 8
+  data_width: 8
+  shift_reg_width: 8
+
+  # Message types (3-bit, MSB of payload after device_id)
+  qspi_type_payload: 0b001    # Payload message type (Quad mode)
+  qspi_type_event: 0b100      # Event message type
+  qspi_type_error: 0b010      # Error message type
+  spi_type_payload_a: 0b001   # SPI/Dual payload type A (MOSI / IO0)
+  spi_type_payload_b: 0b010   # SPI/Dual payload type B (MISO / IO1)
+
+  # Event codes (8-bit)
+  events:
+    start: 0x03               # Datalogger enabled
+    stop: 0x00                # Datalogger disabled
+    cs_down: 0x09             # Chip select asserted (active low)
+    cs_up: 0x0A               # Chip select deasserted
+    cs_up_incomplete: 0x0B    # CS up before byte complete (padded)
+    timeout: 0x04             # SCLK timeout error
+    cs_down_new_pol_h: 0x10   # CS down with new polarity (CPOL=1)
+    cs_down_new_pol_l: 0x11   # CS down with new polarity (CPOL=0)
+
+  # Timing parameters
+  timeout_cycles: 100000000   # ~1 second at 100MHz (slowest QSPI ~1MHz)
+
+# =============================================================================
+# Message Formats
+# =============================================================================
+# All messages are 32-bit wide. The topmost 5 bits are always the device ID.
+# The remaining 27 bits define the message content.
+# =============================================================================
+
+messages:
+  # ---------------------------------------------------------------------------
+  # Event Message
+  # Sent for: CS transitions, enable/disable, timeout errors
+  # ---------------------------------------------------------------------------
+  - name: event
+    description: Event notification (CS up/down, start/stop, timeout)
+    type_code: 0b100
+    total_bits: 32
+    fields:
+      - name: device_id
+        bits: [31, 27]
+        width: 5
+        description: Datalogger device ID (from G_QSPI_DEV_ID generic)
+
+      - name: type
+        bits: [26, 24]
+        width: 3
+        value: 0b100
+        description: Message type indicator (always 0b100 for events)
+
+      - name: timestamp
+        bits: [23, 8]
+        width: 16
+        description: Low 16 bits of the global timestamp
+
+      - name: event_code
+        bits: [7, 0]
+        width: 8
+        description: |
+          Event type identifier:
+            0x03 = Start (datalogger enabled)
+            0x00 = Stop (datalogger disabled)
+            0x09 = CS Down (chip select asserted)
+            0x0A = CS Up (chip select released)
+            0x0B = CS Up Incomplete (byte padded)
+            0x04 = Timeout (SCLK stuck)
+            0x10 = CS Down with new polarity (CPOL=1)
+            0x11 = CS Down with new polarity (CPOL=0)
+
+  # ---------------------------------------------------------------------------
+  # Payload Message (Quad Mode: 4 data pins)
+  # Two packets per 8-bit sample: Payload A (IO0/IO1), Payload B (IO2/IO3)
+  # ---------------------------------------------------------------------------
+  - name: payload_quad_a
+    description: QSPI payload A (IO0 and IO1 data)
+    type_code: 0b001
+    condition: G_QSPI_PINS > 4 (Quad mode)
+    total_bits: 32
+    fields:
+      - name: device_id
+        bits: [31, 27]
+        width: 5
+        description: Datalogger device ID
+
+      - name: type
+        bits: [26, 24]
+        width: 3
+        value: 0b001
+        description: Payload type identifier
+
+      - name: reserved
+        bits: [23, 16]
+        width: 8
+        value: 0x00
+        description: Reserved byte
+
+      - name: data_io1
+        bits: [15, 8]
+        width: 8
+        description: 8-bit data from IO1
+
+      - name: data_io0
+        bits: [7, 0]
+        width: 8
+        description: 8-bit data from IO0
+
+  - name: payload_quad_b
+    description: QSPI payload B (IO2 and IO3 data)
+    type_code: 0b001
+    condition: G_QSPI_PINS > 4 (Quad mode)
+    total_bits: 32
+    fields:
+      - name: device_id
+        bits: [31, 27]
+        width: 5
+        description: Datalogger device ID
+
+      - name: type
+        bits: [26, 24]
+        width: 3
+        value: 0b001
+        description: Payload type identifier
+
+      - name: reserved
+        bits: [23, 16]
+        width: 8
+        value: 0x00
+        description: Reserved byte
+
+      - name: data_io3
+        bits: [15, 8]
+        width: 8
+        description: 8-bit data from IO3
+
+      - name: data_io2
+        bits: [7, 0]
+        width: 8
+        description: 8-bit data from IO2
+
+  # ---------------------------------------------------------------------------
+  # Payload Message (SPI/Dual Mode: 2 data pins)
+  # Single byte per message with timestamp
+  # ---------------------------------------------------------------------------
+  - name: payload_spi_a
+    description: SPI payload A (MOSI / IO0)
+    type_code: 0b001
+    condition: G_QSPI_PINS <= 4 (SPI/Dual mode)
+    total_bits: 32
+    fields:
+      - name: device_id
+        bits: [31, 27]
+        width: 5
+        description: Datalogger device ID
+
+      - name: type
+        bits: [26, 24]
+        width: 3
+        value: 0b001
+        description: Payload type A identifier
+
+      - name: timestamp
+        bits: [23, 8]
+        width: 16
+        description: Low 16 bits of the global timestamp
+
+      - name: data
+        bits: [7, 0]
+        width: 8
+        description: 8-bit data from IO0 (MOSI)
+
+  - name: payload_spi_b
+    description: SPI payload B (MISO / IO1)
+    type_code: 0b010
+    condition: G_QSPI_PINS <= 4 (SPI/Dual mode)
+    total_bits: 32
+    fields:
+      - name: device_id
+        bits: [31, 27]
+        width: 5
+        description: Datalogger device ID
+
+      - name: type
+        bits: [26, 24]
+        width: 3
+        value: 0b010
+        description: Payload type B identifier
+
+      - name: timestamp
+        bits: [23, 8]
+        width: 16
+        description: Low 16 bits of the global timestamp
+
+      - name: data
+        bits: [7, 0]
+        width: 8
+        description: 8-bit data from IO1 (MISO)
+
+  # ---------------------------------------------------------------------------
+  # Error Message
+  # Default/fallback packet
+  # ---------------------------------------------------------------------------
+  - name: error
+    description: Error or default packet
+    type_code: 0b010
+    total_bits: 32
+    fields:
+      - name: device_id
+        bits: [31, 27]
+        width: 5
+        description: Datalogger device ID
+
+      - name: type
+        bits: [26, 24]
+        width: 3
+        value: 0b010
+        description: Error type identifier
+
+      - name: reserved
+        bits: [23, 0]
+        width: 24
+        value: 0x000000
+        description: Reserved (all zeros)
+
+# =============================================================================
+# Configuration Register
+# =============================================================================
+config:
+  name: qspi_config
+  description: Configuration register for QSPI datalogger
+  width: 16  # G_CONFIG_WIDTH default
+  fields:
+    - name: device_id
+      bits: [15, 11]
+      width: 5
+      description: Target device ID (must match G_QSPI_DEV_ID to apply config)
+
+    - name: reserved
+      bits: [10, 4]
+      width: 7
+      description: Reserved for future use
+
+    - name: two_wires_mode
+      bits: [3, 3]
+      width: 1
+      description: |
+        2-wire mode enable:
+          0 = Disabled (normal SPI/QSPI)
+          1 = Enabled (only payload A sent)
+
+    - name: three_wires_mode
+      bits: [2, 2]
+      width: 1
+      description: |
+        3-wire mode enable:
+          0 = Disabled
+          1 = Enabled (only payload A sent)
+
+    - name: clock_phase
+      bits: [1, 1]
+      width: 1
+      description: |
+        SPI Clock Phase (CPHA):
+          0 = Sample on first edge
+          1 = Sample on second edge
+
+    - name: enable
+      bits: [0, 0]
+      width: 1
+      description: |
+        Datalogger enable bit:
+          0 = Disabled
+          1 = Enabled
+
+# =============================================================================
+# SPI Mode Reference
+# =============================================================================
+# Mode | CPOL | CPHA | SCLK Idle | Data Sampled On
+# -----+------+------+-----------+------------------
+#   0  |  0   |  0   |   Low     | Rising edge
+#   1  |  0   |  1   |   Low     | Falling edge
+#   2  |  1   |  0   |   High    | Falling edge
+#   3  |  1   |  1   |   High    | Rising edge
+#
+# CPOL is auto-detected from SCLK level at CS falling edge.
+# CPHA is configured via the clock_phase config bit.
+# =============================================================================
+
+# =============================================================================
+# Error Outputs
+# =============================================================================
+errors:
+  name: qspi_errors
+  description: Error status outputs
+  width: 2  # G_ERROR_WIDTH default
+  fields:
+    - name: timeout
+      bits: [0, 0]
+      width: 1
+      description: SCLK timeout error (clock stuck during transfer)
+
+    - name: reserved
+      bits: [1, 1]
+      width: 1
+      description: Reserved
+
+# =============================================================================
+# Decoding Examples (Python)
+# =============================================================================
+# Example decoder implementation for SW integration
+# =============================================================================
+
+examples:
+  decode_message: |
+    def decode_qspi_msg(msg: int, quad_mode: bool = False) -> dict:
+        """Decode a 32-bit QSPI datalogger message."""
+        device_id = (msg >> 27) & 0x1F
+        msg_type = (msg >> 24) & 0x07
+        
+        result = {
+            "device_id": device_id,
+            "type": msg_type,
+        }
+        
+        if msg_type == 0b100:  # Event
+            result["name"] = "event"
+            result["timestamp"] = (msg >> 8) & 0xFFFF
+            events = {
+                0x00: "stop", 0x03: "start",
+                0x09: "cs_down", 0x0A: "cs_up", 0x0B: "cs_up_incomplete",
+                0x04: "timeout", 0x10: "cs_down_cpol1", 0x11: "cs_down_cpol0"
+            }
+            result["event"] = events.get(msg & 0xFF, f"unknown_{msg & 0xFF:#x}")
+        elif msg_type == 0b001:  # Payload A
+            result["name"] = "payload_a"
+            if quad_mode:
+                result["io1"] = (msg >> 8) & 0xFF
+                result["io0"] = msg & 0xFF
+            else:
+                result["timestamp"] = (msg >> 8) & 0xFFFF
+                result["data"] = msg & 0xFF
+        elif msg_type == 0b010:  # Payload B or Error
+            if quad_mode:
+                result["name"] = "payload_b"
+                result["io3"] = (msg >> 8) & 0xFF
+                result["io2"] = msg & 0xFF
+            else:
+                result["name"] = "payload_b"
+                result["timestamp"] = (msg >> 8) & 0xFFFF
+                result["data"] = msg & 0xFF
+        
+        return result
+
+  reconstruct_byte_quad: |
+    def reconstruct_qspi_byte(payload_a: int, payload_b: int) -> int:
+        """Reconstruct 8-bit byte from Quad SPI payloads."""
+        io0 = payload_a & 0xFF
+        io1 = (payload_a >> 8) & 0xFF
+        io2 = payload_b & 0xFF
+        io3 = (payload_b >> 8) & 0xFF
+        # Nibble-wise: high nibble from B, low nibble from A
+        return ((io3 << 4) | io2) << 4 | ((io1 << 4) | io0)

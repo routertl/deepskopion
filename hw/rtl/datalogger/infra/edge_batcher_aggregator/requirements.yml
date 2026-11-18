@@ -1,0 +1,175 @@
+# edge_batcher_aggregator — Requirements catalog (contract-first per ROUTERTL convention)
+#
+# Wraps G_NUM_CHANNELS edge_batcher instances behind a per-channel demux
+# (EV_WORD[31:27] → batcher[i]) + fixed-priority arbiter into the
+# zs_msg_framer's variable-payload IN_* interface.
+#
+# Wire-format spec:
+#   docs/software/data_plane/message_formats/payloads/edge_batch.md
+# Python codec (sanctioned oracle):
+#   sw/stream/zs_msg.py — parse_edge_batch / pack_edge_batch round-trip
+#
+# Each EBA-REQ-N below is referenced by ≥1 cocotb test in
+# hw/sim/cocotb/tests/datalogger/infra/edge_batcher_aggregator/test_edge_batcher_aggregator.py
+# via @requires().
+
+ip: edge_batcher_aggregator
+version: 1.0
+schema_version: 1
+
+port_contract:
+  slaves: []
+  masters: []
+  scalars:
+    - { name: EV_VALID,         dir: in,  width: "1" }
+    - { name: EV_READY,         dir: out, width: "1" }
+    - { name: EV_WORD,          dir: in,  width: "31 downto 0" }
+    - { name: TIMESTAMP_64,     dir: in,  width: "63 downto 0" }
+    - { name: FR_VALID,         dir: out, width: "1" }
+    - { name: FR_READY,         dir: in,  width: "1" }
+    - { name: FR_DATALOGGER_ID,    dir: out, width: "7  downto 0" }
+    - { name: FR_MSG_CLASS,     dir: out, width: "7  downto 0" }
+    - { name: FR_MSG_TYPE,      dir: out, width: "15 downto 0" }
+    - { name: FR_FLAGS,         dir: out, width: "15 downto 0" }
+    - { name: FR_TIMESTAMP,     dir: out, width: "63 downto 0" }
+    - { name: FR_PAYLOAD,       dir: out, width: "G_N_MAX*32 - 1 downto 0" }
+    - { name: FR_PAYLOAD_WORDS, dir: out, width: "7 downto 0" }
+  clocks:
+    - { name: CLK }
+  resets:
+    - { name: RST, polarity: active_high }
+
+parameters:
+  - { name: G_NUM_CHANNELS,   default: 8 }
+  - { name: G_N_MAX,          default: 32 }
+  - { name: G_T_FLUSH_CYCLES, default: 10000 }
+  - { name: G_CHANNEL_IDS,    default: "identity (sentinel x\"00\")" }
+
+functional_contract:
+
+  # ── Demux: device_id steers EV_VALID to the matching batcher ─────────────
+  - id: EBA-REQ-1
+    kind: behavioral
+    desc: >-
+      EV_WORD[31:27] = device_id is decoded as the batcher index.
+      ev_valid_per_ch(device_id) rises on EV_VALID='1' while all
+      other channels stay '0'. EV_READY echoes the selected batcher's
+      EV_READY back to the producer. Two events on different channels
+      can be in flight simultaneously (each in its own batcher).
+
+  - id: EBA-REQ-2
+    kind: behavioral
+    desc: >-
+      Unmapped device_id (no batcher owns it — out of range, or absent from the
+      sparse G_CHANNEL_IDS map) → DROP-AND-CONSUME: EV_READY='1' (the producer
+      sees one clean handshake and moves on) while no batcher sees the valid
+      pulse. DS-P3.50 hardening: the pre-DS-P3.50 behaviour was EV_READY='0',
+      which is a PERMANENT producer stall (deadlock), not a drop — a single
+      malformed id would wedge the whole edge pipe. Range-safety remains an
+      upstream invariant; this is the fail-safe. The aggregator MUST NOT corrupt
+      other channels' state on an unmapped event.
+
+  # ── Arb: fixed-priority on batch_valid (lowest index wins) ──────────────
+  - id: EBA-REQ-3
+    kind: behavioral
+    desc: >-
+      When exactly one batcher asserts BATCH_VALID='1', the aggregator
+      forwards that batcher's outputs onto the FR_* bus: FR_VALID='1',
+      FR_TIMESTAMP=that batcher's anchor, FR_DATALOGGER_ID=its channel,
+      FR_PAYLOAD_WORDS=its N, FR_PAYLOAD=its packed buffer. FR_MSG_CLASS
+      always = DATA, FR_MSG_TYPE always = 0x0601 (SEV_INFO|DOMAIN_EDGE|
+      EVT_EDGE_BATCH), FR_FLAGS always = 0 in v1.
+
+  - id: EBA-REQ-4
+    kind: behavioral
+    desc: >-
+      When ≥2 batchers assert BATCH_VALID simultaneously, the lowest-
+      index one wins (channel 0 beats channel 1 etc.). FR_READY routes
+      only to the winning batcher's BATCH_READY input; non-winning
+      batchers see BATCH_READY='0' and continue to hold their flush.
+
+  - id: EBA-REQ-5
+    kind: behavioral
+    desc: >-
+      After the winner's BATCH_READY handshake, the arb re-evaluates
+      on the next cycle. If another batcher is now the lowest-index
+      winner (the previous one returned to ACCUM/IDLE), the new
+      winner's batch is presented on FR_* immediately. No mid-frame
+      switches — once FR_VALID is high, the bus contents are held
+      stable until FR_READY rises.
+
+  # ── End-to-end: device-id-targeted bursts produce parseable batches ─────
+  - id: EBA-REQ-10
+    kind: behavioral
+    desc: >-
+      32 events all on channel 3 → exactly one capacity-flush batch
+      from batcher[3] → FR_VALID rises with FR_DATALOGGER_ID=3,
+      FR_PAYLOAD_WORDS=32, FR_TIMESTAMP=first event's clk_sys tick.
+      An assembled wire buffer (FR_PAYLOAD + the constant header
+      stamping) round-trips through sw.stream.zs_msg.parse_edge_batch
+      with all 32 events recovered bit-for-bit.
+
+  - id: EBA-REQ-11
+    kind: behavioral
+    desc: >-
+      Interleaved bursts: 16 events on channel 0 followed by 16 on
+      channel 5, both within T_FLUSH_CYCLES idle. Two timer-flushes
+      land sequentially on FR_*. Channel 0's batch flushes first
+      (lowest priority index ties broken naturally by capacity event
+      counter); channel 5's follows. Both round-trip cleanly through
+      parse_edge_batch.
+
+  # ── DS-P3.50: sparse→dense channel remap ────────────────────────────────
+  - id: EBA-REQ-30
+    kind: behavioral
+    desc: >-
+      With G_CHANNEL_IDS set to a sparse global-id list (e.g. 1,2,3,6) and
+      G_NUM_CHANNELS = the list length (4), the aggregator instantiates exactly
+      that many DENSE batchers. An event with global device_id = 6 routes to the
+      dense batcher that owns id 6 and flushes with FR_DATALOGGER_ID = 6 (the GLOBAL
+      id, NOT the dense index 3). Each mapped id batches independently; no dead
+      batchers exist for ids 0/4/5/7. Identity default (G_CHANNEL_IDS absent)
+      reproduces the pre-DS-P3.50 device_id == batcher-index behaviour exactly.
+
+  # ── DS-P2.153: declared input pipeline (PF-F0 100 MHz timing closure) ───
+  - id: EBA-REQ-40
+    kind: behavioral
+    desc: >-
+      The aggregator carries EXACTLY THREE declared register stages — the
+      DS-P2.153 cuts of the PF-F0 critical cones at 100 MHz on MPFS095T-1
+      (cone slacks below are the PLACEROUTE layout engine's pinslacks
+      ranking, used to pick the cuts; the signoff metric is SmartTime
+      VERIFYTIMING — see docs/evidence/pf-f0/DS-P2.153-pf-f0-timing-closure.md
+      for the correction): an EV input stage (C_EBA_INPUT_PIPE_STAGES = 1,
+      cutting the combinational f_event_timestamp fan-out into every
+      batcher's TIMESTAMP_64 / state_r / payload_buf, pinslacks -5.5..-6.2
+      ns) and an FR output store-and-forward stage
+      (C_EBA_OUTPUT_PIPE_STAGES = 1, cutting the 4 x G_N_MAX*32-bit payload
+      mux into the framer's pre_payload_r and the merge's priority READY
+      cone back into the batcher/emitter enables, the -5.5 ns pinslacks
+      class the input stage alone left behind) — plus a registered
+      arbitration grant (C_EBA_ARB_PIPE_STAGES = 1, cutting the residual
+      -2.2 ns pinslacks BATCH_VALID -> priority arb -> capture
+      enables/selects cone).
+      Contract: (a) FR_VALID for a capacity flush rises exactly 3 cycles
+      later than the pre-DS-P2.153 zero-stage aggregator — no more
+      (an undeclared deeper pipe is also a break); (b) the timestamp a
+      batcher stamps is the value LATCHED AT THE EV HANDSHAKE CYCLE — the
+      stage registers the resolved event timestamp alongside the word, never
+      re-samples the live TIMESTAMP_64 port a cycle late, so every captured
+      anchor/delta is bit-identical to the unpipelined aggregator; (c) the
+      stage re-arms in the cycle it drains, sustaining one event per cycle
+      (EV_READY holds through a full-rate capacity burst); (d) the output
+      stage acknowledges the winning batcher at CAPTURE (store-and-forward,
+      one batch of buffering; per-batcher order and fixed-priority
+      arbitration unchanged). Latency is producer-relative only; no captured
+      value changes (DE25/Zynq baselines unchanged).
+
+  # ── Reset: returns all batchers + arb to clean state ────────────────────
+  - id: EBA-REQ-20
+    kind: behavioral
+    desc: >-
+      RST asserted mid-anything (events in flight, batches queued)
+      clears all per-channel batchers' n_r to 0, drops FR_VALID
+      immediately, and arms for fresh events. No half-flush leakage
+      across the boundary.

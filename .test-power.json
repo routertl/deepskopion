@@ -1,0 +1,6 @@
+{
+  "why": "tools/tests/test_pkg_install_clean_clone_p3_150.py is a receipt's affected suite and replays rr pkg install / rr target set in ~20 fresh clones against the live registry; it took 441 s inside the pre-commit gate on 2026-10-16. The runner's default budget (120 s + 2 s per test) times it out at 184 s, so the base is raised; per-test and ceiling stay at the runner defaults.",
+  "pytest_timeouts": {
+    "base_s": 1800
+  }
+}

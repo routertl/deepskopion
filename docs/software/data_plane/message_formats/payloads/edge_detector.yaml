@@ -1,0 +1,254 @@
+# =============================================================================
+# Edge Detector Datalogger Protocol Definition
+# Extracted from: hw/rtl/datalogger/nonstd/edge_datalogger.vhd
+# =============================================================================
+# This file defines the HW<->SW protocol for the Edge Detector datalogger module.
+# The message width is 32 bits total.
+#
+# Key Feature: Sub-Microsecond Edge Timing
+# The Edge Detector captures signal transitions with clock-cycle precision
+# using a 16-bit global timestamp plus an 8-bit sub-microsecond extension.
+#
+# This datalogger is classified as "non-standard" (nonstd/) because it does
+# not use the 3-bit message type discriminator. Instead, bits [26:24] carry
+# three independent operational flags (S, F, E).
+# =============================================================================
+
+protocol:
+  name: edge_datalogger
+  description: Single-channel edge transition detector with sub-µs timing
+  message_width: 32
+  version: "1.0"
+  category: nonstd  # Non-standard: no message type discriminator
+
+# =============================================================================
+# Constants
+# =============================================================================
+constants:
+  # Field widths
+  device_id_width: 5
+  flags_width: 3       # S + F + E (not a message type)
+  timestamp_width: 16
+  extension_width: 8
+
+  # FIFO parameters
+  fifo_depth: 8
+  fifo_width: 27        # S + F + E + timestamp(16) + extension(8)
+
+  # CONFIG control codes (2-bit, in deviceLoadConfig[1:0])
+  config_codes:
+    disabled: 0b00              # Datalogger off (default after reset)
+    enable_capturing: 0b01      # Enable edge capture
+    read_trigger_on: 0b10      # Enable reading + continue capturing
+    read_trigger_off: 0b11     # Enable reading + stop capturing
+
+  # Edge types (from datalogger_pkg)
+  edge_detection: both         # Captures both rising and falling edges
+
+# =============================================================================
+# Message Format
+# =============================================================================
+# The Edge Detector emits a single message type. There is no CONFIG/STATUS
+# discrimination — every output word is an edge event (or a read-triggered
+# sample). The S bit distinguishes SW-requested reads from edge-triggered
+# events.
+# =============================================================================
+
+messages:
+  # ---------------------------------------------------------------------------
+  # Edge Event Message
+  # Sent on: detected edge transition OR software-triggered readback
+  # ---------------------------------------------------------------------------
+  - name: edge_event
+    description: Edge transition or readback event with sub-µs timestamp
+    total_bits: 32
+    fields:
+      - name: device_id
+        bits: [31, 27]
+        width: 5
+        description: >
+          Datalogger instance ID (from G_ED_DEV_ID generic, default 28).
+          Used by the arbiter and SW to identify the source datalogger.
+
+      - name: s_bit
+        bits: [26, 26]
+        width: 1
+        description: >
+          Send/ReadEvent flag.
+            0 = Edge-triggered event (normal operation).
+            1 = Software-triggered readback (via CONFIG read trigger codes).
+          Affects interpretation of the E bit polarity.
+
+      - name: f_bit
+        bits: [25, 25]
+        width: 1
+        description: >
+          FIFO pressure flag.
+            0 = FIFO has capacity.
+            1 = FIFO is almost full (backpressure warning).
+          SW should use this to detect potential data loss.
+
+      - name: e_bit
+        bits: [24, 24]
+        width: 1
+        description: >
+          Edge polarity / signal level.
+            When S=0 (edge event): Inverted current input level (captures
+            the PREVIOUS level before the edge: 1=was-high→falling,
+            0=was-low→rising).
+            When S=1 (read event): Current input level (direct sample:
+            1=high, 0=low).
+          RTL: `not EDGE_IN when ReadEvent='0' else EDGE_IN` (line 169).
+
+      - name: timestamp
+        bits: [23, 8]
+        width: 16
+        description: >
+          Lower 16 bits of the global 1µs timestamp.
+          Registered snapshot at the moment of the event.
+
+      - name: extension
+        bits: [7, 0]
+        width: 8
+        description: >
+          Sub-microsecond timing extension. Free-running counter (0–99 at
+          100 MHz) that resets on each 1µs timestamp tick.
+          Full timestamp: timestamp_us * 1000 + extension * 10 (ns).
+          Provides clock-cycle-precise edge timing.
+
+# =============================================================================
+# Configuration Register
+# =============================================================================
+# The CONFIG port is G_CONFIG_WIDTH bits wide (default 16).
+# The config_control entity filters by device ID and extracts local bits.
+# =============================================================================
+
+config:
+  name: edge_config
+  description: Configuration input for Edge Detector datalogger
+  width: 16  # G_CONFIG_WIDTH default
+  fields:
+    - name: device_id
+      bits: [15, 11]
+      width: 5
+      description: >
+        Target device ID (must match G_ED_DEV_ID to apply config).
+        Managed by the config_control shared infrastructure entity.
+
+    - name: reserved
+      bits: [10, 2]
+      width: 9
+      description: Reserved for future use (must be 0)
+
+    - name: control_code
+      bits: [1, 0]
+      width: 2
+      description: >
+        Operating mode selection:
+          00 = Disabled (reset state, no capture)
+          01 = Enable edge capturing (capture both edges)
+          10 = Enable read trigger + continue capturing
+          11 = Enable read trigger + stop capturing
+
+# =============================================================================
+# Error Outputs
+# =============================================================================
+# The ED_ERRORS port is G_ERROR_WIDTH bits wide (default 2).
+# Note: Errors are output as port signals only — no error messages are
+# emitted in the data stream. This is a known compliance gap.
+# =============================================================================
+
+errors:
+  name: edge_errors
+  description: Error status outputs (port-level only, not in message stream)
+  width: 2  # G_ERROR_WIDTH default
+  fields:
+    - name: error_flags
+      bits: [1, 0]
+      width: 2
+      description: >
+        Runtime error flags (directly mapped to ED_ERRORS port).
+        Currently not driven by the RTL — reserved for future use.
+
+# =============================================================================
+# Decoding Examples (Python)
+# =============================================================================
+# Example decoder implementation for SW integration
+# =============================================================================
+
+examples:
+  decode_message: |
+    def decode_edge_msg(msg: int, clk_freq_mhz: int = 100) -> dict:
+        """Decode a 32-bit Edge Detector datalogger message.
+
+        Args:
+            msg: Raw 32-bit hardware word.
+            clk_freq_mhz: System clock frequency in MHz (for extension→ns).
+
+        Returns:
+            Dictionary with decoded fields.
+        """
+        device_id = (msg >> 27) & 0x1F
+        s_bit     = (msg >> 26) & 0x01
+        f_bit     = (msg >> 25) & 0x01
+        e_bit     = (msg >> 24) & 0x01
+        timestamp = (msg >> 8) & 0xFFFF
+        extension = msg & 0xFF
+
+        # Convert extension to nanoseconds
+        ns_per_cycle = 1000 // clk_freq_mhz  # 10ns at 100MHz
+        full_ts_ns = timestamp * 1000 + extension * ns_per_cycle
+
+        result = {
+            "device_id": device_id,
+            "timestamp_us": timestamp,
+            "extension_cycles": extension,
+            "timestamp_ns": full_ts_ns,
+            "fifo_pressure": bool(f_bit),
+        }
+
+        if s_bit:
+            # Software-triggered readback
+            result["type"] = "readback"
+            result["level"] = e_bit  # Direct sample
+        else:
+            # Edge-triggered event
+            result["type"] = "edge"
+            # E bit is inverted for edge events
+            result["edge"] = "falling" if e_bit else "rising"
+            result["level_after"] = 0 if e_bit else 1
+
+        return result
+
+  reconstruct_waveform: |
+    def edge_to_transitions(messages: list[int]) -> list[tuple[int, int]]:
+        """Convert a stream of edge messages to (timestamp_ns, value) pairs.
+
+        Suitable for feeding into logic-trace Channel::addTransition().
+        """
+        transitions = []
+        for msg in messages:
+            decoded = decode_edge_msg(msg)
+            if decoded["type"] == "edge":
+                transitions.append((
+                    decoded["timestamp_ns"],
+                    decoded["level_after"],
+                ))
+        return transitions
+
+# =============================================================================
+# Contract Compliance Notes
+# =============================================================================
+# This datalogger is in the "nonstd" category and has known divergences from
+# the standard datalogger contract (UART/I2C/QSPI):
+#
+# Justified divergences:
+#   - No 3-bit message type: Uses S/F/E flags instead (more useful for
+#     edge detection than message type discrimination).
+#   - No CONFIG message: No auto-calibration; immediately operational.
+#   - Extension in [7:0] instead of Data: Sub-µs timing is the core value.
+#
+# Known gaps (needs RTL review):
+#   - No STATUS messages for FIFO overflow events.
+#   - Error reporting via port only, not in the message stream.
+# =============================================================================

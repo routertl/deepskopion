@@ -1,0 +1,26 @@
+# Arbiter parameter-sweep profiles (DS-P3.30 — ARB-REQ-50 / ARB-REQ-51).
+#
+# `rr sim sweep --profiles arbiter_sweep_profiles.yml --tests test_arbiter`
+# re-elaborates the arbiter once per build with the generics injected via
+# $RR_SIM_GENERICS (run_simulation merges at highest priority; project.yml is
+# never touched — RTL-P3.622). The aggregated pass/fail matrix is the evidence
+# for the two sweep REQs:
+#
+#   ARB-REQ-50 — core invariants hold for G_NUM_INPUTS ∈ {2,3,5,8}
+#   ARB-REQ-51 — core invariants hold for G_OUTPUT_FIFO ∈ {0,1}
+#
+# G_OUTPUT_FIFO=0 (passthrough mux, no chaining FIFO) is a code path the
+# default suite never exercises — the prime bug-finding target here.
+
+# ── ARB-REQ-50: G_NUM_INPUTS sweep (G_OUTPUT_FIFO stays default 1) ──
+n2: { generics: { G_NUM_INPUTS: 2 }, tag: req50 }
+n3: { generics: { G_NUM_INPUTS: 3 }, tag: req50 }
+n5: { generics: { G_NUM_INPUTS: 5 }, tag: req50 }
+n8: { generics: { G_NUM_INPUTS: 8 }, tag: req50 }
+
+# ── ARB-REQ-51: G_OUTPUT_FIFO sweep (default + passthrough) ──
+ofifo1: { generics: { G_OUTPUT_FIFO: 1 }, tag: req51 }
+ofifo0: { generics: { G_OUTPUT_FIFO: 0 }, tag: req51 }
+
+# ── Combined stress: passthrough mux at the widest input count ──
+ofifo0_n8: { generics: { G_NUM_INPUTS: 8, G_OUTPUT_FIFO: 0 }, tag: req50_51 }

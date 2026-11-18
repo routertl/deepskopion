@@ -1,0 +1,92 @@
+#!/bin/sh
+# Bring up eth0 without baking a lab subnet into the public image (DS-C1).
+#
+# Default: request a DHCP lease. A user who needs a static point-to-point link
+# supplies it either on the kernel command line:
+#
+#   ds_ip=<address>/<prefix> ds_gateway=<gateway>
+#
+# or in /etc/deepskopion/network.conf:
+#
+#   address=<address>/<prefix>
+#   gateway=<gateway>             # optional
+#
+# The image deliberately has no fallback address. A missing DHCP server leaves
+# the console usable and prints the provisioning command instead of silently
+# joining the network of the bench that built it.
+
+IFACE="eth0"
+ROOT_PREFIX="${DS_ROOT_PREFIX:-}"
+NETWORK_CONF="${ROOT_PREFIX}/etc/deepskopion/network.conf"
+
+cmdline_value() {
+    key="$1"
+    tr ' ' '\n' < "${ROOT_PREFIX}/proc/cmdline" 2>/dev/null \
+        | sed -n "s/^${key}=//p" | head -1
+}
+
+config_value() {
+    key="$1"
+    [ -f "$NETWORK_CONF" ] || return 0
+    sed -n "s/^[[:space:]]*${key}[[:space:]]*=[[:space:]]*//p" \
+        "$NETWORK_CONF" | head -1
+}
+
+wait_for_interface() {
+    i=0
+    while [ ! -e "${ROOT_PREFIX}/sys/class/net/${IFACE}" ] && [ "$i" -lt 50 ]; do
+        sleep 0.2
+        i=$((i + 1))
+    done
+    [ -e "${ROOT_PREFIX}/sys/class/net/${IFACE}" ]
+}
+
+start() {
+    ip link set lo up 2>/dev/null || true
+    if ! wait_for_interface; then
+        echo "network: ${IFACE} did not appear; console provisioning remains available"
+        return 1
+    fi
+    ip link set "${IFACE}" up || return 1
+
+    address="$(cmdline_value ds_ip)"
+    [ -n "$address" ] || address="$(config_value address)"
+    gateway="$(cmdline_value ds_gateway)"
+    [ -n "$gateway" ] || gateway="$(config_value gateway)"
+
+    if [ -n "$address" ] && [ "$address" != "dhcp" ]; then
+        case "$address" in
+            */*) ;;
+            *)
+                echo "network: refusing static address without a prefix: $address"
+                return 1
+                ;;
+        esac
+        ip addr add "$address" dev "$IFACE" 2>/dev/null || true
+        if [ -n "$gateway" ]; then
+            ip route replace default via "$gateway" dev "$IFACE" || return 1
+        fi
+        echo "network: ${IFACE} uses user-supplied static address $address"
+        return 0
+    fi
+
+    if command -v udhcpc >/dev/null 2>&1 \
+        && udhcpc -q -n -t 3 -T 2 -i "$IFACE"; then
+        echo "network: ${IFACE} acquired a DHCP lease"
+        return 0
+    fi
+    echo "network: no DHCP lease; set ds_ip=<address>/<prefix> or create $NETWORK_CONF"
+    return 0
+}
+
+stop() {
+    ip addr flush dev "$IFACE" 2>/dev/null || true
+    ip link set "$IFACE" down 2>/dev/null || true
+}
+
+case "$1" in
+    start)   start ;;
+    stop)    stop ;;
+    restart) stop; start ;;
+    *)       echo "usage: $0 {start|stop|restart}" >&2; exit 1 ;;
+esac

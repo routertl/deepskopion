@@ -1,0 +1,27 @@
+#!/bin/sh
+# SPDX-License-Identifier: MPL-2.0
+# DS-P2.264: /init of the de25_p2writer TOOL image (initramfs root, root=/dev/ram0).
+# Brings up proc/sys/dev and eth0 from ds_ip= on the kernel command line, runs
+# p2write.sh once, then waits for power-off. It never mounts the SD card, so
+# P2 is unmounted for the whole write. Not a product image: no daemon, no
+# python, no login service.
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev 2>/dev/null
+mkdir -p /tmp && mount -t tmpfs tmpfs /tmp
+
+ip_cidr=$(tr ' ' '\n' < /proc/cmdline | sed -n 's/^ds_ip=//p' | tail -1)
+echo "P2W boot ds_ip=${ip_cidr:-<missing>}"
+if [ -n "$ip_cidr" ]; then
+    ip link set eth0 up
+    ip addr add "$ip_cidr" dev eth0
+    for i in $(seq 1 30); do
+        [ "$(cat /sys/class/net/eth0/carrier 2>/dev/null)" = 1 ] && break
+        sleep 1
+    done
+    echo "P2W eth0 carrier=$(cat /sys/class/net/eth0/carrier 2>/dev/null) after ${i}s"
+fi
+
+/usr/sbin/p2write.sh
+echo "P2W exit=$? (power the board off now)"
+while :; do sleep 3600; done

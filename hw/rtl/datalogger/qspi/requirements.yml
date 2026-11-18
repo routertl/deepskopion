@@ -1,0 +1,190 @@
+# qspi_datalogger — Requirements catalog (contract-first per ROUTERTL convention)
+#
+# `qspi_datalogger` is the canonical datalogger for SPI, Dual-SPI and
+# Quad-SPI. There is no separate spi_datalogger entity — single-bit
+# SPI is `qspi_datalogger` with G_QSPI_PINS=4 (SCLK + CSn + MOSI + MISO),
+# Dual-SPI is G_QSPI_PINS=5, Quad-SPI is G_QSPI_PINS=6 (SCLK + CSn +
+# IO0..IO3). The qspi_datalogger_protocol.yml describes the HW word
+# format for all three configurations.
+#
+# LIFECYCLE (DS-P3.90 Phase 1): qspi_datalogger is INLINE-COMPLIANT with the
+# uniform lifecycle. It emits the symmetric pair via event type "100" with
+# C_EVENT_START=0x03 on the ConfigEnable rising edge and C_EVENT_STOP=0x00 on
+# the falling edge (the STOP/WAIT_START FSM), in the always-on (global-RST)
+# domain. The enable marker is load-bearing for the WAIT_START sequencing (the
+# FSM gates on its delivery), so it is kept inline rather than refactored to the
+# shared datalogger_lifecycle component. See
+# docs/standards/datalogger_compliance_checklist.md §10 (L4).
+#
+# Each QSPI-REQ-N below is referenced by ≥1 cocotb test in
+# hw/sim/cocotb/tests/datalogger/qspi/test_*.py via @requires(QSPI-REQ-N).
+# `rr sim coverage-map` enforces the mapping.
+#
+# Complementary to: hw/rtl/datalogger/qspi/qspi_datalogger_protocol.yml (HW
+# word format) and docs/standards/datalogger_compliance_checklist.md
+# section 8b (cross-datalogger rules + R1..R8).
+#
+# PHASE-AGNOSTICISM (DS-P4.2): qspi_datalogger is a RAW byte sampler — it captures
+# fixed 8-bit chunks per data line and has NO notion of Quad-SPI command /
+# address / dummy / data / mode-bit phases. Phase reconstruction is a SW-side
+# concern (the host decoder groups bytes into phases from the bus protocol it
+# knows). So there is deliberately NO RTL REQ for "command phase decode" /
+# "dummy-cycle handling" / "mode-bit decode" — the DS-P3.23 wishlist mentioned
+# those, but they are not RTL contracts. The RTL contract is: per-byte capture,
+# CS framing, CPOL/CPHA handling, error events, and the payload word format.
+#
+# DS-P3.23 landed the real-coverage core: test_qspi_capture (quad build) +
+# test_qspi_spi2pin (2-data-pin build) + test_qspi_infilter (glitch filter) +
+# test_qspi_datalogger (lifecycle). See QSPI-REQ-10..41 below.
+
+ip: qspi_datalogger
+version: 0.4
+schema_version: 1
+
+port_contract:
+  slaves: []
+  masters: []
+  scalars:
+    - { name: QSPI_PINS,    dir: in,  width: "G_QSPI_PINS-1 downto 0" }
+    - { name: CONFIG,       dir: in,  width: "G_CONFIG_WIDTH-1 downto 0" }
+    - { name: TIMESTAMP,    dir: in,  width: "G_TIMESTAMP_WIDTH-1 downto 0" }
+    - { name: QSPI_MSG_OUT, dir: out, width: "C_DATALOGGER_MSG_WIDTH-1 downto 0" }
+    - { name: QSPI_MSG_VLD, dir: out, width: "1" }
+    - { name: QSPI_MSG_RDY, dir: in,  width: "1" }
+    - { name: QSPI_ERRORS,  dir: out, width: "G_ERROR_WIDTH-1 downto 0" }
+  clocks:
+    - { name: CLK }
+  resets:
+    - { name: RST, polarity: active_high }
+
+parameters:
+  - { name: G_QSPI_ID_WIDTH,   default: 5 }
+  - { name: G_QSPI_DEV_ID,     default: 28 }
+  - { name: G_QSPI_PINS,       default: 6 }   # 3..6 — 4=SPI, 5=Dual-SPI, 6=Quad-SPI
+  - { name: G_TIMESTAMP_WIDTH, default: 16 }
+  - { name: G_CONFIG_WIDTH,    default: 16 }
+  - { name: G_ERROR_WIDTH,     default: 2 }
+  - { name: G_ENABLE_INFILTER, default: 0 }
+  - { name: G_ILA_EN,          default: 1 }
+
+functional_contract:
+
+  # ── Data-path real coverage (DS-P3.23, quad build G_QSPI_PINS=6) ──
+  - id: QSPI-REQ-10
+    kind: behavioral
+    desc: >-
+      PAYLOAD emission on `QSPI_MSG_OUT` per captured byte. Each completed 8-bit
+      sample emits payloadA ({Q1,Q0}) then payloadB ({Q3,Q2}) in the quad build;
+      back-to-back bytes in one CS frame emit one A/B pair each, in order.
+      Backpressure: `QSPI_MSG_RDY` held low holds the payload until RDY rises (no
+      silent drop of a single held byte). 3-wire halfDuplexMode (`CONFIG` bit 2)
+      emits payloadA only (B suppressed). 2-wire noChipSelectMode (`CONFIG` bit
+      3) self-starts sampling with no CS edge (DS-T2.38). Verified by
+      test_qspi_capture.{test_multibyte_backtoback_io0,test_backpressure_holds_payload,
+      test_half_duplex_no_b_payload,test_no_cs_2wire_capture}.
+
+  - id: QSPI-REQ-11
+    kind: behavioral
+    desc: >-
+      CS-gated framing — a falling CS on `QSPI_PINS`(1) opens a transaction
+      (CS_DOWN event 0x09 or a new-polarity variant 0x10/0x11 on `QSPI_MSG_OUT`)
+      and a rising CS closes it (CS_UP 0x0A). Verified by
+      test_qspi_capture.test_cs_framing_events.
+
+  - id: QSPI-REQ-12
+    kind: behavioral
+    desc: >-
+      MODE 0 (CPOL=0, CPHA=0) byte capture — sample `QSPI_PINS` data on the SCLK
+      rising edge; the `QSPI_MSG_OUT` payload byte equals the MSB-first driven
+      value. Verified by test_qspi_capture.test_mode0_single_byte_io0.
+
+  - id: QSPI-REQ-13
+    kind: behavioral
+    desc: >-
+      MODE 1 (CPOL=0, CPHA=1) byte capture — `QSPI_PINS` data driven on the
+      rising edge, sampled on the falling edge; byte on `QSPI_MSG_OUT`. Verified
+      by test_qspi_capture.test_mode1_single_byte_io0.
+
+  - id: QSPI-REQ-14
+    kind: behavioral
+    desc: >-
+      MODE 2 (CPOL=1, CPHA=0) byte capture with CPOL AUTO-DETECTED from the
+      idle-high SCLK level on `QSPI_PINS`(0) latched at CS-assert; and CPOL
+      re-latch across a polarity change between frames (new-polarity-high event
+      0x10 on `QSPI_MSG_OUT`). Verified by
+      test_qspi_capture.{test_mode2_single_byte_io0,test_cpol_change_between_frames}.
+
+  - id: QSPI-REQ-15
+    kind: behavioral
+    desc: >-
+      MODE 3 (CPOL=1, CPHA=1) byte capture with CPOL auto-detected; sample
+      `QSPI_PINS` data on the SCLK rising (second) edge; byte on `QSPI_MSG_OUT`.
+      Verified by test_qspi_capture.test_mode3_single_byte_io0.
+
+  - id: QSPI-REQ-22
+    kind: behavioral
+    desc: >-
+      Quad data-phase decode — four independent bytes on `QSPI_PINS` IO0..IO3
+      (MSB-first per line) reconstruct on `QSPI_MSG_OUT` as payloadA={Q1,Q0} then
+      payloadB={Q3,Q2}. The two payload packets share type tag 001 and are
+      distinguished only by delivery order (A then B). Verified by
+      test_qspi_capture.test_quad_four_lines.
+
+  - id: QSPI-REQ-40
+    kind: behavioral
+    desc: >-
+      Protocol-violation handling — CS rises mid-byte (N<8 bits). The datalogger
+      emits the CS_UP_INCOMPLETE event (0x0B) and a `QSPI_MSG_OUT` payload whose
+      captured bits are LEFT-justified (MSB-aligned) + zero-padded (DS-T2.37
+      fix). Verified by test_qspi_capture.test_partial_byte_padding.
+
+  - id: QSPI-REQ-100
+    kind: behavioral
+    desc: >-
+      Adversarial idle bus — with CS held HIGH, SCLK/data toggling on `QSPI_PINS`
+      must NOT be sampled (the edge detectors are CE-gated by not-CSn); zero
+      payload frames on `QSPI_MSG_OUT`. Verified by
+      test_qspi_capture.test_idle_bus_cs_high_no_payload.
+
+  - id: QSPI-REQ-31
+    kind: behavioral
+    desc: >-
+      Device-id filter — `CONFIG`[15:11] addresses a specific datalogger instance;
+      only the instance whose id matches G_QSPI_DEV_ID applies the config. A
+      `CONFIG` word addressed to a different id is ignored (no enable, no START
+      on `QSPI_MSG_OUT`). Verified by test_qspi_capture.test_device_id_filter.
+
+  - id: QSPI-REQ-41
+    kind: behavioral
+    desc: >-
+      Input glitch filter — with G_ENABLE_INFILTER=1 each `QSPI_PINS` bit passes
+      through a 2-cycle agreement debouncer (tich.infilter). A clean transfer is
+      still captured correctly (matched SCLK/data latency), and a sub-2-cycle
+      spurious SCLK pulse is rejected (no extra sample, byte stays aligned on
+      `QSPI_MSG_OUT`). Verified by
+      test_qspi_infilter.{test_infilter_clean_capture,test_infilter_rejects_sclk_glitch}.
+
+  # ── Reset determinism (v0.1) ────────────────────────────────────
+  - id: QSPI-REQ-50
+    kind: behavioral
+    desc: >-
+      On RST='1' (active high), `QSPI_MSG_VLD` is held low and
+      `QSPI_ERRORS` is cleared. After RST de-assert, the datalogger
+      remains quiescent until valid bus activity on `QSPI_PINS` —
+      no spurious message emission during the post-reset idle window.
+
+  # ── Per-datalogger reset / reconfiguration (DS-P3.90 Phase 2) ──────
+  - id: QSPI-REQ-51
+    kind: behavioral
+    desc: >-
+      Decode self-resets on disable (DS-P3.90 Phase 2). Unlike level/uart/i2c,
+      the qspi datalogger does NOT take config_control.CAPTURE_RST: its decode FSM
+      already self-resets when configEnable=0 — it returns to the STOP (idle)
+      state and clears its sample count — and its enable/disable lifecycle
+      (START 0x03 / STOP 0x00, event type "100") is woven INTO that FSM, so
+      wiring CAPTURE_RST would be redundant and would risk suppressing the inline
+      DISABLED/STOP marker (H.96). A disable -> re-enable therefore cleanly
+      re-arms: START on enable, STOP on disable, START again on re-enable, on
+      `QSPI_MSG_OUT` / `QSPI_MSG_VLD`. Honors the "don't generate non-necessary
+      resets" rule. Verified by test_qspi_datalogger.test_capture_rst_reconfig. See
+      docs/standards/datalogger_compliance_checklist.md §10.

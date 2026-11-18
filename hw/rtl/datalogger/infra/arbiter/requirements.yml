@@ -1,0 +1,201 @@
+# arbiter — Requirements catalog (contract-first per ROUTERTL convention)
+#
+# The deepskopion infra arbiter (slim, post-D.4): N input streams each
+# backed by a sync FIFO, round-robin output selection, optional chaining
+# output FIFO. Used as both the per-protocol 1st-layer arbiter (when
+# C_<PROTO>_DATALOGGERS > 1) and the 2nd-layer burst arbiter inside
+# datalogger_gather.
+#
+# Token-message machinery, metadata-insertion FSM, weights, RR-fill-level
+# batching, FLUSH input, and TIMESTAMP plumbing have all been removed.
+# The ZS framer (zs_msg_framer.vhd) is the single downstream stamping
+# authority; consumers that want batching handle it inside their datalogger
+# entity. See deepskopion D.4 (decisions.json).
+#
+# Each ARB-REQ-N below is referenced by ≥1 cocotb test in
+# hw/sim/cocotb/tests/datalogger/infra/arbiter/test_arbiter.py via @requires().
+# Adversarial-by-default: every requirement is exercised with hostile
+# input shapes, not just happy paths. Surfaced DUT defects file as
+# T-tier tickets (no in-session fixes) per the file-don't-fix convention.
+
+ip: arbiter
+version: 1.0
+schema_version: 1
+
+port_contract:
+  slaves: []
+  masters: []
+  scalars:
+    # DS-P2.139: the record ports DIN/DOUT were flattened in the RTL; the
+    # contract now names the ports the entity actually has.
+    - { name: DIN_DATA,   dir: in,  width: "G_NUM_INPUTS * G_DATA_WIDTH - 1 downto 0" }
+    - { name: DIN_VALID,  dir: in,  width: "G_NUM_INPUTS - 1 downto 0" }
+    - { name: DOUT_DATA,  dir: out, width: "G_DATA_WIDTH - 1 downto 0" }
+    - { name: DOUT_VALID, dir: out, width: "1" }
+    - { name: DOUT_EMPTY, dir: out, width: "1" }
+    - { name: DOUT_FULL,  dir: out, width: "1" }
+    - { name: EMPTY,      dir: out, width: "0 to G_NUM_INPUTS - 1" }
+    - { name: FULL,       dir: out, width: "0 to G_NUM_INPUTS - 1" }
+    - { name: FIFO_CNT,   dir: out, width: "uFifoBufferCnt(0 to G_NUM_INPUTS-1)(G_FIFO_DEPTH downto 0)" }
+    - { name: READY,    dir: in,  width: "1" }
+  clocks:
+    - { name: CLK }
+  resets:
+    - { name: RST, polarity: active_high }
+
+parameters:
+  - { name: G_FIFO_DEPTH,  default: 9 }
+  - { name: G_NUM_INPUTS,  default: 4 }
+  - { name: G_OUTPUT_FIFO, default: 1 }
+  - { name: G_DATA_WIDTH,  default: "C_INPUT_WIDTH" }
+
+functional_contract:
+
+  # ── Reset / determinism ──────────────────────────────────────────────────
+  - id: ARB-REQ-1
+    kind: behavioral
+    desc: >-
+      Under RST='1' (active-high), DOUT_VALID stays low, all FULL bits
+      stay low, all EMPTY bits stay high. Post-reset with no input
+      traffic (DIN_VALID(i)=0 ∀i), DOUT_VALID remains low indefinitely
+      (no spurious emissions).
+
+  - id: ARB-REQ-2
+    kind: behavioral
+    desc: >-
+      One-hot invariant: the internal selector vector `sel_r` never
+      collapses to all-zero — an assert in the RTL must trigger if
+      it ever does. Verified indirectly via `DOUT_DATA`: every
+      captured word decodes to a valid input index in [0, N-1] —
+      a corrupt `sel_r` would surface as all-zero data or a
+      sync-byte mismatch. Tested by perturbing reset timing and
+      back-pressure to attempt to drive `sel_r` into an invalid
+      state.
+
+  # ── Single-input ordering ────────────────────────────────────────────────
+  - id: ARB-REQ-10
+    kind: behavioral
+    desc: >-
+      Single-source ordering: drive input k with a sequence of N
+      distinct words. When all N have been read on DOUT (via the
+      valid handshake with READY='1'), they appear in arrival order
+      with no drops and no reordering. Tested with N up to G_FIFO_DEPTH
+      pre-fill + back-to-back drain.
+
+  - id: ARB-REQ-11
+    kind: behavioral
+    desc: >-
+      FIFO depth honoured: filling input k with 2^G_FIFO_DEPTH words
+      asserts FULL(k); the (2^G_FIFO_DEPTH + 1)-th write while FULL(k)=1
+      is dropped (or held off by the wrapper logic), never silently
+      overwriting prior contents.
+
+  # ── Multi-input fairness ─────────────────────────────────────────────────
+  - id: ARB-REQ-20
+    kind: behavioral
+    desc: >-
+      Round-robin fairness across G_NUM_INPUTS sources, all continuously
+      backpressure-free: over a measurement window of M output words
+      (M ≫ G_NUM_INPUTS), each source contributes within ±1 of M/N
+      words. Window M is at least 64*G_NUM_INPUTS to give the round-
+      robin a chance to settle.
+
+  - id: ARB-REQ-21
+    kind: behavioral
+    desc: >-
+      Adversarial fairness — sparse vs dense: source 0 drives one word
+      every C cycles (sparse); sources 1..N-1 drive continuously
+      (dense). Source 0 must still be granted its word within a
+      bounded latency (at most 2*G_NUM_INPUTS cycles after the word
+      appears in its FIFO). No starvation.
+
+  - id: ARB-REQ-22
+    kind: behavioral
+    desc: >-
+      Skip-empty: when the currently selected input's FIFO is empty,
+      the selector rotates without burning output bandwidth on a dead
+      slot. Driving only source N-1 (all others empty) must produce
+      back-to-back outputs at ≥1 word per G_NUM_INPUTS cycles (no idle
+      stalls beyond the skip latency).
+
+  # ── Back-pressure ────────────────────────────────────────────────────────
+  - id: ARB-REQ-30
+    kind: behavioral
+    desc: >-
+      Back-pressure honoured: when READY='0', no new output is accepted.
+      DOUT_VALID may stay high (the consumer hasn't taken the current
+      word yet) but no FIFO is popped, the selector does not rotate
+      on the unaccepted slot, and no data is lost.
+
+  - id: ARB-REQ-31
+    kind: behavioral
+    desc: >-
+      Back-pressure resume: after a multi-cycle READY='0' window
+      followed by READY='1', the next output appears within 1 cycle
+      and the held-up data resumes in the same order it would have
+      had without the stall.
+
+  # ── Status signals ───────────────────────────────────────────────────────
+  - id: ARB-REQ-40
+    kind: behavioral
+    desc: >-
+      EMPTY/FULL correctness per input: EMPTY(i)='1' iff FIFO(i) holds
+      zero words; FULL(i)='1' iff FIFO(i) holds 2^G_FIFO_DEPTH words.
+      Transitions track DIN writes and arbiter reads with one-cycle
+      latency (FIFO sync register stage).
+
+  - id: ARB-REQ-41
+    kind: behavioral
+    desc: >-
+      FIFO_CNT(i) tracks the FIFO occupancy. After N writes and M
+      reads (M ≤ N), FIFO_CNT(i) = N - M (within ±1 for FWFT-counter
+      timing). Wraparound is not allowed (FIFO_CNT saturates at the
+      FIFO's max, never overflows back to zero).
+
+  # ── Parameter sweep ──────────────────────────────────────────────────────
+  - id: ARB-REQ-50
+    kind: behavioral
+    desc: >-
+      ARB-REQ-1 + ARB-REQ-10 + ARB-REQ-20 + ARB-REQ-30 all hold for
+      G_NUM_INPUTS ∈ {2, 3, 5, 8}. G_NUM_INPUTS=1 is a degenerate
+      pass-through, tested separately for sanity but not blocking.
+
+  - id: ARB-REQ-51
+    kind: behavioral
+    desc: >-
+      G_OUTPUT_FIFO ∈ {0, 1} both pass the core suite (ARB-REQ-1, 10,
+      20, 30). G_OUTPUT_FIFO=0 disables the chaining FIFO and routes
+      the mux output directly to DOUT — back-pressure semantics differ
+      slightly (READY gates the mux pop), test must handle both.
+
+# ── Adversarial attack vectors (filing-target list) ───────────────────────
+#
+# Every adversarial run must attempt at least these attack shapes. A
+# zero-defect run is a yellow flag, not victory (feedback_test_success
+# _is_bugs_found memory rule). When a defect surfaces, file as T-tier
+# and continue — do NOT fix in-session.
+#
+# These are documentation only (not part of the routertl-schema-validated
+# contract above). Tracked as comments because the schema validator
+# does not accept extra top-level keys today (RTL-T enhancement to add
+# an `adversarial:` section to the schema would let this live as data
+# rather than prose).
+#
+#   single-cycle-pulse:    DIN_VALID(i)='1' for exactly one cycle with i
+#                          rotating each pulse — no word dropped, no
+#                          phantom output (covers ARB-REQ-10, 22).
+#   simultaneous-fill:     All G_NUM_INPUTS sources valid same cycle for
+#                          K cycles — FIFO_CNT(i) = K, RR drains with
+#                          bounded latency (covers ARB-REQ-20, 40).
+#   backpressure-storm:    READY oscillates 0/1 every cycle for 1000
+#                          cycles while inputs stream — no output lost
+#                          or duplicated (covers ARB-REQ-30, 31).
+#   starvation-probe:      Source 0 sparse (1 / 256 cycles), others
+#                          continuous — source 0's word reaches DOUT
+#                          within 2*G_NUM_INPUTS cycles (covers
+#                          ARB-REQ-21).
+#   post-reset-mid-traffic: RST re-asserted mid-stream — FIFOs drain,
+#                          sel_r returns to C_ONE_HOT_INIT, DOUT quiet
+#                          (covers ARB-REQ-1, 2).
+#   parameter-sweep:       Re-run the full suite at every G_NUM_INPUTS in
+#                          {2, 3, 5, 8} (covers ARB-REQ-50).

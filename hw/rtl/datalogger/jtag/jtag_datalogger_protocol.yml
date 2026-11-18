@@ -1,0 +1,241 @@
+# =============================================================================
+# JTAG Datalogger Protocol Definition  (DRAFT v0.1 — co-refine with the RTL)
+# Foundation: bitbucket.org/dasjimaz/jtag (JTAG_master.vhd TAP FSM + IR/DR)
+# =============================================================================
+# Defines the HW<->SW protocol for a PASSIVE JTAG / IEEE 1149.1 datalogger.
+# Message width is 32 bits, matching every other deepskopion datalogger.
+#
+# WHAT IT IS: the jtag_datalogger watches TCK / TMS / TDI / TDO as INPUTS ONLY
+# (it never drives the chain). It mirrors the TAP state machine by sampling
+# TMS on TCK edges, and captures the IR and DR shift streams (TDI = host->
+# device, TDO = device->host) byte by byte — exactly the way the SPI datalogger
+# captures MOSI/MISO. Each shift is bracketed by begin/end events; the SW
+# reassembles the per-register bitstream and decodes it (IDCODE, instruction,
+# boundary-scan, ARM-DAP, …).
+#
+# KEY DESIGN NOTE — clock domains: unlike UART/I2C/SPI (slow async buses the
+# dataloggers oversample on clk_sys), JTAG is clocked by an EXTERNAL TCK (often
+# 10–100 MHz, async to clk_sys). The capture front-end (TAP FSM tracking +
+# IR/DR shift) therefore runs in the TCK domain; the 32-bit messages cross
+# TCK -> clk_sys through a coherent CDC before entering datalogger_gather. This
+# is the one genuinely-new building block vs the existing dataloggers.
+# =============================================================================
+
+protocol:
+  name: jtag_datalogger
+  description: Passive IEEE 1149.1 (JTAG/TAP) datalogger — TAP-FSM + IR/DR shift capture
+  message_width: 32
+  version: "0.1"          # DRAFT — architectural scaffold, pre-RTL
+
+# =============================================================================
+# Identity — domain + device id
+# =============================================================================
+# NOTE (audit): the domain codepoint is today split between sw/stream/zs_msg.py
+# and a hardcoded X"6" in deepskopion_top.vhd; no protocol spec declares it.
+# We declare it HERE as the intended single source of truth going forward.
+identity:
+  domain: 0x8             # DOMAIN_JTAG — first free 4-bit codepoint
+                          # (0x0..0x7 used: SYS/UART/I2C/SPI/I2S/QSPI/EDGE/TRIG)
+  device_id: 16           # PROPOSED 5-bit datalogger id (free; 16,17 reserve a 2nd TAP)
+  category: Burst         # per-protocol arbiter feeding the BURST output
+
+# =============================================================================
+# Constants
+# =============================================================================
+constants:
+  # Field widths (uniform with the other Burst dataloggers)
+  device_id_width: 5
+  type_width: 3
+  timestamp_width: 16
+  data_width: 8
+  tap_state_width: 4      # 16 IEEE-1149.1 TAP states
+
+  # Message types (3-bit, immediately below the 5-bit device_id)
+  message_types:
+    payload_tdi: 0b001    # one byte of the TDI shift stream (host -> device), LSB-first
+    payload_tdo: 0b010    # one byte of the TDO shift stream (device -> host), LSB-first
+    tap_state:   0b011    # optional verbose: a TAP FSM state change (debug mode)
+    event:       0b100    # lifecycle + shift-frame boundary markers
+
+  # Event codes (8-bit). SHARED CONVENTION (see audit): 0x00=disabled,
+  # 0x03=enabled are the SAME lifecycle codes every deepskopion datalogger uses.
+  # JTAG defines its own SHIFT-frame codes because, unlike single-frame
+  # protocols (I2C START/STOP, QSPI CS), it has TWO register frames (IR, DR)
+  # AND needs a partial-bit count — see ir_shift_end / dr_shift_end below.
+  events:
+    disabled:        0x00   # datalogger disabled (shared lifecycle)
+    enabled:         0x03   # datalogger enabled  (shared lifecycle)
+    overflow_error:  0x05   # TCK-domain capture FIFO overflowed (shared-style error)
+    tap_reset:       0x0C   # TEST-LOGIC-RESET reached (>=5 TCKs with TMS=1)
+    ir_shift_begin:  0x10   # entered SHIFT-IR
+    # ir_shift_end carries the valid-bit count of the final (partial) byte in
+    # the low nibble: code = 0x20 | valid_bits(0..7); 0 => last byte was full.
+    ir_shift_end:    0x20   # 0x20..0x27
+    dr_shift_begin:  0x30   # entered SHIFT-DR
+    dr_shift_end:    0x40   # 0x40..0x47  (low nibble = valid bits in final byte)
+
+  # TAP FSM states (4-bit) — mirrors JTAG_master.vhd t_fsm_jtag ordering.
+  tap_states:
+    test_logic_reset: 0x0
+    run_test_idle:    0x1
+    select_dr_scan:   0x2
+    capture_dr:       0x3
+    shift_dr:         0x4
+    exit1_dr:         0x5
+    pause_dr:         0x6
+    exit2_dr:         0x7
+    update_dr:        0x8
+    select_ir_scan:   0x9
+    capture_ir:       0xA
+    shift_ir:         0xB
+    exit1_ir:         0xC
+    pause_ir:         0xD
+    exit2_ir:         0xE
+    update_ir:        0xF
+
+  # Bit ordering — JTAG shifts LSB-first (the bit nearest TDO exits first).
+  bit_ordering:
+    standard: LSB-first
+    shift_direction: right
+    notes: >
+      TDI/TDO bytes are packed LSB-first: the first bit shifted on TDI/observed
+      on TDO is bit 0 of the first payload byte. SW concatenates bytes in
+      arrival order; the last byte's valid-bit count comes from the *_shift_end
+      event low nibble (sub-byte IR/DR like BYPASS=1b or a 4-bit IR).
+
+# =============================================================================
+# Message Formats — all 32-bit; [31:27]=device_id, [26:24]=type
+# =============================================================================
+messages:
+  - name: payload_tdi
+    description: One byte of the TDI (host -> device) shift stream
+    type_code: 0b001
+    total_bits: 32
+    fields:
+      - { name: device_id, bits: [31, 27], width: 5, description: Datalogger device id }
+      - { name: type,      bits: [26, 24], width: 3, value: 0b001, description: TDI payload }
+      - { name: timestamp, bits: [23, 8],  width: 16, description: Low 16 bits of the global 1us timestamp }
+      - { name: data,      bits: [7, 0],   width: 8, description: TDI byte, LSB-first }
+
+  - name: payload_tdo
+    description: One byte of the TDO (device -> host) shift stream
+    type_code: 0b010
+    total_bits: 32
+    fields:
+      - { name: device_id, bits: [31, 27], width: 5, description: Datalogger device id }
+      - { name: type,      bits: [26, 24], width: 3, value: 0b010, description: TDO payload }
+      - { name: timestamp, bits: [23, 8],  width: 16, description: Low 16 bits of the global 1us timestamp }
+      - { name: data,      bits: [7, 0],   width: 8, description: TDO byte, LSB-first }
+
+  - name: tap_state
+    description: TAP FSM state change (optional verbose mode)
+    type_code: 0b011
+    total_bits: 32
+    fields:
+      - { name: device_id, bits: [31, 27], width: 5, description: Datalogger device id }
+      - { name: type,      bits: [26, 24], width: 3, value: 0b011, description: TAP-state message }
+      - { name: timestamp, bits: [23, 8],  width: 16, description: Low 16 bits of the global 1us timestamp }
+      - { name: reserved,  bits: [7, 4],   width: 4, description: Reserved }
+      - { name: tap_state, bits: [3, 0],   width: 4, description: Current TAP state (see tap_states) }
+
+  - name: event
+    description: Lifecycle + shift-frame boundary markers
+    type_code: 0b100
+    total_bits: 32
+    fields:
+      - { name: device_id,  bits: [31, 27], width: 5, description: Datalogger device id }
+      - { name: type,       bits: [26, 24], width: 3, value: 0b100, description: Event message }
+      - { name: timestamp,  bits: [23, 8],  width: 16, description: Low 16 bits of the global 1us timestamp }
+      - name: event_code
+        bits: [7, 0]
+        width: 8
+        description: |
+          Event code (see constants.events). For ir_shift_end (0x20|n) and
+          dr_shift_end (0x40|n) the low nibble n is the number of VALID bits in
+          the final payload byte (0 => the last byte was a full 8 bits).
+
+# =============================================================================
+# Configuration Register  (CONFIG broadcast, G_CONFIG_WIDTH = 16)
+# =============================================================================
+# Identical envelope to every datalogger: [15:11]=device_id selector, [0]=enable.
+# JTAG reserves a couple of mode bits for future chain-aware decode.
+config:
+  name: jtag_config
+  width: 16
+  fields:
+    - { name: device_id, bits: [15, 11], width: 5, description: Target device id (must match to apply) }
+    - { name: reserved,  bits: [10, 3],  width: 8, description: Reserved }
+    - name: verbose_tap
+      bits: [2, 2]
+      width: 1
+      description: 1 = also emit a tap_state message on every FSM transition (debug; high volume)
+    - name: capture_tdo
+      bits: [1, 1]
+      width: 1
+      description: 1 = capture the TDO stream too (0 = TDI-only, halves bandwidth)
+    - { name: enable, bits: [0, 0], width: 1, description: Datalogger enable (0=disabled/reset, 1=enabled) }
+
+# =============================================================================
+# Error Outputs  (JTAG_ERRORS, G_ERROR_WIDTH = 2)
+# =============================================================================
+errors:
+  name: jtag_errors
+  width: 2
+  fields:
+    - name: error_flags
+      bits: [1, 0]
+      width: 2
+      description: |
+        [0] = TCK-domain capture overflow (CDC FIFO full — see overflow_error)
+        [1] = TAP-FSM desync (illegal TMS sequence / unexpected reset)
+
+# =============================================================================
+# Open design points (to settle alongside the RTL)
+# =============================================================================
+open_points:
+  - tck_clock_domain: >
+      Capture front-end runs in the TCK domain; 32-bit messages cross to
+      clk_sys via a coherent CDC FIFO. Define the CDC + the overflow policy
+      (drop-and-flag via overflow_error, never silent).
+  - wide_dr: >
+      Boundary-scan / memory DRs can be thousands of bits; they stream as many
+      payload bytes between dr_shift_begin and dr_shift_end. The total length =
+      (#payload bytes - 1)*8 + valid_bits(final). Confirm no per-shift length cap.
+  - chain_awareness: >
+      A real chain concatenates multiple devices' IR/DR. v0.1 captures the raw
+      concatenated stream; chain splitting (configurable per-device IR lengths,
+      mirroring the I2C-injector address config) is a Phase-3 feature.
+  - self_test: >
+      The existing JTAG *master* IP (dasjimaz/jtag) becomes the on-chip injector
+      driving a TAP; this datalogger is the DUT watching it — the same SelfTestBench
+      master-drives / datalogger-watches pattern used for the EMIO dataloggers.
+
+# =============================================================================
+# Decoding Example (Python — sketch for sw/stream/decoders.py)
+# =============================================================================
+examples:
+  decode_message: |
+    def decode_jtag_msg(msg: int) -> dict:
+        device_id = (msg >> 27) & 0x1F
+        mtype     = (msg >> 24) & 0x07
+        ts        = (msg >> 8) & 0xFFFF
+        low8      = msg & 0xFF
+        r = {"device_id": device_id, "type": mtype, "timestamp": ts}
+        if mtype == 0b001:
+            r.update(name="tdi", byte=low8)
+        elif mtype == 0b010:
+            r.update(name="tdo", byte=low8)
+        elif mtype == 0b011:
+            r.update(name="tap_state", state=low8 & 0xF)
+        elif mtype == 0b100:
+            code = low8
+            if   code == 0x00: r.update(name="event", event="disabled")
+            elif code == 0x03: r.update(name="event", event="enabled")
+            elif code == 0x05: r.update(name="event", event="overflow_error")
+            elif code == 0x0C: r.update(name="event", event="tap_reset")
+            elif code == 0x10: r.update(name="event", event="ir_shift_begin")
+            elif code == 0x30: r.update(name="event", event="dr_shift_begin")
+            elif (code & 0xF8) == 0x20: r.update(name="event", event="ir_shift_end", valid_bits=code & 7)
+            elif (code & 0xF8) == 0x40: r.update(name="event", event="dr_shift_end", valid_bits=code & 7)
+            else: r.update(name="event", event=f"unknown_{code:#x}")
+        return r

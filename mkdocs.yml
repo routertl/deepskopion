@@ -1,0 +1,97 @@
+site_name: Deepskopion
+site_description: Protocol-agnostic logic analyzer platform — FPGA hardware + embedded software.
+repo_url: https://github.com/routertl/deepskopion
+repo_name: routertl/deepskopion
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  features:
+    - navigation.instant
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - Home: README.md
+  - Overview:
+      - System Overview: SYSTEM_OVERVIEW.md
+      - Developer's Guide: DEEPSKOPION_DEV_GUIDE.md
+      - Requirements Roadmap: REQUIREMENTS_ROADMAP.md
+      - SDK Migration: SDK_V3_MIGRATION_REPORT.md
+      - SDK User Guide: SDK_USER_GUIDE.md
+  - Hardware:
+      - FPGA Design: hardware/fpga_design.md
+      - Edge Capture Bandwidth: hardware/fpga_edge_capture_bandwidth.md
+      - Datalogger Builder Flow: hardware/datalogger_builder_flow.md
+      - Interface Inventory: hardware/datalogger_interface_inventory.md
+  - Software:
+      - Overview: software/README.md
+      - Deployment Contract: DEPLOYMENT_CONTRACT.md
+      - Control Plane:
+          - Overview: software/control_plane/README.md
+          - Register Bank Access: software/control_plane/register_bank_access.md
+          - YAML Manifest: software/control_plane/yaml_manifest.md
+      - Data Plane:
+          - Overview: software/data_plane/README.md
+          - Burst vs Stream: software/data_plane/burst_vs_stream.md
+          - DMA DDR Buffers: software/data_plane/dma_ddr_buffers.md
+          - Global Timing Model: software/data_plane/global_timing_model.md
+          - Trigger Architecture: software/data_plane/trigger_architecture.md
+          - Stacked Decoders: software/data_plane/stacked_decoders.md
+          - Message Formats:
+              - Overview: software/data_plane/message_formats/overview.md
+              - Common Header: software/data_plane/message_formats/common_header.md
+              - Event & Datalogger ID: software/data_plane/message_formats/event_and_datalogger_id_spec.md
+      - Processes & Components:
+          - Overview: software/processes_components/README.md
+          - Architecture: software/processes_components/overview.md
+          - User Space Daemon: software/processes_components/user_space_daemon/README.md
+  - Design:
+      - Monetization: design/monetization_architecture.md
+      - PDL Architecture: design/pdl_architecture.md
+  - Standards:
+      - Compliance Checklist: standards/datalogger_compliance_checklist.md
+      - Documentation Guide: standards/datalogger_documentation_guide.md
+  - Migration: migration/sdk_v3_migration_report.md

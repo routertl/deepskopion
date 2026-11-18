@@ -1,0 +1,44 @@
+# DE-L0 declarative userspace map for the Agilex 5 HPS.
+version: "1.0.0"
+target: agilex5-hps
+
+devices:
+  # Agilex-5 lightweight HPS-to-FPGA aperture (DE-P0 §3.2).
+  - name: system_regs
+    base_addr: 0x20000000
+    span: 0x1000
+    compatible: generic-uio
+    regbank_ref: ../../../project_regbank.yml
+
+  # CPU-physical f2sdram ring.  Linux is constrained to the lower 512 MiB and
+  # the DT reserves this entire window with no-map.
+  - name: ddr_ring
+    base_addr: 0xA0000000
+    span: 0x10000000
+    compatible: generic-uio
+
+  # DS-T2.71: the two CTU CAN-FD datalogger endpoints behind the lwh2f decoder.
+  # These are the windows targets/de25_datalogger.yml's can@20010000 /
+  # can@20020000 dt_nodes probe, and declaring them here is what makes those
+  # nodes legal to ENABLE: tools/de25_linux_image.py's decode crosscheck
+  # refuses an enabled dt_node whose reg window no device below claims, and
+  # refuses a device below whose window hw/rtl/de25/axil_demux3.vhd does not
+  # decode.  The addresses are not free choices — the demux selects on
+  # awaddr(17 downto 16), so selectors 0/1/2 ARE 0x20000000/0x20010000/
+  # 0x20020000 and selector 3 (0x20030000) is hardwired to DECERR.
+  #
+  # uio: false — these are driven by the mainline ctucanfd kernel driver via
+  # their DT nodes, not by a userspace /dev/uio mapping.  Listing them keeps
+  # the map an honest statement of what the fabric decodes without also
+  # generating a UIO binding that would fight the driver for the region.
+  - name: canfd0
+    base_addr: 0x20010000
+    span: 0x10000
+    requires_bridge: lwh2f
+    uio: false
+
+  - name: canfd1
+    base_addr: 0x20020000
+    span: 0x10000
+    requires_bridge: lwh2f
+    uio: false

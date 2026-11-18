@@ -1,0 +1,138 @@
+# edge_batcher — Requirements catalog (contract-first per ROUTERTL convention)
+#
+# Per-channel batching FSM for the EDGE_BATCH zs_msg payload. Each
+# EBT-REQ-N below is referenced by ≥1 cocotb test in
+# hw/sim/cocotb/tests/datalogger/infra/edge_batcher/test_edge_batcher.py
+# via @requires().
+#
+# Wire-format spec:
+#   docs/software/data_plane/message_formats/payloads/edge_batch.md
+# Python codec (sanctioned oracle):
+#   sw/stream/zs_msg.py — parse_edge_batch / pack_edge_batch round-trip
+#
+# Adversarial-by-default: every requirement is exercised with hostile
+# input shapes (back-pressure storms, RST mid-flush, sustained valid).
+# Surfaced DUT defects file as T-tier (no in-session fixes) per the
+# file-don't-fix convention.
+
+ip: edge_batcher
+version: 1.0
+schema_version: 1
+
+port_contract:
+  slaves: []
+  masters: []
+  scalars:
+    - { name: EV_VALID,        dir: in,  width: "1" }
+    - { name: EV_READY,        dir: out, width: "1" }
+    - { name: EV_WORD,         dir: in,  width: "31 downto 0" }
+    - { name: TIMESTAMP_64,    dir: in,  width: "63 downto 0" }
+    - { name: BATCH_VALID,     dir: out, width: "1" }
+    - { name: BATCH_READY,     dir: in,  width: "1" }
+    - { name: BATCH_ANCHOR_TS, dir: out, width: "63 downto 0" }
+    - { name: BATCH_CHANNEL,   dir: out, width: "7 downto 0" }
+    - { name: BATCH_N,         dir: out, width: "7 downto 0" }
+    - { name: BATCH_PAYLOAD,   dir: out, width: "G_N_MAX*32 - 1 downto 0" }
+  clocks:
+    - { name: CLK }
+  resets:
+    - { name: RST, polarity: active_high }
+
+parameters:
+  - { name: G_N_MAX,          default: 32 }
+  - { name: G_CHANNEL_ID,     default: 0 }
+  - { name: G_T_FLUSH_CYCLES, default: 10000 }
+
+functional_contract:
+
+  # ── Reset / idle ─────────────────────────────────────────────────────────
+  - id: EBT-REQ-1
+    kind: behavioral
+    desc: >-
+      Under `RST`='1', state_r=S_IDLE, n_r=0, BATCH_VALID='0', and
+      EV_READY='1' (ready to accept the first event). No spurious
+      BATCH_VALID pulses during or immediately after reset.
+
+  - id: EBT-REQ-2
+    kind: behavioral
+    desc: >-
+      In S_IDLE with EV_VALID='0', the batcher is quiescent indefinitely:
+      EV_READY='1', BATCH_VALID='0'. The idle-timer never fires while
+      n_r=0 (only counts down on a non-empty open batch).
+
+  # ── First event of a batch ───────────────────────────────────────────────
+  - id: EBT-REQ-3
+    kind: behavioral
+    desc: >-
+      On the first (EV_VALID && EV_READY) in S_IDLE the FSM latches
+      TIMESTAMP_64 into anchor_r, writes one entry into slot 0 with
+      ts_delta=0, increments n_r to 1, and moves to S_ACCUM next cycle.
+      BATCH_VALID stays '0'.
+
+  # ── Capacity flush ───────────────────────────────────────────────────────
+  - id: EBT-REQ-4
+    kind: behavioral
+    desc: >-
+      After exactly G_N_MAX accepted events (with monotonic, in-range
+      timestamps), the FSM enters S_FLUSH and asserts BATCH_VALID.
+      BATCH_N=G_N_MAX; BATCH_ANCHOR_TS = the first event's timestamp;
+      BATCH_PAYLOAD reproduces the byte-exact wire layout that
+      sw.stream.zs_msg.parse_edge_batch yields on a buffer assembled
+      from those events.
+
+  # ── Delta overflow flush ─────────────────────────────────────────────────
+  - id: EBT-REQ-5
+    kind: behavioral
+    desc: >-
+      Two events whose ts_64b spacing exceeds 0xFFFF cycles must close
+      the open batch BEFORE the second is admitted. After the flush is
+      consumed (BATCH_READY='1'), the FSM re-opens with the parked
+      second event as a single-entry batch with itself as the new
+      anchor (ts_delta=0).
+
+  # ── Idle timer flush ─────────────────────────────────────────────────────
+  - id: EBT-REQ-6
+    kind: behavioral
+    desc: >-
+      With n_r ≥ 1 and no new EV_VALID for G_T_FLUSH_CYCLES consecutive
+      cycles, the FSM flushes the partial batch. BATCH_N equals the
+      events-so-far count; the timer does not fire while n_r=0
+      (mirroring EBT-REQ-2's quiescence guarantee).
+
+  # ── Backpressure on the flush handshake ──────────────────────────────────
+  - id: EBT-REQ-7
+    kind: behavioral
+    desc: >-
+      BATCH_VALID stays high until BATCH_READY='1' for at least one
+      cycle. While the framer holds BATCH_READY='0', new EV_VALID
+      tuples are NOT accepted (EV_READY='0'). After the handshake the
+      buffer clears and the FSM returns to S_IDLE.
+
+  # ── Per-entry encoding parity with the spec ──────────────────────────────
+  - id: EBT-REQ-8
+    kind: behavioral
+    desc: >-
+      Each 32-bit BATCH_PAYLOAD slot decodes as flags[7:0] |
+      channel[15:8] | ts_delta[15:0] in LE-byte order, per
+      edge_batch.md §2. Flags bit[0]=E, bit[1]=F, bit[2]=S; channel
+      equals G_CHANNEL_ID (zero-extended to 8b); ts_delta is the
+      cycle-count between this entry's timestamp and BATCH_ANCHOR_TS.
+
+  # ── Reset mid-batch ──────────────────────────────────────────────────────
+  - id: EBT-REQ-9
+    kind: behavioral
+    desc: >-
+      Asserting RST while a batch is open (S_ACCUM with n_r > 0) or
+      mid-flush (S_FLUSH with BATCH_VALID='1') must clear n_r to 0,
+      drop BATCH_VALID immediately, and return to S_IDLE. No half-flush
+      leakage (no BATCH_VALID pulse after RST drops without a fresh
+      event causing it).
+
+  # ── Single-channel invariant ─────────────────────────────────────────────
+  - id: EBT-REQ-10
+    kind: invariant
+    desc: >-
+      Every entry in BATCH_PAYLOAD carries channel = G_CHANNEL_ID. The
+      block does not inspect EV_WORD[31:27] (device_id) — channel
+      filtering is the upstream demux's job. Any DUT divergence here
+      is a build-time wiring bug, not a runtime one.

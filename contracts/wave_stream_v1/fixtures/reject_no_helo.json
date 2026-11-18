@@ -1,0 +1,32 @@
+{
+  "contract": "wave_stream_v1",
+  "name": "reject_no_helo",
+  "expect": "reject",
+  "why": "Data before the handshake. Without HELO the consumer has no channel descriptors, so every annotation it receives is unplaceable \u2014 and a producer that streams anyway looks 'alive' while showing nothing.",
+  "expect_fields": [
+    "frame[0][ANNOTATIONS]",
+    "session"
+  ],
+  "frames": [
+    {
+      "dir": "p2c",
+      "tag": 6,
+      "payload": {
+        "seq": 0,
+        "annotations": [
+          {
+            "ts_start": 10,
+            "ts_end": 20,
+            "channel_id": 100,
+            "kind": "uart_byte",
+            "text": "0x55 'U'",
+            "payload": {
+              "byte": 85
+            },
+            "is_error": false
+          }
+        ]
+      }
+    }
+  ]
+}

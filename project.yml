@@ -1,0 +1,4 @@
+# Managed by RouteRTL — do not edit manually.
+# To modify project settings, edit: targets/de25_datalogger.yml
+# To switch targets: rr target set <name>
+target: targets/de25_datalogger.yml

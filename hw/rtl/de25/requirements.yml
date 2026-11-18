@@ -1,0 +1,151 @@
+ip: de25_interconnect_shell
+hdl_file: deepskopion_de25_top.vhd
+version: 1.0
+
+# DS-P2.187: `ip: de25_interconnect_shell` names no entity, so contract-check
+# failed with no-matching-hdl and never compared a port. The shell is the
+# target-scoped DE25 board top that wraps the portable deepskopion_core with
+# the HPS, lwh2f_axilite_bridge, axil_demux3 and axil_apb_shim:
+# deepskopion_de25_top. hdl_file pins it, and port_contract below is that
+# entity's real boundary (scaffolded with rr ip contract init, reviewed).
+#
+# The previous port_contract described the shell's INTERNAL interfaces
+# (signals inside deepskopion_de25_top, not ports of any entity), and its
+# parameters are not generics of any entity. Kept here as documentation:
+#   port_contract:
+#     slaves:
+#       - { name: lwh2f_axil, protocol: axi-lite, clock_domain: clk_sys, reset: rst_sys }
+#       - { name: f2sdram_axi, protocol: axi4, clock_domain: clk_sys, reset: rst_sys }
+#     masters:
+#       - { name: regbank_axil, protocol: axi-lite, clock_domain: clk_sys, reset: rst_sys }
+#     scalars:
+#       - { name: irq, dir: out, width: 3 }
+#       - { name: ctu_a_apb, dir: out, width: "APB3/32" }
+#       - { name: ctu_b_apb, dir: out, width: "APB3/32" }
+#     clocks:
+#       - { name: clk_sys }
+#     resets:
+#       - { name: rst_sys, polarity: active_high }
+#
+#   parameters:
+#     - { name: CSR_APERTURE_BASE, default: "0x20000000" }
+#     - { name: DDR_RING_BASE, default: "0xA0000000" }
+#
+# Witnesses. coverage-map reads cocotb @requires tags only, so it reports all
+# seven REQs below as missing. Six have a witness in
+# tools/tests/test_de25_shell_contract.py (nvc testbenches it runs, plus one
+# static source check); coverage-map cannot credit any of them. OPEN GAP (both need a follow-up ticket): (1) those witnesses are
+# invisible to the contract gate; (2) DE25-AXIL-002 has NO witness at all —
+# tb_axil_demux3 always presents AW and W on the same cycle.
+#   DE25-AXIL-001  test_axil_demux_behavior (tb_axil_demux3: one-hot decode)
+#   DE25-AXIL-002  none
+#   DE25-AXIL-003  test_axil_demux_behavior (tb_axil_demux3: 0x30000 DECERR)
+#   DE25-APB-001   test_axil_apb_behavior (tb_axil_apb_shim: setup then
+#                  access phase, PSEL/PENABLE held while PREADY is low)
+#   DE25-APB-002   test_axil_apb_behavior (tb_axil_apb_shim: no PSEL before W)
+#   DE25-APB-003   test_axil_apb_behavior (tb_axil_apb_shim: partial write
+#                  refused with SLVERR, no PSEL)
+#   DE25-PORT-001  test_portable_core_has_no_vendor_dependency
+port_contract:
+  slaves:
+    []
+  masters:
+    []
+  scalars:
+    - { name: CLOCK2_50, dir: in, width: "1" }
+    - { name: CLOCK0_50, dir: in, width: "1" }
+    - { name: LEDR, dir: out, width: "3 downto 0" }
+    - { name: DDR4_CKE, dir: out, width: "1" }
+    - { name: DDR4_ODT, dir: out, width: "1" }
+    - { name: DDR4_CS_n, dir: out, width: "1" }
+    - { name: DDR4_A, dir: out, width: "16 downto 0" }
+    - { name: DDR4_BA, dir: out, width: "1 downto 0" }
+    - { name: DDR4_BG, dir: out, width: "0 downto 0" }
+    - { name: DDR4_ACT_n, dir: out, width: "1" }
+    - { name: DDR4_PAR, dir: out, width: "1" }
+    - { name: DDR4_DQ, dir: inout, width: "31 downto 0" }
+    - { name: DDR4_DQS, dir: inout, width: "3 downto 0" }
+    - { name: DDR4_DQS_n, dir: inout, width: "3 downto 0" }
+    - { name: DDR4_DBI_n, dir: inout, width: "3 downto 0" }
+    - { name: DDR4_ALERT_n, dir: in, width: "1" }
+    - { name: DDR4_CK, dir: out, width: "1" }
+    - { name: DDR4_CK_n, dir: out, width: "1" }
+    - { name: DDR4_RESET_n, dir: out, width: "1" }
+    - { name: DDR4_RZQ, dir: in, width: "1" }
+    - { name: DDR4_REFCLK_p, dir: in, width: "1" }
+    - { name: HPS_SD_CLK, dir: out, width: "1" }
+    - { name: HPS_SD_CMD, dir: inout, width: "1" }
+    - { name: HPS_SD_DATA, dir: inout, width: "3 downto 0" }
+    - { name: HPS_UART_TX, dir: out, width: "1" }
+    - { name: HPS_UART_RX, dir: in, width: "1" }
+    - { name: HPS_ENET_MDC, dir: out, width: "1" }
+    - { name: HPS_ENET_MDIO, dir: inout, width: "1" }
+    - { name: HPS_ENET_RX_CTL, dir: in, width: "1" }
+    - { name: HPS_ENET_RX_DATA, dir: in, width: "3 downto 0" }
+    - { name: HPS_ENET_TX_CLK, dir: out, width: "1" }
+    - { name: HPS_ENET_TX_CTL, dir: out, width: "1" }
+    - { name: HPS_ENET_TX_DATA, dir: out, width: "3 downto 0" }
+    - { name: HPS_USB_STP, dir: out, width: "1" }
+    - { name: HPS_USB_DIR, dir: in, width: "1" }
+    - { name: HPS_USB_NXT, dir: in, width: "1" }
+    - { name: HPS_USB_DATA, dir: inout, width: "7 downto 0" }
+    - { name: HPS_I2C_SCL, dir: inout, width: "1" }
+    - { name: HPS_I2C_SDA, dir: inout, width: "1" }
+    - { name: HPS_LCM_SPIM_CLK, dir: out, width: "1" }
+    - { name: HPS_LCM_SPIM_MOSI, dir: out, width: "1" }
+    - { name: HPS_LCM_SPIM_SS, dir: out, width: "1" }
+    - { name: HPS_LCM_D_C, dir: inout, width: "1" }
+    - { name: HPS_GPIO, dir: inout, width: "1 downto 0" }
+    - { name: HPS_LCM_RST_n, dir: inout, width: "1" }
+    - { name: HPS_LCM_BK, dir: inout, width: "1" }
+    - { name: HPS_KEY, dir: inout, width: "1" }
+    - { name: HPS_LED, dir: inout, width: "1" }
+    - { name: HPS_GSENSOR_INT, dir: inout, width: "1" }
+    - { name: GPIO_D, dir: in, width: "15 downto 0" }
+  clocks:
+    - { name: HPS_CLK_25, source: board }
+    - { name: HPS_ENET_RX_CLK, source: board }
+    - { name: HPS_USB_CLK, source: board }
+  resets:
+    []
+
+parameters: []
+
+functional_contract:
+  - id: DE25-AXIL-001
+    kind: behavioral
+    desc: >-
+      AXI4-Lite offsets 0x00000, 0x10000, and 0x20000 select exactly one of
+      the regbank, CTU-A, or CTU-B downstream interfaces respectively.
+  - id: DE25-AXIL-002
+    kind: behavioral
+    desc: >-
+      Independently arriving AXI write-address and write-data channels are
+      each accepted once and forwarded to the selected slave without ordering
+      assumptions.
+  - id: DE25-APB-001
+    kind: behavioral
+    desc: >-
+      A full-word access to either CTU window emits one APB setup phase followed
+      by a stable access phase; PSEL, PADDR, PWRITE, and PWDATA remain stable
+      while PREADY is low.
+  - id: DE25-APB-002
+    kind: negative
+    desc: >-
+      If only AXI AW or only AXI W has arrived, the shim must not assert PSEL
+      until both write halves have been accepted.
+  - id: DE25-APB-003
+    kind: negative
+    desc: >-
+      A partial AXI write must produce no APB transfer and must return SLVERR,
+      because the CTU APB interface has no byte strobes.
+  - id: DE25-AXIL-003
+    kind: negative
+    desc: >-
+      An access in reserved offset window 0x30000 must assert no downstream
+      valid and must return DECERR locally.
+  - id: DE25-PORT-001
+    kind: negative
+    desc: >-
+      The portable deepskopion_core must not reference a vendor primitive
+      library or instantiate either vendor's generated block-design/debug shell.

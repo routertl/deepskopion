@@ -1,0 +1,26 @@
+# DS-P2.189 — deepskopion-side RR-CDC-002 waivers for VENDORED sources.
+#
+# A vendored package is installed byte-for-byte from its upstream commit and
+# its bytes are pinned by ip.lock file_hashes, so an inline
+# `rr-lint-disable-line` pragma added to a vendored file is lost on the next
+# re-vendor. That happened: DS-T1.21 (31761198) annotated rr_rea_cdc.vhd s1/s2
+# inline, and the REA re-vendor 30c53d04 (DS-P3.174) overwrote them, so the
+# DS-T1.21 whole-design CDC gate went red on main and stayed red for 4 days.
+#
+# A waiver here is anchored on (path, entity, signal), never on a line number,
+# so it survives upstream line churn. tools/cdc_lint_waivers.py enforces it and
+# refuses a waiver that matches no finding (stale) and any finding outside the
+# named entity/signals (no blanket file waiver).
+#
+# Each waiver must name evidence: the requirement that makes the crossing safe
+# and the constraint files that bound it. Those files must exist and contain
+# what the waiver says they contain, or the waiver is refused.
+#
+# DS-P2.193: the rea-sync-word-quasi-static-mcp waiver that lived here is gone.
+# rr-rea 1.12.3 (REA-P2.26, tag v1.12.3 = 6d9d218) carries the same RR-CDC-002
+# waiver inline upstream on rr_rea_sync_word s1/s2, citing REA-REQ-959 and
+# rr_rea_scoped.xdc/.sdc. 1.12.4 (82cfcc7) keeps it, and every target pins
+# routertl/rea ==1.12.4. Re-adding it here is refused as stale (the upstream
+# pragma already suppresses s1/s2).
+version: 1
+waivers: []

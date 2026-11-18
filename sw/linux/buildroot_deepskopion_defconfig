@@ -1,0 +1,99 @@
+# Buildroot defconfig — deepskopion ARM Cortex-A9 (Zybo Z7-20)
+# DS-P2.49 — python3 + msgpack + dropbear python_overlay for rr linux rootfs
+
+# Architecture: ARM Cortex-A9 (Zynq-7), VFPv3 HF
+BR2_arm=y
+BR2_cortex_a9=y
+BR2_ARM_FPU_VFPV3=y
+BR2_ARM_INSTRUCTIONS_THUMB2=y
+
+# Toolchain: internal Buildroot toolchain, glibc, C++ enabled (some deps want it)
+BR2_TOOLCHAIN_BUILDROOT=y
+BR2_TOOLCHAIN_BUILDROOT_GLIBC=y
+BR2_TOOLCHAIN_BUILDROOT_CXX=y
+
+# Optimisation
+BR2_OPTIMIZE_2=y
+
+# System
+BR2_TARGET_GENERIC_HOSTNAME="deepskopion"
+BR2_TARGET_GENERIC_ISSUE="deepskopion (Buildroot python_overlay)"
+BR2_TARGET_GENERIC_ROOT_PASSWD="root"
+BR2_INIT_BUSYBOX=y
+BR2_ROOTFS_DEVICE_CREATION_DYNAMIC_DEVTMPFS=y
+BR2_SYSTEM_DEFAULT_PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin"
+
+# Filesystem output — tarball; rr linux python_overlay extracts from this
+BR2_TARGET_ROOTFS_TAR=y
+BR2_TARGET_ROOTFS_TAR_GZIP=y
+
+# Python 3 + the non-stdlib deps deepskopion's sw/stream uses
+BR2_PACKAGE_PYTHON3=y
+BR2_PACKAGE_PYTHON3_SSL=y
+BR2_PACKAGE_PYTHON3_HASHLIB=y
+BR2_PACKAGE_PYTHON3_BZIP2=y
+BR2_PACKAGE_PYTHON3_ZLIB=y
+BR2_PACKAGE_PYTHON3_PIP=y
+BR2_PACKAGE_PYTHON_MSGPACK=y
+
+# DS-P3.44: PS-side EMIO self-test harness uses these idiomatic libs.
+# The stdlib path (raw ioctls + termios + ctypes) works too, and is
+# documented in docs/software/linux_i2c_spi_userspace.md — but the
+# self-test goes through the libs because (a) they're well-trodden +
+# maintained, (b) they handle CS auto-toggle / repeated-START / baud
+# clamping correctly, (c) overlay rebuild cost is routine here per
+# feedback_solid_beats_devtime.
+BR2_PACKAGE_PYTHON_SERIAL=y       # pyserial — /dev/ttyPS0 — UART0 over EMIO
+BR2_PACKAGE_PYTHON_SPIDEV=y       # spidev   — /dev/spidev*  — SPI0 over EMIO
+
+# Host-side device-tree tools (dtc/fdtput/fdtoverlay) — needed by
+# sw/linux/build_dt.sh to patch the system.dtb with the spidev child
+# node (DS-P3.48). Without this, the only available fdtput on a typical
+# lab box is PetaLinux's, which contaminates the no-PetaLinux flow
+# (RTL-P2.621 / RTL-P2.624 audit). Building dtc as part of our buildroot
+# host tree keeps the toolchain inside the project boundary.
+BR2_PACKAGE_HOST_DTC=y
+
+# Host-side u-boot-tools (mkimage etc.) — `rr linux bootscr` resolves
+# mkimage via this path FIRST (RTL-P2.621 resolver). Without it the
+# fallback walks PATH and would land on PetaLinux's mkimage, which the
+# resolver now refuses. Building it under the project's buildroot keeps
+# the toolchain inside the project boundary.
+BR2_PACKAGE_HOST_UBOOT_TOOLS=y
+# smbus2 isn't in buildroot 2024.11.x's package tree (only smbus_cffi
+# which doesn't expose i2c_msg.read/write). Vendor it directly via the
+# rootfs_overlay/ at sw/linux/rootfs_overlay/usr/lib/python3.12/
+# site-packages/smbus2/ — a small pure-Python module.
+
+# i2c-tools brings i2cdetect / i2cget / i2cset / i2ctransfer for
+# manual probing during on-board bring-up. Tiny binary, useful.
+BR2_PACKAGE_I2C_TOOLS=y
+
+# SSH server = dropbear (lightweight sshd). NB dropbear's own scp is compiled
+# out by BR2_PACKAGE_DROPBEAR_SMALL (default y in Buildroot), so `scp host:f
+# board:` fails with "scp: not found" on the board — add the OpenSSH CLIENT
+# (scp/sftp/ssh) for it, while keeping dropbear as the running daemon.
+# BR2_PACKAGE_OPENSSH_SERVER defaults to y once BR2_PACKAGE_OPENSSH is enabled
+# (Buildroot Config.in), so it MUST be explicitly disabled below or sshd would
+# clash with dropbear on port 22 — DS-P3.79 caught this the hard way: an
+# earlier commit enabled BR2_PACKAGE_OPENSSH without this line and silently
+# pulled sshd in anyway (`make deepskopion_defconfig` reveals it in .config).
+BR2_PACKAGE_DROPBEAR=y
+BR2_PACKAGE_OPENSSH=y
+BR2_PACKAGE_OPENSSH_CLIENT=y
+# BR2_PACKAGE_OPENSSH_SERVER is not set
+
+# Useful runtime tools beyond busybox
+BR2_PACKAGE_TAR=y
+
+# DS-P3.103: CAN userspace for the on-silicon fabric-loopback validation.
+# cansend/candump (can-utils) + the FULL iproute2 `ip` — busybox's `ip` cannot
+# configure `type can bitrate`, which BRING_UP_CAN.md checkpoint B needs to bring
+# can0/can1 up at 250 kbit and drive a can0->can1 frame across the fabric wired-AND.
+BR2_PACKAGE_CAN_UTILS=y
+BR2_PACKAGE_IPROUTE2=y
+
+# Buildroot kernel/bootloader: WE DO NOT BUILD THESE — rr linux owns
+# the kernel (linux-xlnx) and bootloader (u-boot-xlnx) via its own
+# steps. Buildroot here is strictly a rootfs userspace tree.
+# (Leave BR2_LINUX_KERNEL=n and BR2_TARGET_UBOOT=n implicitly.)

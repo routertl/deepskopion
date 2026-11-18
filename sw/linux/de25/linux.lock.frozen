@@ -1,0 +1,56 @@
+{
+  "architecture": "aarch64",
+  "artifacts": {
+    "Image": {
+      "sha256": "88c116ee63fe699e5caf68467080df3ccd538064abd18f84b77993c338a8e64a",
+      "size": 46768640
+    },
+    "bl31.bin": {
+      "sha256": "9bb74661d68359a5589d87a93677a1c9a73afddff10c83c0876d56fcdc9ee86f",
+      "size": 61504
+    },
+    "boot.scr": {
+      "sha256": "a595f76528d311c7a10c69abafcd30864fdd9380cdd8aa496be4b34fedf8eb74",
+      "size": 380
+    },
+    "sdcard.img": {
+      "content_sha256": "7f0c6c99527836976579a37f1e322002e799ab1365ee9157c7cb3256d11ba6cb",
+      "size": 455081984
+    },
+    "socfpga_agilex5_socdk.dtb": {
+      "sha256": "b8615a679776231443ff9cee0b6794e03e39cdaf629946efb2965b6a0b239c99",
+      "size": 24776
+    },
+    "u-boot-spl-dtb.hex": {
+      "sha256": "65a96da614981a71bbb24da3d2e5d29428afe4789e1ccb180fa6b9f1c9f3c034",
+      "size": 526275
+    },
+    "u-boot.itb": {
+      "sha256": "1ae849a985d803534e0408d0397d8005fd99027375387ebd0f06e1bec115b85e",
+      "size": 937776
+    }
+  },
+  "inputs": {
+    "cpython-3.13.1+20241219-aarch64-unknown-linux-gnu-install_only.tar.gz": "c991fe7da0fdcdc35738169c02b966d23e69dbf3e33a6dd73d157fc9d14325ad",
+    "msgpack-1.1.1.tar.gz": "77b79ce34a2bdab2594f490c8e80dd62a02d650b91a75159a63ec413b8d104cd",
+    "sw/linux/de25/kernel_de25.config-fragment": "20f1511ab538852f7edae6a065229d8f2000bcf86cc84f877faabe0dc5e82bc2",
+    "sw/linux/de25/system_memory_map.yml": "490649e322149ad7bb45a3ff7e2a682f5575de9e5d684c01a1d876855860ae81",
+    "targets/de25_datalogger.yml": "16e716243b0daee7d0b7eb3e43903eb29522e8714ee5086c9021c0f71c23a4e1",
+    "tools/de25_linux_image.py": "b45392bc59f599de70f4f6ef3cf9fa4ac97c1b9cbfc5c78c1b8c4d5399d4a2f8"
+  },
+  "kernel_build_identity": {
+    "host": "reproducible",
+    "timestamp": "2025-09-25 06:05:32 +0000",
+    "user": "routertl",
+    "version": 1
+  },
+  "mtools_date_string": "2025-09-25 06:05:32",
+  "source_date_epoch": 1758780332,
+  "sources": {
+    "arm-trusted-firmware": "116f2f97fa533e3540be97a2d9ec828f2a2b68aa",
+    "linux-socfpga": "3234b1ed89566a5e8b6c22c68bdfd36347174267",
+    "u-boot-socfpga": "e5f40a8ed1ec65f20c4e2491bfe8e738efce6d94"
+  },
+  "target": "de25_datalogger",
+  "version": 1
+}

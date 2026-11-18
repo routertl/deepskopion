@@ -1,0 +1,575 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# targets/zybo_datalogger.yml — Zybo Z7-20 CAN-free default target (DS-P2.121).
+#
+# Default CAN-less target for Zybo Z7-20, per decision DS-D.43 Option (a).
+# Builds without the CTU CAN FD soft core. canfd_demo remains the opt-in
+# example for CAN FD validation.
+# ─────────────────────────────────────────────────────────────────────────────
+project:
+  name: deepskopion
+  top_module: deepskopion_top
+  output_dir: build/zybo_datalogger
+# DS-P1.72: make the launch timing/CDC gates opt-in instead of advisory. The
+# clock names are the application RTL domains; generated PS/MMCM subclocks stay
+# owned by the Vivado IP constraints and are enumerated in the audit report.
+synthesis:
+  fail_on_unmatched_constraints: true
+implementation:
+  fail_on_unmatched_constraints: true
+declared_clocks:
+  - name: clk_sys
+    freq_hz: 100000000
+    assert_drift: false
+  - name: clk_ddr
+    freq_hz: 125000000
+    assert_drift: false
+  - name: reg_clk
+    freq_hz: 33333333
+    assert_drift: false
+hardware:
+  vendor: xilinx
+  part: xc7z020clg400-1
+  language: vhdl
+  platform: zybo-z7-20
+  pins:
+  - led[0]
+  - led[1]
+  - led[2]
+  - led[3]
+  - ja[0]
+  - ja[1]
+  - ja[2]
+  - ja[3]
+  - ja[4]
+  - ja[5]
+  - ja[6]
+  - ja[7]
+  - jb[0]
+  - jb[1]
+  - jb[2]
+  - jb[3]
+  - jb[4]
+  - jb[5]
+  - jb[6]
+  - jb[7]
+  # PS7 project-feature deltas (RTL-P2.618). Layered on top of the
+  # canonical Zybo Z7-20 board preset (routertl/boards/zybo-z7-20/
+  # ps7_preset.tcl, auto-loaded from hardware.platform above).
+  # Per-feature TCL files keep the board preset generic for any
+  # Z7-20 consumer while we apply DS-specific deltas declaratively.
+  ps7_hooks:
+    - hw/bd/ds_hp2_off.tcl                # S_AXI_HP2 unused; turn it off
+    - hw/bd/ds_irq_f2p_on.tcl             # DS-P3.60: ring-watermark alarm → IRQ_F2P[0]
+    - hw/bd/ds_emio_uart_i2c_spi.tcl      # DS-P2.51: route UART0/I2C0/SPI0 to EMIO
+    - hw/bd/ds_emio_can.tcl               # DS-P3.102: route CAN0/CAN1 to EMIO (2-node fabric loopback)
+simulation:
+  test_dir: hw/sim/cocotb/tests
+  waves_dir: hw/sim/waves
+  logs_dir: hw/sim/logs
+  simulator: nvc
+  # DS-X3 (DS-P1.33): the pre-hardware functional baseline for THIS target.
+  # Keep this explicit rather than using --all: canfd_demo's test_dir also
+  # contains eye/responder benches and legacy UART diagnostics that are not in
+  # the active datalogger data path. tools/sim/run_xilinx_baseline.py runs this
+  # tag through the shared sim queue and fails closed on any cocotb SKIP.
+  tags:
+    xilinx_baseline:
+      # Active protocol implementations (I2C, UART, SPI/QSPI, JTAG, CAN, EDGE).
+      - test_i2c_datalogger
+      - test_uart_precommit
+      - test_qspi_capture
+      - test_jtag_datalogger
+      - test_can_datalogger
+      - test_edge_datalogger
+      # Generated active-target gather, including real per-protocol BFMs and
+      # cross-protocol backpressure/fairness.
+      - test_datalogger_gather
+      - test_datalogger_gather_crossproto
+      - test_datalogger_gather_i2c
+      - test_datalogger_gather_uart
+      - test_datalogger_gather_spi
+      - test_datalogger_gather_jtag
+      - test_datalogger_gather_edge
+      # AXI-Lite regbank behavior and the capture-config fan-out seam.
+      - test_demo_axilite_bfm_conformance
+      - test_regbank_datalogger_config_seam
+      # Exact zs_msg framing plus AXI-stream stability under backpressure.
+      - test_zs_msg_framer
+      - test_framer_axistream_conformance
+      # Arbitration, backpressure, and visible loss accounting/reporting.
+      - test_arbiter
+      - test_error_event_bank
+      - test_error_event_emitter
+      - test_emit_framer_integration
+      # Real protocol pins through gather/framer/DMA into an AXI DDR model.
+      - test_datalogger_to_ddr
+      # DS-P2.323: every cocotb test that reads the regbank schema hex content
+      # (tools/tests/test_regbank_hex_readers_in_baselines_ds_p2_323.py).
+      - test_regbank_rom_stream_ds_p1_82
+      - test_regbank_wrapper_rom_seam
+      - test_pfsoc_fic0_regbank_read_ds_p2_305
+      - test_pfsoc_fic0_rom_stream_rdloop_ds_p2_305
+      - test_fic0_stall_trigger_ds_p2_326
+      - test_fic0_stall_capture_ds_p2_326
+      - test_regbank_reset_values_ds_p2_317
+paths:
+  sources:
+  - hw/rtl
+  - libs
+  simulation: hw/sim
+  # DS-T1.17: ONE file, not the hw/xdc directory. RouteRTL auto-globs every
+  # *.xdc under a paths.constraints directory (RTL-P3.566), so `hw/xdc` loaded
+  # classic_eye.xdc, eye_loopback.xdc and pblock_ctu.xdc into this build too
+  # (measured: report_compile_order -constraints, build 0dd5dbb). pblock_ctu
+  # raised two Vivado 12-1433 empty-pblock critical warnings, and
+  # eye_loopback's clk_fpga_0/1 max_delay pair showed up in
+  # report_exceptions -ignored as totally overridden. The single-file form is
+  # RTL-P4.269.
+  constraints: hw/xdc/timing.xdc
+  verification: hw/verif
+sources:
+  # DS-P1.88: deepskopion_core's regbank ROMs read these at elaboration (VHDL
+  # textio, sized from the files, DS-P1.82), so they key the build cache.
+  # Staging them into the tool's run directory is rr's job (RTL-P1.297).
+  data:
+  - hw/rtl/regbank/regbank_schema.hex
+  - hw/rtl/regbank/config_schema.hex
+  # Must be the FILE path: a bare dir resolves in the lockfile but the build
+  # passes it raw to Vivado ([12-818] No files matched). This is the DS-T10 CDC
+  # set_max_delay.
+  xdc:
+  # DS-P2.168 / RTL-P2.1544: LATE, so Vivado parses it after the package
+  # scoped XDCs (read_xdc -ref) that create the REA TCK clock its bounds name.
+  # It creates no clock itself, so nothing parsed earlier depends on it.
+  - path: hw/xdc/timing.xdc
+    processing_order: late
+  # DS-P2.309 interim (RTL-P2.2402): PULLUP on every Pmod JA/JB input so an
+  # undriven input idles HIGH. Remove with DS-P3.269.
+  - path: hw/xdc/zybo_header_pullups.xdc
+  # DS-P2.79 / RTL-P2.892 / DS-P2.168: the generated BUILD_ID package must
+  # compile into the SAME library as routertl/rea, because rr_rea_regbank.vhd
+  # resolves rr_rea_build_id_pkg via its own library. `routertl/rea` carries no
+  # library override under packages: any more, and this target lists no explicit
+  # placement for the package: its rr_rea placement comes from the ip.lock
+  # generated_files entry.
+  # NB `sources.libraries` is undocumented in `rr schema` but is genuinely
+  # consumed (routertl_core/lib_cache.py, scan_sources.py, lint_runners.py);
+  # filed as RTL-P3.1539 so the schema catches up.
+  libraries:
+    # DS-P2.106: deepskopion_top instantiates `entity work.deepskopion_core`.
+    # Package inference can otherwise pull the shared core into tich because
+    # it imports tich units. Vivado compiles unmapped project sources into
+    # xil_defaultlib, so the core must be in that same physical library: a
+    # literal `work` library is distinct and does not satisfy the caller.
+    xil_defaultlib:
+    - hw/rtl/deepskopion_core.vhd
+    ctu_can_fd_rtl:
+    - tools/sim/vendor_stubs/ctu_can_fd/can_top_apb_stub.vhd
+build_options:
+  # Pinned to the ONE supported Vivado release (tools/preflight/
+  # supported_environment.yml → vivado.version). Preflight fails the build if
+  # the declaration and this pin ever disagree — a declaration describing a
+  # build nobody runs is worse than none.
+  tool_version: '2024.1'
+  # DS-P1.28 (DS-E0): NO jtag_serial here. A cable serial identifies ONE
+  # physical cable on ONE bench; in the file a stranger edits it is at best
+  # inert and at worst points rr at somebody else's board. Cable selection is
+  # per-deployment: runtimes/hw.local.yml (bench descriptor) or `rr program run
+  # --cable <serial>`. A host with a single board needs neither.
+  #
+  # DS-P1.28: `queue_builds: true` also removed. The build queue is bench
+  # infrastructure — with no routertl-queue dispatcher installed, a queued job
+  # sits queued forever, which on a stranger's machine looks exactly like a
+  # hung build. This bench opts in through RR_QUEUE_BUILDS=1 in the
+  # environment (and `rr synth run --queue` works anywhere); the public target
+  # states no opinion about somebody else's job scheduler.
+# Per-stage EDA memory cgroup sizing (RTL-P2.737 Layer-2). deepskopion_top
+# (2x CTU CAN-FD + datalogger gather + ddr_stream + REA) is heavier than the
+# default per-stage peak estimates: top synth peaks ~10 GB, but the default
+# 'synth' estimate (6000 MB x 1.3 = 7.8 GB cgroup) is too small — the scope
+# thrashed at MemoryHigh and systemd-oomd PSI-killed it after 96 min (no .dcp).
+# Size the cgroups to the real peaks so they never sit in sustained reclaim.
+eda_memory:
+  peaks:
+    vivado:
+      synth: 22000   # -> MemoryMax 28600M; observed peak 19.5 GB (OOM at 14000, DS-T2.62)
+      impl: 16000    # -> MemoryMax 20800M; P&R headroom
+linux:
+  # FSBL → u-boot → kernel boot chain. xilinx-fsbl first-stage uses the
+  # Vitis FSBL (instead of uboot-spl); requires u-boot built with
+  # CONFIG_OF_EMBED=y + CONFIG_OF_BOARD=n per RTL-P2.614, since the
+  # Xilinx FSBL doesn't set R2 (post-FSBL UART goes silent otherwise).
+  first_stage: xilinx-fsbl
+  # DS-P1.105: u-boot-xlnx pinned to the last revision seen booting this board.
+  # The booting BOOT.bin (5a6a42a8) carries U-Boot a87a5c15c1c3 (u-boot-xlnx
+  # master of 2026-05-07). That commit has no tag; xilinx-v2026.1 is it plus
+  # four commits that touch only Versal device trees, so for Zynq-7 it is the
+  # same source. Unpinned, rr clones the repo default branch: the 3d925cc6
+  # build took master at xilinx_v2026.2, because rr's release pin keys on
+  # hardware.tool_version and this file declares build_options.tool_version.
+  # `rr linux uboot` clones with --branch, so a tag, not a sha.
+  uboot_branch: xilinx-v2026.1
+  # Console is the MIO UART1 at 0xE0001000 (the USB UART through the FTDI);
+  # UART0 at 0xE0000000 is on EMIO, into the fabric (DS-P2.51). Which one a
+  # boot stage prints on follows the device tree's serialN aliases, and their
+  # order belongs to the device-tree generator, not to this file:
+  #   * the XSCT generator (until rr d2bb99714, 2026-10-20) wrote
+  #     serial0 = UART0, serial1 = UART1, so this file said console=ttyPS1;
+  #   * SDTGen + Lopper (rr since then) writes serial0 = UART1,
+  #     serial1 = UART0. With console=ttyPS1 the kernel console and U-Boot's
+  #     stdout-path (reconciled to the same serialN, RTL-P3.590) both landed on
+  #     the EMIO UART0: the 3d925cc6 BOOT.bin printed nothing after the FSBL
+  #     handoff (DS-P1.105, 2026-11-14).
+  # So console=ttyPS0 for the current generator, and the earlycon address is
+  # pinned to UART1's base so early printk never depends on the aliases.
+  # tools/check_zybo_console.py refuses a built system.dtb / uboot_control.dtb
+  # whose stdout-path, console= or earlycon resolves to any UART but
+  # 0xE0001000; run it after `rr linux sdcard`. linux.console_uart: mio1 would
+  # pin the alias itself, but rr's alias rewrite does not parse Lopper's
+  # path-form aliases yet (it raises); it follows when rr can.
+  # UART1 base on Zynq-7: 0xE0001000. The Cadence UART driver name is 'cdns'.
+  # DS-P3.52: no baud on earlycon. The cdns earlycon reprograms the baud
+  # divisor when a baud is given (xilinx_uartps.c:1340) using port->uartclk —
+  # but the uart node carries only a `clocks` phandle (unresolvable pre-clock-
+  # framework), no static `clock-frequency`, so earlycon used a wrong default
+  # clock and garbled early output until the full driver took over. Omitting
+  # the baud makes the earlycon inherit u-boot's already-correct 115200 setup
+  # (no reprogram). console= keeps its baud — the full xuartps driver resolves
+  # the real clock via the phandle.
+  # uio_pdrv_genirq.of_id=generic-uio (DS-P3.60): tells the generic UIO
+  # platform driver which DT `compatible` to bind. Without it the kernel
+  # leaves every `compatible = "generic-uio"` node unbound (/sys/class/uio
+  # empty) — which is why the daemon historically used /dev/mem. With it,
+  # the ring-watermark interrupt node below probes into /dev/uio0 and the
+  # daemon can block on its IRQ instead of polling.
+  # DS-C1: no address is built into the image. S40network requests DHCP unless
+  # the owner supplies ds_ip=<address>/<prefix> (and optional ds_gateway=) or
+  # /etc/deepskopion/network.conf. ds_source remains a target property because
+  # it selects this image's hardware data source rather than a deployment.
+  bootargs: "earlycon=cdns,mmio32,0xe0001000 console=ttyPS0,115200 uio_pdrv_genirq.of_id=generic-uio ds_source=ddr ds_ring_word_bytes=16"
+  # U-Boot boot script (DS-P3.47). Compiled to out/boot.scr by `rr linux
+  # bootscr`. Without this declaration, BOOT_SCRIPT defaults unset and
+  # `rr linux sdcard` doesn't stage boot.scr — boards then fall back to
+  # u-boot's distroboot defconfig which may or may not find uImage at
+  # the addresses our boot.cmd uses (fatload to 0x2080000 + bootm).
+  # Source: sw/linux/boot.cmd.
+  boot_script: sw/linux/boot.cmd
+  # Daemon needs python3 + msgpack; rr linux rootfs --python-overlay
+  # layers a Buildroot-built tree on top of busybox (RTL-P2.603 / DS-P2.49).
+  # The tree is built by sw/linux/build_buildroot.sh and extracted by
+  # sw/linux/extract_python_overlay.sh — both gitignored.
+  rootfs:
+    python_overlay: sw/linux/python_overlay
+    # DS-P2.81: rootfs_overlay/usr/local/share/deepskopion/sw/stream/ is a
+    # STAGED COPY of sw/stream/, not a source of truth. Declaring the refresh
+    # here is what stops it being a script somebody has to remember between an
+    # edit and the image — the gap that put a five-week-old daemon on the
+    # board while every build command reported success. rr runs it at the
+    # start of `rr linux rootfs` and ABORTS if it fails (RTL-P1.117).
+    # DS-P1.87: refuse an image whose overlay lacks the native edge library
+    # built from this checkout (tools/native_edge_lib.py prints the install line).
+    # DS-P3.201: the sshd binary is staged here too, so an image cannot be
+    # built without it (2026-11-05: a rootfs built without this step had no SSH).
+    stage_command: ./sw/linux/stage_daemon.sh && ./sw/linux/stage_dropbear_overlay.sh && python3 tools/native_edge_lib.py check --profile zybo && python3 sw/linux/clean_python_overlay.py --check sw/linux/python_overlay
+  # DS-X5: the two tracked kernel config fragments this target's features
+  # REQUIRE. Both were shipped in-tree for months while NOTHING referenced
+  # them, so `rr linux kernel` built from the bare xilinx_zynq_defconfig and
+  # the deployed 6.6.80 image measurably had `# CONFIG_SPI_SPIDEV is not set`
+  # and `# CONFIG_CAN_CTUCANFD_PLATFORM is not set` (read from the board's own
+  # /proc/config.gz, 2026-08-13). The consequences are exactly the two
+  # features the fragments exist for: no /dev/spidev1.0 (so PS-LOOP-REQ-7/9
+  # cannot run at all — the SKIP that DS-X5 forbids) and no ctucanfd binding
+  # for the CTU cores this target is named after.
+  #
+  # MEASURED CAVEAT (routertl gap, DS-X5): `rr linux kernel` resolves its
+  # fragment list from $KERNEL_CONFIG_FRAGMENTS and project.yml
+  # `linux.kernel_config_fragments`, merged with auto-discovery of
+  # sw/linux/out/*.config-fragment. This key — `linux.kernel_config`, the one
+  # the schema documents for exactly this purpose — is only consumed by the
+  # legacy scripts/build_kernel.sh env path, so declaring it here states the
+  # intent but does NOT by itself reach the kernel step; the DS-X5 build
+  # passed the same two paths in $KERNEL_CONFIG_FRAGMENTS. Guarded by
+  # sw/linux/tests/test_kernel_fragment_declaration.py; verify against the built
+  # .config (and the board's /proc/config.gz), never against this line alone.
+  kernel_config: sw/linux/kernel_emio.config-fragment
+  # spidev child under the EMIO SPI controller (DS-P3.48). The kernel only
+  # exposes /dev/spidevX.Y when an explicit child with a recognised
+  # compatible string lives under the SPI controller node. Declared here so
+  # `rr linux dtb` injects it on every regen (RTL-P3.581) — RETIRES the old
+  # sw/linux/build_dt.sh fdtput post-patch (which silently dropped on a plain
+  # `rr linux dtb`). RTL-P3.592 lets this inject via a dtc round-trip when
+  # fdtput isn't on PATH, so it works on any box with dtc.
+  dt_nodes:
+    # DS-P2.76: give the board a MODEL string so it can say what it is.
+    # /proc/device-tree/model does not exist on this build and `compatible` is
+    # the generic "xlnx,zynq-7000", so the running board cannot identify itself
+    # at all — which is why board identity had to be established from the PL's
+    # own GIT_HASH register instead. It matters here specifically because ONE
+    # rootfs_overlay serves three targets (canfd_demo / classic_eye /
+    # eye_loopback) and two physical deepskopion boards share bench state and an
+    # IP; SSH host keys cannot help either, since the initramfs regenerates them
+    # every boot (S49dropbear). Name the TARGET, not just the silicon, so a
+    # `cat /proc/device-tree/model` distinguishes the variants.
+    - path: /
+      properties:
+        model: "deepskopion zybo_datalogger (Digilent Zybo Z7-20, xc7z020)"
+    # DS-T2.16: drive the SPI chip-select from EMIO GPIO line 54 (EMIO bit 0)
+    # via the SPI core's cs-gpios — the native PS SPI0_SS_O never asserts at the
+    # EMIO seam (controller asserts CS internally but the EMIO pin doesn't carry
+    # it; SCLK/MOSI do). Cell array = <&gpio0 54 GPIO_ACTIVE_LOW>: gpio0
+    # (gpio@e000a000) phandle=9, #gpio-cells=2, flag 1 = GPIO_ACTIVE_LOW.
+    # NOTE: 9 is the DTG-assigned gpio0 phandle — re-verify it stays 9 after any
+    # `rr linux dtb` regen (gpio0 is always present so it should be stable).
+    - path: /axi/spi@e0006000
+      properties:
+        cs-gpios: [9, 54, 1]
+    - path: /axi/spi@e0006000/spidev@0
+      create: true
+      properties:
+        compatible: rohm,dh2228fv
+        reg: 0
+        spi-max-frequency: 1000000
+    # DS-P3.60: ring-fill watermark interrupt → UIO. The PL drives IRQ_F2P[0]
+    # (deepskopion_top u_ring_watermark.alarm) which the PS7 maps to GIC SPI
+    # #29. The node lives under /axi (simple-bus, interrupt-parent = <&intc>),
+    # so it inherits the GIC; interrupts = <type number flags> = <0 29 4>:
+    #   0  = SPI (shared peripheral interrupt; IRQ_F2P[0] = GIC ID 61 = SPI 29)
+    #   29 = SPI-relative number (GIC ID 61 − 32)
+    #   4  = IRQ_TYPE_LEVEL_HIGH (the alarm is a held level, not a pulse)
+    # compatible = generic-uio + the of_id bootarg → uio_pdrv_genirq binds it
+    # and exposes /dev/uio0; a read() blocks until the IRQ, write(1) re-enables.
+    - path: /axi/ring_watermark@0
+      create: true
+      properties:
+        compatible: generic-uio
+        interrupts: [0, 29, 4]
+        interrupt-names: ring-watermark
+    # DS-P3.102: enable the two PS CAN controllers (EMIO) as SocketCAN can0/can1.
+    # The base zynq-7000 dtsi ships can@e0008000 / can@e0009000 'disabled' with
+    # their compatible/reg/interrupts/clocks already populated; the ds_emio_can.tcl
+    # ps7_hook routes them to EMIO and these nodes flip them 'okay' so xilinx_can
+    # binds. Wire bitrate is set at runtime (`ip link set can0 type can bitrate
+    # 250000`) — 250 kbit is clean for the datalogger's 16-TQ/100 MHz timing. See
+    # docs/BRING_UP_CAN.md. (Re-verify the node names survive `rr linux dtb` regen.)
+    - path: /axi/can@e0008000
+      properties:
+        status: okay
+    - path: /axi/can@e0009000
+      properties:
+        status: okay
+features:
+  regbank: true
+system_config: tools/datalogger-builder/config/datalogger_config.yml
+auto_sources: true
+# DS-R0: the datalogger/responder core reaches only the registry-pinned open-logic
+# FIFO through tich.fifo_sync. The optional Xilinx bodies inside rr_ddr_stream
+# remain platform support and are not part of that portable core closure.
+hooks:
+  pre_commit:
+    enabled: true
+    lint: true
+    check_yaml: true
+    check_docs: true
+    tests: []
+    exclude:
+      lint:
+      # The generated gather (regenerated by the datalogger-builder pre_build hook).
+      - hw/rtl/datalogger/infra/datalogger_gather/datalogger_gather.vhd
+      tests: []
+  # DS-P3.55: seed the nvc work libs with the units the rr-sim per-top closure
+  # drops (TICH.ZS_MSG_PKG + the RR vendor-body synth-only units) before the sim
+  # compile. WORKAROUND for routertl RTL-P3.643 — see the script header. The OLO
+  # library divergence is fixed properly via the packages: { library: olo }
+  # overrides below, not here.
+  pre_sim:
+  # DS-P2.231: rom_info_pkg.vhd is a gitignored build output; a fresh clone has
+  # none until a hook writes it. Sims list it as a source, so generate it here
+  # from the tracked regbank memory images (pre_build regbank-regen does the
+  # full regeneration before synth).
+  - name: rom-info-sim
+    script: tools/regen_regbank.sh
+    args:
+    - --rom-info-only
+    - --output-dir
+    - hw/rtl/pkg
+    - --regbank-dir
+    - hw/rtl/regbank
+    - --library
+    - tich
+    idempotent_outputs: true
+    expected_outputs:
+    - hw/rtl/pkg/rom_info_pkg.vhd
+  - name: pre-sim-seed-libs
+    script: tools/sim/pre_sim_seed_libs.py
+    args: []
+  pre_build:
+  # DS-P1.28 (DS-E0): check the supported environment BEFORE anything else in
+  # the build runs. FIRST in the list on purpose — a missing prerequisite
+  # should cost seconds, not the 90 minutes it takes synthesis to run out of
+  # memory, and the failure names the exact prerequisite that is missing.
+  # pre_build hooks are fatal by default (RTL-P3.674), so a non-zero exit here
+  # stops the build; only the `build` stage runs, since nothing about a JTAG
+  # cable or a network link is needed to produce a bitstream.
+  - name: golden-path-preflight
+    script: tools/preflight/ds_preflight.py
+    args:
+    - --stage
+    - build
+  # DS-P2.79 / RTL-P3.1203: regenerate the REA BUILD_ID package (a hash of the
+  # REA source tree) before every build, so on-chip BUILD_ID (0xD4) self-reports
+  # which REA source this bitstream carries.
+  #
+  # This was MISSING here while every routertl REA example had it, so the
+  # vendored local/rr_rea could not compile at all: rr_rea_regbank.vhd does
+  # `use work.rr_rea_build_id_pkg` and nothing ever produced that package —
+  # "unit 'rr_rea_build_id_pkg' not found in library 'tich'". The failure was
+  # invisible because an earlier ip.lock-drift gate aborted first; clearing the
+  # drift is what exposed it.
+  # DS-X6 (DS-P1.37): invoked through the project-local module shim, NOT the
+  # `routertl:` source-path form. The published wheel ships this script
+  # compiled (*.so), so `routertl:sdk/scripts/rr_rea_build_id.py` resolves on
+  # a source checkout (this bench) and on nothing a stranger installs —
+  # measured on the first off-bench rehearsal: "Script not found" from a
+  # clean `pip install routertl`. The shim imports the module and calls its
+  # main(), which both install forms support.
+  - name: rr_rea_build_id
+    script: tools/hooks/run_sdk_generator.py
+    args:
+    - rea-build-id
+    # Hash the ip.yml-declared file list (flavor-invariant, RTL-P3.1213).
+    # DS-P1.27 (DS-X1): the manifest lives with the VENDORED fork inside this
+    # repo — the sources the build actually compiles. The old target reached
+    # into a sibling routertl checkout's ip/routertl/rea/ip.yml, a path a
+    # lone clone does not have (and hashed sources the build did not use).
+    - --ip-yml
+    - libs/routertl/rea/ip.yml
+    - --out
+    - generated/rr_rea_build_id_pkg.vhd
+    watch:
+    - libs/routertl/rea/rtl/*.vhd
+    - libs/routertl/rea/ip.yml
+    # DS-X2: declaring ownership is what lets --from-clean archive this output
+    # and prove the hook recreates it. The generator is write-if-changed, so an
+    # unchanged staged run is accepted by digest without timestamp churn.
+    idempotent_outputs: true
+    expected_outputs:
+    - generated/rr_rea_build_id_pkg.vhd
+  - name: datalogger-builder
+    script: tools/datalogger-builder/datalogger_gather_gen.py
+    args:
+    - tools/datalogger-builder/config/datalogger_config.yml
+    - --pkg-dir
+    - hw/rtl/pkg
+    - --rtl-dir
+    - hw/rtl/datalogger/infra/datalogger_gather
+    - --regbank-dir
+    - hw/rtl/regbank
+    # DS-P1.21: same defect as regbank-regen below — a deterministic generator
+    # whose tracked outputs survive the pre-build clean, so the write is a
+    # no-op and the mtime-based staleness gate rejects a correct file forever.
+    # The digest check still catches a genuine silent generator failure.
+    idempotent_outputs: true
+    expected_outputs:
+    - hw/rtl/pkg/datalogger_config_pkg.vhd
+    - hw/rtl/datalogger/infra/datalogger_gather/datalogger_gather.vhd
+    - hw/rtl/regbank/config_schema.hex
+  - name: regbank-regen
+    script: tools/regen_regbank.sh
+    # --output-dir/--library are the SSOT for the regbank VHDL package: regen_regbank.sh
+    # writes hw/rtl/pkg with library tich, and the rr sim presim drift gate
+    # (_resolve_regbank_presim_dirs, RTL-P2.739) reads them here so it diff-checks the
+    # committed pkg with the SAME path+library, not the src/pkg/work defaults (DS-T2.64).
+    args:
+    - --output-dir
+    - hw/rtl/pkg
+    - --regbank-dir
+    - hw/rtl/regbank
+    - --library
+    - tich
+    # DS-P1.21: this hook is DETERMINISTIC, and that made it fail its own
+    # output-staleness gate — permanently. Three things composed:
+    #   1. system_regbank_pkg.vhd is a TRACKED generated file;
+    #   2. the pre-build clean removes the output dir but PRESERVES tracked
+    #      files ("preserved 13 tracked file(s)" in the log), so the old copy
+    #      survives;
+    #   3. the generator's write is a no-op when content is unchanged, so the
+    #      mtime never advances past hook-start.
+    # The gate verifies by mtime, so a correct, freshly-verified file read as
+    # stale and `rr synth run` aborted before Vivado even started — measured
+    # blocked since 2026-07-07.
+    # idempotent_outputs is exactly the escape the SDK provides for this
+    # (RTL-P3.1418): unchanged output is accepted ONLY when its content digest
+    # matches, so a genuine silent generator failure is still caught. DS-X2's
+    # installer also preserves rom_info_pkg's first per-build volatile stamp
+    # across staged hook runs, so synth -> impl -> bitstream can converge.
+    idempotent_outputs: true
+    expected_outputs:
+    - hw/rtl/pkg/rom_info_pkg.vhd
+    - hw/rtl/pkg/system_regbank_pkg.vhd
+    - hw/rtl/regbank/regbank_schema.bin
+    - hw/rtl/regbank/regbank_schema.hex
+    - hw/rtl/regbank/system_regbank.vhd
+# DS-P2.231: no lock.exclude for hw/rtl/pkg/rom_info_pkg.vhd any more — the
+# file is gitignored, and routertl.lock leaves gitignored files out (RTL-P2.2095).
+# RTL-P2.1102: the RTL-P3.1548 RR_ALLOW_XPM_SIM_SYNTH override is retired —
+# with the libs/xpm_vhdl clone gone (see the dependencies note above), the
+# xpm sim-model synth gate (RTL-P3.1358) has nothing to refuse; XPM comes
+# only from the shared vendor_libs cache, which never enters the synth set.
+tcl_hooks:
+  gen_project:
+  - hw/bd/deepskopion_bd.tcl
+  # The regbank package keeps ROM paths clone-relative. Vivado evaluates VHDL
+  # file I/O from synth_1, so stage the ROMs in the run's own pre-synth hook;
+  # an earlier post_ip_gen hook is erased when RouteRTL resets synth_1.
+  synthesis:
+  - hw/bd/configure_regbank_rom_staging.tcl
+  # DS-T1.17: keep the constraint evidence the DS-P1.72 timing audit needs on
+  # every build: the XDC compile order while the synthesis project is open,
+  # then the ignored and unbound exceptions and the unconstrained-path reports
+  # on the routed design. RouteRTL writes cdc.rpt (report_cdc) itself.
+  post_synthesis:
+  - hw/vivado/ds_constraint_evidence_synth.tcl
+  post_implementation:
+  - hw/vivado/ds_constraint_evidence_impl.tcl
+packages:
+  routertl/edge_counter: local
+  routertl/edge_detector: local
+  routertl/infilter: local
+  routertl/infilter_array: local
+  routertl/lfsr: local
+  routertl/phase_accumulator: local
+  routertl/ram_dual_port: local
+  routertl/ram_lut: local
+  # routertl/sync_cdc removed (DS-P3.90): unused — ddr_stream_axi provides its
+  # own rr.sync_cdc (num_stages_g). Even with routertl P2.690 (honor library
+  # qualifier in entity refs), an EXPLICITLY-declared routertl/sync_cdc package
+  # still gets its file emitted into ddr_stream's rr read_vhdl block, colliding.
+  # Dropping the (unused) package + its orphaned vendored copy is the fix.
+  # DS-P3.55: pin all open-logic packages into the shared `olo` library.
+  # The open-logic source files are library-self-referential (they say
+  # `library work; use work.olo_base_pkg_*`), so the resolver's per-package
+  # default would home each into its own `olo_base_*` library. But the
+  # consumer (libs/routertl/rr_ddr_stream/.../rr_fifo_async_mixed.vhd and
+  # rr_fifo_sync.vhd) says `library olo;` — every olo unit must live in ONE
+  # named library `olo`. The registry's `library_override: olo` (RTL-P2.594)
+  # encodes exactly this canonical name; a stale lock (resolved before that
+  # override went live) homed them per-package and broke `rr sim`
+  # (`library OLO not found`). The per-package `library:` override (RTL-P2.656,
+  # same mechanism as `local/rr_rea` below) re-homes them into `olo` for both
+  # ip.lock and the sim compile, matching the registry-canonical name.
+  open-logic/olo_base_fifo_sync: {version: ^4.4.1, library: olo}
+  open-logic/olo_base_fifo_async: {version: ^4.4.1, library: olo}
+  open-logic/olo_base_wconv_n2xn: {version: ^4.4.1, library: olo}
+  open-logic/olo_base_wconv_xn2n: {version: ^4.4.1, library: olo}
+  enclustra/en_cl_fix_resize: ^d2ce1a617bc8
+  # DS-P2.72: un-vendored — ddr_stream_axi now CONSUMED from the registry
+  # (routertl/rr_ddr_stream, library `rr`, entity rr.ddr_stream_axi). The old
+  # vendored `local/ddr_stream_axi` copy (libs/local/ddr_stream_axi) is removed;
+  # the registry 0.3.0 copy carries the DDR-T2.15/DDR-T2.11/DDR-P3.25 fixes + the
+  # re-derived scoped CDC xdc (RTL-P2.762, read_xdc -ref ddr_stream_axi).
+  # DS-P2.121: ctu-fee/ctucanfd_ip_core is pulled only by the CAN opt-in
+  # (RouteRTL lacks an optional package flag in ip.yml/packages:, tracked in
+  # RTL-P3.1120). Default targets and packages build CTU-free.
+  routertl/rea: "==1.12.4"
+  routertl/rr_ddr_stream: {version: ^0.3.6, library: rr}
+memory_map: sw/linux/system_memory_map.yml

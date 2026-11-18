@@ -1,0 +1,92 @@
+# level_datalogger — Requirements catalog (contract-first per ROUTERTL convention)
+#
+# Multi-line level-state datalogger. Captures the static logic level
+# (HIGH / LOW) on a vector of input pins (C_LEVEL_INJ_PINS wide).
+# Not in the current PoC datalogger_config.yml — included in the
+# contract-first sweep for the rebuild-once principle.
+#
+# Each LEVEL-REQ-N below is referenced by ≥1 cocotb test in
+# hw/sim/cocotb/tests/datalogger/nonstd/level_datalogger/test_level_datalogger.py
+# via @requires(LEVEL-REQ-N). `rr sim coverage-map` enforces the mapping.
+#
+# v0.1 SCOPE: one provable REQ (reset determinism). Follow-on
+# (DS-P3.<a>) will add real-coverage REQs: level-change detection,
+# CONFIG bit semantics, multi-pin behaviour, adversarial negatives.
+
+ip: level_datalogger
+version: 0.2
+schema_version: 1
+
+port_contract:
+  slaves: []
+  masters: []
+  scalars:
+    - { name: LEVEL_PINS,    dir: in,  width: "C_LEVEL_INJ_PINS-1 downto 0" }
+    - { name: CONFIG,        dir: in,  width: "G_CONFIG_WIDTH-1 downto 0" }
+    - { name: TIMESTAMP,     dir: in,  width: "G_TIMESTAMP_WIDTH-1 downto 0" }
+    - { name: LEVEL_MSG_OUT, dir: out, width: "C_DATALOGGER_MSG_WIDTH-1 downto 0" }
+    - { name: LEVEL_MSG_VLD, dir: out, width: "1" }
+    - { name: LEVEL_MSG_RDY, dir: in,  width: "1" }
+    - { name: LEVEL_ERRORS,  dir: out, width: "G_ERROR_WIDTH-1 downto 0" }
+  clocks:
+    - { name: CLK }
+  resets:
+    - { name: RST, polarity: active_high }
+
+parameters:
+  - { name: G_LEVEL_ID_WIDTH,  default: 5 }
+  - { name: G_LEVEL_DEV_ID,    default: 24 }
+  - { name: G_TIMESTAMP_WIDTH, default: 16 }
+  - { name: G_CONFIG_WIDTH,    default: 16 }
+  - { name: G_ERROR_WIDTH,     default: 2 }
+  - { name: G_SIM_EN,          default: 0 }
+  - { name: G_ILA_EN,          default: 1 }
+
+functional_contract:
+  - id: LEVEL-REQ-10
+    kind: behavioral
+    desc: >-
+      Capture-time stamping (DS-T3.11). A level-change payload on `LEVEL_MSG_OUT`
+      carries the `TIMESTAMP` and `LEVEL_PINS` sampled at the CHANGE instant, not
+      at delivery. Under `LEVEL_MSG_RDY` backpressure (the arbiter stalls
+      acceptance) the frame must still report the change-time values, frozen in a
+      capture latch — never the later values read at the moment the frame is
+      finally accepted. Verified by
+      test_level_datalogger.test_timestamp_is_change_time_not_delivery.
+
+  - id: LEVEL-REQ-50
+    kind: behavioral
+    desc: >-
+      On RST='1' (active high), `LEVEL_MSG_VLD` is held low and
+      `LEVEL_ERRORS` reads zero (the architecture hardcodes
+      LEVEL_ERRORS to all-zero, so this REQ also pins that
+      design choice). After RST de-assert with `LEVEL_PINS`
+      held steady, the datalogger remains quiescent on
+      `LEVEL_MSG_VLD` during the post-reset idle window.
+
+  - id: LEVEL-REQ-51
+    kind: behavioral
+    desc: >-
+      Uniform datalogger lifecycle (DS-P3.90 Phase 1). The level datalogger emits a
+      symmetric pair of status frames via the shared datalogger_lifecycle component
+      (always-on / global-RST domain): exactly one ENABLED frame (event type
+      "100", code 0x03) on the per-device ENABLE rising edge and exactly one
+      DISABLED frame (code 0x00) on the falling edge, carried on `LEVEL_MSG_OUT`
+      (with `LEVEL_MSG_VLD` high one cycle) with the level frame layout
+      (dev_id | type | timestamp | code). It is
+      silent between edges while enabled + pins steady. Verified by
+      test_level_datalogger.test_lifecycle_enable_disable. See the shared lifecycle
+      contract (datalogger_lifecycle SL-REQ-1..4) and H.96.
+
+  - id: LEVEL-REQ-52
+    kind: behavioral
+    desc: >-
+      Per-datalogger reset reaches the decode core (DS-P3.90 Phase 2). The level
+      datalogger takes its synchronous decode reset from config_control.CAPTURE_RST
+      (= global RST OR latched ENABLE=0; CC-REQ-51), so writing ENABLE=0 for this
+      device flushes ALL decode state — the last captured level (levelPins_r),
+      the pending-change flag and the output-valid. A re-enable with UNCHANGED
+      pins therefore re-emits the current level on `LEVEL_MSG_OUT` (because
+      levelPins_r was cleared); without the flush it would emit nothing. The
+      lifecycle emitter and config_control stay on global RST (H.96). Verified by
+      test_level_datalogger.test_capture_rst_reconfig.

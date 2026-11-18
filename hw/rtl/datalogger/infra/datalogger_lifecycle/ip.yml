@@ -1,0 +1,56 @@
+# datalogger_lifecycle — Uniform per-datalogger lifecycle event emitter
+#
+# Shared infrastructure component (DS-P3.90 Phase 1). Emits a SYMMETRIC pair of
+# status frames on the per-device ENABLE edge — ENABLED on the rising edge,
+# DISABLED on the falling edge — in the ALWAYS-ON (global RST) domain, so the
+# markers survive a per-datalogger CAPTURE_RST decode reset (DS-T2.31 / H.96). New
+# dataloggers adopt the uniform lifecycle by instantiating this; jtag/qspi keep an
+# equivalent inline emitter (see docs/standards/datalogger_compliance_checklist.md
+# §10).
+
+ip:
+  name: datalogger_lifecycle
+  library: tich
+  language: vhdl
+  description: |
+    Uniform symmetric ENABLED/DISABLED lifecycle emitter for dataloggers.
+    On the CONFIG_EN rising edge emits one ENABLED frame; on the falling
+    edge one DISABLED frame; otherwise silent. Frame layout passed via
+    generics: DEV_ID & TYPE & TIMESTAMP & code = C_DATALOGGER_MSG_WIDTH.
+    Lives in the global-RST domain so a per-datalogger CAPTURE_RST never
+    suppresses the DISABLED marker.
+
+hdl:
+  top_module: datalogger_lifecycle
+  top_sim:    datalogger_lifecycle
+
+paths:
+  sources: .
+
+synthesis:
+  mode: rtl
+  sources:
+    - datalogger_lifecycle.vhd
+
+build:
+  simulation:
+    sources: []
+    test_dir: ../../../../sim/cocotb/tests/datalogger/infra/datalogger_lifecycle
+    simulator: nvc
+    waves:
+      formats: [fst]
+    # DS-P2.137: the test drives dev-id 12 (its GENERICS, applied only by its
+    # main()); the RTL default is 0. Declare it where --ip reads it.
+    tests:
+      test_datalogger_lifecycle:
+        generics:
+          G_DEV_ID: 12
+
+requirements: requirements.yml
+
+# DS-P2.137: datalogger_lifecycle.vhd says `use tich.datalogger_pkg.all`; the
+# standalone `rr sim run --ip` closure is this manifest's declarations alone.
+dependencies:
+  deepskopion/datalogger_pkg: {path: ../../../pkg_ip/datalogger}
+
+ips: []

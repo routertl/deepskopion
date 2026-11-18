@@ -1,0 +1,276 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# supported_environment.yml — DS-E0 (DS-P1.28). THE declaration of what
+# Deepskopion supports, in machine-readable form.
+#
+# Why this file exists: before it, "own hardware" meant "reconstruct this bench
+# from clues". GOLDEN_PATH.md assumed only "vendor toolchain installed, board
+# attached", while the real target needed Vivado 2024.1, an xc7z020clg400-1 on a
+# specific board, an Ethernet link, a PS UART on a particular FTDI
+# interface, and a traffic source nobody had written down. A stranger could not
+# reproduce any of that, and nothing in the repo could tell them so.
+#
+# This file is the SINGLE SOURCE OF TRUTH for those facts. Two consumers:
+#   * docs/SUPPORTED_ENVIRONMENT.md — the prose, which cites these values.
+#   * tools/preflight/ds_preflight.py — the executable check, wired into the
+#     target's hooks.pre_build so a missing prerequisite FAILS the build BEFORE
+#     synthesis, naming the exact thing that is missing.
+#
+# It is deliberately NOT a description of this bench. Bench identity (JTAG cable
+# serials, other boards sharing a switch, and any host TFTP root) is
+# per-deployment and may live in a local, gitignored runtimes/hw.local.yml copied from
+# hw.example.yml. Anything in here is something we claim any user can reproduce.
+#
+# Severity, per entry:
+#   fail  — the golden path cannot work without it; preflight exits non-zero.
+#   warn  — outside the declared support envelope; it may work, but a failure
+#           here is not a defect we accept a report against.
+# ─────────────────────────────────────────────────────────────────────────────
+schema_version: '1.0.0'
+
+# ── The supported host ───────────────────────────────────────────────────────
+host:
+  # Named OS versions, not "a modern Linux", so that "it fails on my machine" is
+  # a statement with a truth value. `version` is the reference host, where every
+  # target is built. Each `also_supported` entry is a version with a measured run:
+  # `scope` says what that run covered and `evidence` names it. Outside its scope
+  # a version is as unmeasured as any other distribution.
+  os:
+    id: ubuntu
+    version: '22.04'
+    name: Ubuntu 22.04 LTS (Jammy Jellyfish)
+    also_supported:
+      - version: '24.04'
+        name: Ubuntu 24.04 LTS (Noble Numbat)
+        scope: the Zybo Z7-20 build from a fresh clone through the bitstream, under WSL2
+        evidence: >-
+          clean-machine rehearsal R1 of the public export (f2e6ad63), 2026-11-17:
+          routertl 5.5.0 from PyPI, Ubuntu 24.04 under WSL2, the README's Zybo
+          steps through the bitstream ran as written (DS-P1.78)
+    severity: warn
+  arch:
+    value: x86_64
+    # Vivado ships x86_64 Linux binaries only; there is no arm64 build to try.
+    severity: fail
+  # Measured, not guessed: the Zybo target (canfd_demo when measured; zybo_datalogger carries the same eda_memory peaks) sizes the synth cgroup at
+  # 22000 MB after a 19.5 GB observed peak (DS-T2.62 OOMed at 14 GB). The floor
+  # is what the build needs as the OS sees it (MC ruling 2026-10-01, DS-P1.67):
+  # 24 GB leaves room for the 22000 MB cgroup. Under WSL2 the OS sees the
+  # .wslconfig `memory=` limit (default about half the host's RAM), not the
+  # host's physical RAM, so a WSL2 host sets that limit to 24 GB or more.
+  ram_gb_min:
+    value: 24
+    severity: fail
+  # Vivado install (~50 GB) is NOT counted here — this is the checkout plus one
+  # full build tree (project + .dcp checkpoints + bitstream + Linux artifacts).
+  free_disk_gb_min:
+    value: 60
+    severity: fail
+
+# ── Toolchain ────────────────────────────────────────────────────────────────
+python:
+  # From the Ubuntu 22.04 system interpreter (3.10) up to the newest release
+  # cocotb>=2.1 ships wheels for (cp310..cp314; RTL-P3.1682, MC ruling
+  # 2026-10-01). Upper bound is exclusive.
+  min: '3.10'
+  max_exclusive: '3.15'
+  severity: fail
+
+routertl:
+  # 5.6.0 is the published release DeepSkopion 0.1.0 is verified against
+  # (RTL-D.419: the release and its acceptance runs install the wheel a new
+  # user installs on release day). It contains every earlier floor:
+  # 5.5.0 is the first published release that reads the per-target locks
+  # (targets/<t>.routertl.lock) this tree has kept since DS-P2.287: 5.3.0 and
+  # 5.4.0 look for a root routertl.lock, find none and report a stub, so
+  # `rr lock --check` exits 1 for every product (DS-P1.101, measured
+  # 2026-11-14 on clean venvs). Earlier floors stay contained in it: 5.3.0
+  # was the first release with sdk.engine.hps_regen (RTL-P2.2101), which the
+  # DE25 ip.yml needs (DS-P1.85); 4.9.2 offers Agilex .qips to Vivado
+  # (RTL-T2.287); 5.1.0 cannot compile the vendored open-logic packages under
+  # rr linting (RTL-P2.2099).
+  min: '5.6.0'
+  install: pip install routertl
+  severity: fail
+
+vivado:
+  version: '2024.1'
+  # xc7z020clg400-1 is inside the free ML Standard device set, so no licence
+  # purchase is on the golden path. ML Enterprise works too — the check is on
+  # the VERSION, because the build is pinned to it (build_options.tool_version)
+  # and a different release re-times and re-fits the design.
+  edition: ML Standard (free) or ML Enterprise
+  severity: fail
+
+# ── The board ────────────────────────────────────────────────────────────────
+board:
+  vendor: xilinx
+  name: Digilent Zybo Z7-20
+  platform: zybo-z7-20
+  part: xc7z020clg400-1
+  # Revision: the design depends on no revision-specific feature, so the
+  # supported set is "any Digilent Zybo Z7-20" — but that claim is only worth
+  # something if the dependencies are named, so they are, and preflight/prose
+  # both point at this list rather than at a revision letter nobody can check
+  # from software.
+  depends_on_board_features:
+    - xc7z020clg400-1 (the Z7-10's xc7z010 does NOT fit 2x CTU CAN FD + datalogger)
+    - 33.333 MHz PS crystal
+    - 125 MHz fabric oscillator on K17
+    - FTDI FT2232H USB-JTAG (if00) + USB-UART (if01)
+    - PMOD headers JA and JB
+    - microSD slot (the golden path boots Linux from SD)
+    - 10/100/1000 Ethernet (RTL8211E)
+  severity: fail
+
+# ── JTAG rules ───────────────────────────────────────────────────────────────
+jtag:
+  interface: FTDI FT2232H, Digilent Adept — if00 = JTAG, if01 = UART @115200
+  rules:
+    # This is the rule DS-E0 exists to enforce: the public target must NOT pin a
+    # cable serial. A serial identifies ONE physical cable on ONE bench; in a
+    # public target it is at best inert and at worst points rr at somebody
+    # else's board.
+    - The public target declares NO cable serial. One board on the host needs
+      no selection at all.
+    - A host with more than one FTDI-JTAG board must name the cable per
+      invocation (rr program run --cable <serial>) or declare it in the
+      per-deployment bench descriptor (runtimes/hw.local.yml) — never in the target.
+    - Vivado's part lock is the only backstop if the cable is left unpinned on
+      a multi-board host, and it does not distinguish two identical boards.
+  severity: fail
+
+# ── Network ──────────────────────────────────────────────────────────────────
+network:
+  # The public image requests DHCP and contains no address. Point-to-point
+  # users without DHCP provide ds_ip=<address>/<prefix> at boot or create
+  # /etc/deepskopion/network.conf from the serial console. Either way the
+  # deployment owns the address; it never comes from this repository.
+  topology: Ethernet with DHCP or an owner-configured static link
+  addressing: dhcp-or-user-static
+  static_bootarg: ds_ip=<address>/<prefix>
+  severity: fail
+
+# ── Power ────────────────────────────────────────────────────────────────────
+power:
+  method: USB micro-B from the host (the PROG/UART port), board power-select
+    jumper in the USB position
+  alternative: 5 V barrel supply, jumper in the wall position — required if
+    PMOD loads exceed what USB can deliver
+  # No smart plug, no shared outlet, no remote power control is assumed. The
+  # user reaches the board.
+  notes: Jumper designators differ across board silkscreens; positions are
+    labelled on the board and in the Digilent Zybo Z7 reference manual.
+  severity: warn
+
+# ── PMOD wiring ──────────────────────────────────────────────────────────────
+pmod:
+  # THE POINT: the golden path needs no probe wires at all. Every bus it
+  # decodes is generated on-chip (see traffic_source). PMOD is for pointing the
+  # datalogger at a real external bus afterwards.
+  required_for_golden_path: false
+  map:
+    ja0: 'I2C #4 SCL   (or PS EMIO I2C0 SCL when EMIO_MUX_SEL[0]=1)'
+    ja1: 'I2C #4 SDA   (or PS EMIO I2C0 SDA when EMIO_MUX_SEL[0]=1)'
+    ja2: 'I2C #5 SCL   (always external)'
+    ja3: 'I2C #5 SDA   (always external)'
+    ja4: 'SPI #8 CS    (or PS EMIO SPI0 SS   when EMIO_MUX_SEL[2]=1)'
+    ja5: 'SPI #8 MOSI  (or PS EMIO SPI0 MOSI when EMIO_MUX_SEL[2]=1)'
+    ja6: 'SPI #8 MISO  (or PS EMIO SPI0 MISO when EMIO_MUX_SEL[2]=1)'
+    ja7: 'SPI #8 SCLK  (or PS EMIO SPI0 SCLK when EMIO_MUX_SEL[2]=1)'
+    jb0: 'UART #12 TX  (or PS EMIO UART0 TX  when EMIO_MUX_SEL[1]=1)'
+    jb1: 'UART #13 TX  (always external)'
+    jb2: 'EDGE #1 line (always external)'
+    jb3: 'EDGE #2 line (always external)'
+    jb4: 'EDGE #3 line (always external)'
+    jb5: 'EDGE #6 line (always external)'
+  ground: PMOD pin 5 or 6 of the same header — an unreferenced probe reads
+    all-ones or garbage
+  levels: 3.3 V LVCMOS, not 5 V tolerant
+  severity: warn
+
+# ── Deterministic traffic source ─────────────────────────────────────────────
+traffic_source:
+  # "Connect your bus and hope it says something" is not a golden path: the
+  # first run has to produce KNOWN events so the user can tell success from a
+  # dead capture. Everything below is inside the FPGA and the PS.
+  kind: on-chip, no external hardware
+  buses:
+    - name: UART / I2C / SPI
+      how: PS EMIO UART0 / I2C0 / SPI0 driven from Linux userspace
+        (the EMIO UART0 tty, base 0xE0000000, resolved with emio_uart_dev();
+        /dev/i2c-0; /dev/spidev0.0) and routed back into the
+        datalogger matrix in fabric via EMIO_MUX_SEL
+      stimulus: write bytes to the device node
+      observed_by: 'UART #12, I2C #4, SPI #8'
+    - name: CAN (opt-in, DS-D.43)
+      how: two PS CAN controllers routed to EMIO, wired-AND into one real
+        2-node CAN bus in fabric; can1 ACKs can0 so frames actually complete
+      stimulus: ip link set can0 type can bitrate 250000 && ip link set can0 up
+        (same for can1), then cangen/cansend can0
+      observed_by: 'can_datalogger id 20 on capture_pin 28, only in a build whose
+        datalogger_config.yml enables it'
+  # Consistency between this declaration and the target is checked by preflight:
+  # if these DT nodes or datalogger ids ever disappear, the traffic source is a
+  # promise the design no longer keeps.
+  #
+  # The SPI path needs both nodes: the controller carries the EMIO GPIO
+  # chip-select (DS-T2.16) and the kernel exposes no spidev without the child
+  # node (DS-P3.48).
+  required_dt_nodes:
+    - /axi/spi@e0006000
+    - /axi/spi@e0006000/spidev@0
+  required_datalogger_ids: [4, 8, 12]
+  # DS-T1.17: DS-P2.121 (DS-D.43) made the CAN data logger opt-in and removed
+  # id 20 from the shared datalogger_config.yml, but this list still required
+  # it, so every Zybo build stopped in preflight before Vivado ran. An opt-in
+  # bus is judged only when its datalogger is configured: a build that carries
+  # can_datalogger id 20 still needs both PS CAN nodes, because a lone node has
+  # nothing to ACK it and no frame ever completes.
+  opt_in:
+    - name: CAN
+      datalogger_ids: [20]
+      required_dt_nodes:
+        - /axi/can@e0008000
+        - /axi/can@e0009000
+  severity: fail
+
+# ── Targets ──────────────────────────────────────────────────────────────────
+# The product targets in targets/. The rest of this file, and the preflight,
+# declare the Zybo Z7-20 golden path; the other two build with their own vendor
+# tool at the release the README's Requirements table names.
+targets:
+  zybo_datalogger:
+    board: Digilent Zybo Z7-20
+    tool: Vivado 2024.1
+    status: supported
+    evidence: >-
+      silicon, 2026-11-16, pre-registered gate: the 43b88faa build booted from
+      SD and read REGBANK_NUM_WORDS = 7436, build identity 0x43B88FAA (DS-P1.111)
+  de25_datalogger:
+    board: Terasic DE25
+    tool: Quartus Prime Pro 25.3
+    status: supported
+    evidence: >-
+      silicon, 2026-11-16, pre-registered gate: the 43b88faa build read
+      REGBANK_NUM_WORDS = 7436, identity by the regbank stamp (DS-P1.111)
+  pfsoc_datalogger:
+    board: Microchip PolarFire SoC Discovery Kit
+    tool: Libero SoC 2025.2
+    status: preview
+    evidence: >-
+      silicon, 2026-11-16, pre-registered gate: the 43b88faa build read
+      REGBANK_NUM_WORDS = 7436 on 2 cold boots, build identity 0x43B88FAA
+      (DS-P1.111); the self-test capture is not yet verified on silicon, so the
+      target is a preview
+
+# ── What is NOT supported ────────────────────────────────────────────────────
+# Recorded here so "unsupported" is a statement in the repo rather than a thing
+# a user discovers after a two-hour build.
+unsupported:
+  - Windows and macOS (the Linux flow builds a Linux boot chain)
+  - WSL2 past the bitstream (the Linux image, SD card and board steps are not
+    measured under WSL2; the build through the bitstream is, see host.os)
+  - Zybo Z7-10 (xc7z010) — the canonical target instantiates 2x CTU CAN FD
+  - any Vivado release other than 2024.1
+  - a CTU-free base datalogger target (future work; the shared RTL/BD always
+    include the CTU cores today)

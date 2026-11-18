@@ -1,0 +1,85 @@
+# DS-P2.322 test-only configuration for test_datalogger_gather_jtag (DS-P3.99), NOT a product mix.
+# The DS-P1.104 default mix (tools/datalogger-builder/config/datalogger_config.yml) plus JTAG0 at its
+# pre-DS-P1.104 slot: device id 16, TCK/TMS/TDI/TDO on logical pins 24-27. The default mix has no JTAG
+# logger, so the JTAG gather path is tested on this fixture. datalogger_config_pkg.vhd and
+# datalogger_gather.vhd beside this file are the generator's output for it, frozen; the desk test
+# tools/tests/test_gather_jtag_fixture_fresh_ds_p2_322.py holds them equal to the generator.
+# Pins 24-27 are not wired to a board pin (gather bench only): AllowUnwiredPins.
+# Regenerate the pair after any edit here or to the product mix:
+#   python3 tools/datalogger-builder/datalogger_gather_gen.py tools/sim/fixtures/gather_jtag/datalogger_config.yml \
+#     --pkg-dir tools/sim/fixtures/gather_jtag --rtl-dir tools/sim/fixtures/gather_jtag
+
+Design: Zybo Z7-20
+
+Constraints:
+  NumDataloggerPins: 64
+  MaxDataloggerID: 31
+  AllowUnwiredPins: true
+
+Dataloggers:
+  # Burst protocols — per-protocol arbiter feeding the BURST output
+  Burst:
+    I2c:
+      4:
+        SCL: 12
+        SDA: 13
+      5:
+        SCL: 14
+        SDA: 15
+
+    Uart:
+      12:
+        TX: 36
+      13:
+        TX: 37
+
+    Spi:
+      8:
+        SCLK: 23
+        CS: 20
+        MOSI: 21
+        MISO: 22
+
+    # EDGE device_ids start at 1 — device_id 0 is RESERVED. CONFIG=0 is
+    # the idle/clear value (reset state, written between commands), and
+    # it is bit-identical to "disable device_id 0", so a live data logger at
+    # id 0 is silently disabled by every CONFIG clear (DS-T2.9). Ids are
+    # kept low and non-conflicting (4,5=I2C, 8=SPI, 12,13=UART) so the
+    # edge_batcher_aggregator sizes G_NUM_CHANNELS = max(edge id)+1
+    # (it demuxes EV_WORD[31:27] directly as the batcher index) instead
+    # of the full 5-bit 32-channel space — the DS-T10 capacity fix.
+    Jtag:
+      16:
+        TCK: 24
+        TMS: 25
+        TDI: 26
+        TDO: 27
+    Edge:
+      1:
+        LINE: 42
+      2:
+        LINE: 43
+      3:
+        LINE: 44
+
+    # CAN FD data logger (project code, passive): one post-transceiver RX
+    # line. The CTU CAN FD controller is not part of the products.
+    Can:
+      20:
+        RX: 28
+
+BoardPins:
+  12: JA0
+  13: JA1
+  14: JA2
+  15: JA3
+  20: JA4
+  21: JA5
+  22: JA6
+  23: JA7
+  36: JB0
+  37: JB1
+  42: JB2
+  43: JB3
+  44: JB4
+  28: JB5

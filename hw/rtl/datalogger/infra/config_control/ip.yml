@@ -1,0 +1,53 @@
+# config_control — Per-datalogger CONFIG demux + latch
+#
+# Each datalogger instance instantiates one config_control pinned to its
+# G_DEV_ID. The block compares CONFIG[15:11] to G_DEV_ID and latches
+# the lower bits into CONFIG_OUT when matched, holding the last good
+# value until a fresh write for the same ID arrives.
+#
+# Part of the DS-P3.21 infra-IP bundle. See section 8b of the
+# standards doc for R1..R8.
+
+ip:
+  name: config_control
+  library: tich
+  language: vhdl
+  description: |
+    Device-ID-filtered CONFIG demux. Watches the shared CONFIG bus
+    for writes addressed to G_DEV_ID (CONFIG[15:11] match) and
+    latches the lower bits into CONFIG_OUT. Holds the latched value
+    until the next matching write — non-matching writes are no-ops
+    that don't disturb downstream consumers.
+
+hdl:
+  top_module: config_control
+  top_sim:    config_control
+
+paths:
+  sources: .
+
+synthesis:
+  mode: rtl
+  sources:
+    - config_control.vhd
+
+build:
+  simulation:
+    sources: []
+    test_dir: ../../../../sim/cocotb/tests/datalogger/infra/config_control
+    simulator: nvc
+    waves:
+      formats: [fst]
+
+requirements: requirements.yml
+
+# DS-P2.137: config_control.vhd says `use tich.datalogger_pkg.all`. The
+# standalone `rr sim run --ip` compile is built from this manifest's
+# declared closure alone (the test's main() custom_libraries is NOT run), so
+# the package pair must be declared here or analysis fails with
+# "library TICH not found". `path:` marks a local manifest, not a registry
+# ref (rr IP_MANIFEST_REFERENCE `dependencies`).
+dependencies:
+  deepskopion/datalogger_pkg: {path: ../../../pkg_ip/datalogger}
+
+ips: []

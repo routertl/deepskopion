@@ -1,0 +1,183 @@
+{
+  "contract": "wave_stream_v1",
+  "name": "session_edge_lane_names",
+  "expect": "accept",
+  "why": "Edge lanes named in HELO (2.8.0, DS-P3.124): the entries at ids 1 and 2 equal the device_ids of the EDGE_EVENTS words and have width 0, so a consumer labels those lanes i2c_scl and i2c_sda instead of edge_1 and edge_2. The SAMPLES channels stay above id 31.",
+  "frames": [
+    {
+      "dir": "p2c",
+      "tag": 0,
+      "payload": {
+        "ver": "wave_stream_v1",
+        "producer": "deepskopion-daemon/0.1.0",
+        "sample_clk_hz": 100000000,
+        "channels": [
+          {
+            "id": 1,
+            "name": "i2c_scl",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 2,
+            "name": "i2c_sda",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 40,
+            "name": "uart_rx",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 41,
+            "name": "uart_tx",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 42,
+            "name": "i2c_sda",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 43,
+            "name": "i2c_scl",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 44,
+            "name": "can_rx",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 45,
+            "name": "can_tx",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 100,
+            "name": "uart_byte",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 101,
+            "name": "i2c_frame",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 102,
+            "name": "spi_xact",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 103,
+            "name": "jtag_tap",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 105,
+            "name": "can_msg",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 202,
+            "name": "protocol_stats",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "DecimalUnsigned"
+          },
+          {
+            "id": 920,
+            "name": "edge_lane",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          }
+        ],
+        "channel_total_bits": 6
+      }
+    },
+    {
+      "dir": "c2p",
+      "tag": 1,
+      "payload": {
+        "consumer": "routewave/1.7.0",
+        "max_rate_hint_hz": 5000000
+      }
+    },
+    {
+      "dir": "p2c",
+      "tag": 6,
+      "payload": {
+        "seq": 0,
+        "annotations": [
+          {
+            "ts_start": 3000,
+            "ts_end": 3086,
+            "channel_id": 100,
+            "kind": "uart_byte",
+            "text": "0x55 'U'",
+            "payload": {
+              "byte": 85
+            },
+            "is_error": false
+          }
+        ]
+      }
+    },
+    {
+      "dir": "p2c",
+      "tag": 7,
+      "payload": {
+        "seq": 1,
+        "clk_mhz": 100,
+        "anchor_ns": 3000000,
+        "words": [
+          134985728,
+          269203712,
+          151763456,
+          285981440
+        ]
+      }
+    }
+  ]
+}

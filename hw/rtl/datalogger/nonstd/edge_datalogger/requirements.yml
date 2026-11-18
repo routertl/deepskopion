@@ -1,0 +1,236 @@
+# edge_datalogger — Requirements catalog (contract-first per ROUTERTL convention)
+#
+# edge_datalogger is deepskopion's actual logic-analyzer capture path:
+# it tags every rising/falling/both edge on a single input line with
+# a timestamp and emits a 32-bit message. No protocol decode — the
+# message stream IS the trace.
+#
+# Watch the names: the ENTITY is `edge_datalogger`, the PORT prefix is
+# `ED_*` (ED_MSG_OUT/VLD/RDY/ERRORS), the input pin is `EDGE_IN`.
+# This is the historical mismatch DS-P3.16 caught in the datalogger-builder
+# protocols.yml mapping.
+#
+# LIFECYCLE EXEMPTION (DS-P3.90 Phase 1): edge_datalogger is EXEMPT from the
+# uniform ENABLED/DISABLED lifecycle frame. Its 32-bit frame is bespoke —
+# dev_id(5) & s_bit & f_bit & e_bit & timestamp(16) & ext(8) — so the three bits
+# that would hold the message `type` field instead carry the S/F/E flags
+# (compliance checklist H3 = justified divergence). There is no clean type slot
+# for a "100"/0x03/0x00 lifecycle frame without aliasing a read-sync edge
+# sample. Enable/disable is observable via the start/stop of the edge stream.
+# See docs/standards/datalogger_compliance_checklist.md §10 (L5).
+#
+# Each EDGE-REQ-N below is referenced by ≥1 cocotb test in
+# hw/sim/cocotb/tests/datalogger/nonstd/edge_datalogger/test_edge_datalogger.py via
+# @requires(EDGE-REQ-N). `rr sim coverage-map` enforces the mapping.
+#
+# Complementary to: hw/rtl/datalogger/nonstd/edge_datalogger/edge_datalogger_protocol.yml
+# (HW word format) and docs/standards/datalogger_compliance_checklist.md
+# section 8b.
+#
+# v0.1 SCOPE: one provable REQ. The pre-existing test_edge_datalogger is
+# a skeleton (`assert True`) — same shape as QSPI was before DS-P3.19.
+# Real-coverage REQs (rising/falling/both edge detection, CONFIG mode
+# bits, trigger-off / read-trigger semantics, debouncing via
+# G_ENABLE_INFILTER, adversarial idle-line negatives) come in
+# DS-P3.<a> as follow-on per standards doc R7.
+
+ip: edge_datalogger
+version: 0.1
+schema_version: 1
+
+port_contract:
+  slaves: []
+  masters: []
+  scalars:
+    - { name: EDGE_IN,    dir: in,  width: "1" }
+    - { name: CONFIG,     dir: in,  width: "G_CONFIG_WIDTH - 1 downto 0" }
+    - { name: TIMESTAMP,  dir: in,  width: "G_TIMESTAMP_WIDTH - 1 downto 0" }
+    - { name: ED_MSG_OUT, dir: out, width: "C_DATALOGGER_MSG_WIDTH - 1 downto 0" }
+    - { name: ED_MSG_VLD, dir: out, width: "1" }
+    - { name: ED_MSG_RDY, dir: in,  width: "1" }
+    - { name: ED_ERRORS,  dir: out, width: "G_ERROR_WIDTH - 1 downto 0" }
+    # DS-P2.187: ports the entity gained after v0.1 (DS-T2.84 lifecycle flag,
+    # DS-P3.117 max-frequency tracker). EDGE-REQ-53..57 already test them.
+    - { name: ED_MSG_LIFECYCLE, dir: out, width: "1" }
+    - { name: ED_MAX_INTERVAL,  dir: out, width: "G_MAXFREQ_WIDTH - 1 downto 0" }
+    - { name: ED_MAX_NEW,       dir: out, width: "1" }
+    # DS-P2.16: Stream-RLE word flag.
+    - { name: ED_MSG_STREAM,    dir: out, width: "1" }
+  clocks:
+    - { name: CLK }
+  resets:
+    - { name: RST, polarity: active_high }
+
+parameters:
+  - { name: G_ED_ID_WIDTH,     default: 5 }
+  - { name: G_ED_DEV_ID,       default: 28 }
+  - { name: G_TIMESTAMP_WIDTH, default: 16 }
+  - { name: G_CONFIG_WIDTH,    default: 16 }
+  - { name: G_ERROR_WIDTH,     default: 2 }
+  - { name: G_ENABLE_INFILTER, default: 0 }
+  - { name: G_ILA_EN,          default: 0 }
+  - { name: G_MAXFREQ_WIDTH,        default: 24 }
+  - { name: G_MAXFREQ_MIN_INTERVAL, default: 2 }
+  - { name: G_MAXFREQ_CONFIRM,      default: 1 }
+  - { name: G_RLE_CNT_WIDTH,        default: 24 }
+
+functional_contract:
+
+  # ── Reset determinism (v0.1) ────────────────────────────────────
+  - id: EDGE-REQ-50
+    kind: behavioral
+    desc: >-
+      On RST='1' (active high), `ED_MSG_VLD` is held low (gated by
+      the FIFO reset-busy path). After RST de-assert with `EDGE_IN`
+      held steady (no transitions), the datalogger remains quiescent
+      on `ED_MSG_VLD` — no spurious message emission during the
+      post-reset idle window.
+
+      NOTE on ED_ERRORS: the contract intentionally does not claim
+      anything about `ED_ERRORS` under reset. Authoring this REQ
+      surfaced that the architecture declared the port but never
+      drove it; DS-P3.24 since drives `ED_ERRORS`[0] as the
+      internal-FIFO overflow flag (EDGE-REQ-51/52). Expanding REQ-50
+      to also assert ED_ERRORS = 0 under reset is still open.
+
+  # ── Internal-FIFO overflow on ED_ERRORS (DS-P3.24) ──────────────
+  # DS-P2.187: test_edge_datalogger has tagged EDGE-REQ-51/52 since DS-P3.24
+  # (c314035f), but the REQs were never declared here, so coverage-map
+  # reported both tags as orphans. Declared from that commit's RTL and tests.
+  - id: EDGE-REQ-51
+    kind: negative
+    desc: >-
+      With the consumer draining (`ED_MSG_RDY`='1') the internal FIFO
+      never fills, so `ED_ERRORS`[0] stays '0' across a sustained edge
+      train (one `EDGE_IN` transition per clock). PROHIBITION: no
+      overflow pulse is raised while no edge is dropped.
+
+  - id: EDGE-REQ-52
+    kind: behavioral
+    desc: >-
+      With no drain (`ED_MSG_RDY`='0') the internal FIFO (2**8 = 256
+      words) fills; each further detected edge is dropped and
+      `ED_ERRORS`[0] pulses for exactly one CLK per dropped edge, so M
+      edges into the full FIFO give exactly M pulses. The gather sums
+      these pulses into ERR_CNT_EDGE, the out-of-band lost-edge count.
+
+  # ── Max-frequency tracker (DS-P3.117) ───────────────────────────
+  - id: EDGE-REQ-53
+    kind: behavioral
+    desc: >-
+      A periodic line at a known half-period H clocks (H >=
+      G_MAXFREQ_MIN_INTERVAL) drives `ED_MAX_INTERVAL` to exactly H
+      (the FASTEST = smallest validated edge-to-edge interval), and
+      `ED_MAX_NEW` pulses when that smaller interval is first latched.
+      freq_max = G_SYS_CLK / (2 * ED_MAX_INTERVAL). The very first edge
+      after enable only OPENS the window and must not latch.
+
+  - id: EDGE-REQ-54
+    kind: behavioral
+    desc: >-
+      Glitch robustness. After a slow line has established a max
+      interval, a single SUB-FLOOR runt interval (< G_MAXFREQ_MIN_INTERVAL)
+      MUST NOT latch a spuriously-high frequency: `ED_MAX_INTERVAL` is
+      unchanged by the runt and no `ED_MAX_NEW` pulse is emitted for it.
+      This is the "one runt pulse sticks a false max forever" defeat.
+
+  - id: EDGE-REQ-55
+    kind: behavioral
+    desc: >-
+      Host re-ping / re-arm. Toggling CONFIG[2] (rising edge) clears the
+      latched max (`ED_MAX_INTERVAL` returns to all-ones) and reopens a
+      fresh window. A subsequently SLOWER line then reports the new,
+      LARGER min-interval (lower max frequency) — proving the latch is
+      not stuck (the stale-latch escape).
+
+  - id: EDGE-REQ-56
+    kind: behavioral
+    desc: >-
+      Event-driven emission + idle-gap safety. `ED_MAX_NEW` pulses
+      exactly on each step to a new (smaller) min interval and stays low
+      otherwise (no spurious re-broadcast on equal/larger intervals). A
+      long idle gap must NOT forge a small interval: the interval counter
+      saturates at all-ones rather than wrapping.
+
+  # ── Wire identity of S=1 words (DS-T2.84) ───────────────────────
+  - id: EDGE-REQ-57
+    kind: behavioral
+    desc: >-
+      The ENABLED/DISABLED lifecycle frame (DS-T2.43) is emitted with
+      `ED_MSG_LIFECYCLE`='1' on its `ED_MSG_VLD` cycle, carrying device id
+      and code (0x03 ENABLED, 0x00 DISABLED) in `ED_MSG_OUT`[7:0].
+      PROHIBITION: no word with `ED_MSG_LIFECYCLE`='0' and S=1 is emitted
+      unless a read was requested (CONFIG code 10 or 11). The frame's
+      type "100" is bit-identical to S=1/F=0/E=0, so without the flag a
+      consumer reads the marker as "line is low" (DS-P1.71 silicon).
+
+  - id: EDGE-REQ-58
+    kind: behavioral
+    desc: >-
+      When an edge is detected on the same cycle as a read, the readback is
+      the only S=1 word (E = current line level). The edge follows as an
+      S=0 event whose E and timestamp are those of the cycle it was
+      detected. PROHIBITION: the deferred edge is never written with S=1,
+      where it would read as a second readback of the pre-edge level.
+
+  # ── Stream-RLE (differential) mode (DS-P2.16) ───────────────────
+  # Tests: hw/sim/cocotb/tests/datalogger/nonstd/edge_datalogger/test_edge_streamer.py
+  # Word format: edge_datalogger_protocol.yml messages rle_*.
+  - id: EDGE-REQ-59
+    kind: behavioral
+    desc: >-
+      With CONFIG[4:3] = "10" latched on the enable cycle, the capture is one
+      SYNC word (type 000 line low / 001 line high, [23:0] = TIMESTAMP[23:0])
+      followed by PACK words (type 101): three edge deltas of 1..255 CLK ticks,
+      delta_0 = [7:0] the oldest. SYNC timestamp + the deltas since = the
+      TIMESTAMP event mode stamps on the same edge. Every such word has
+      `ED_MSG_STREAM`='1'; the lifecycle frame keeps it '0'. PROHIBITION: no
+      event-mode (S/F/E) word is written for a Stream-RLE capture.
+
+  - id: EDGE-REQ-60
+    kind: behavioral
+    desc: >-
+      An edge 256 or more ticks after the previous one is one LONG word (type
+      110, [23:0] = the delta). 2**G_RLE_CNT_WIDTH - 1 ticks with no edge is one
+      IDLE word (type 111, [23:0] = that tick count) that advances time without
+      a toggle; the next delta counts from it.
+
+  - id: EDGE-REQ-61
+    kind: behavioral
+    desc: >-
+      A PACK holding one or two deltas is written, zero-padded in the empty
+      high slots, on the cycle its newest delta reaches 255 ticks with no next
+      edge, so no edge waits more than 255 ticks in the packer and no LONG or
+      IDLE word is written while deltas are held. Disabling the capture writes
+      the held deltas the same way.
+
+  - id: EDGE-REQ-62
+    kind: behavioral
+    desc: >-
+      A Stream-RLE word lost to a full FIFO pulses `ED_ERRORS`[0] once. The
+      compressor then drops the held deltas, ignores edges and writes nothing
+      until the FIFO has room, and then writes a SYNC with the line's current
+      level and TIMESTAMP. PROHIBITION: no PACK/LONG/IDLE word follows a lost
+      word before that SYNC.
+
+  - id: EDGE-REQ-63
+    kind: behavioral
+    desc: >-
+      CONFIG[4:3] = "00", and the reserved "01" and "11", keep event mode: one
+      S=0 word per edge with `ED_MSG_STREAM`='0', stamped with the TIMESTAMP
+      of the cycle edge_detector reports the edge (drive cycle + 1).
+
+  # ── Max-frequency confirmation gate (DS-P3.117) ─────────────────
+  - id: EDGE-REQ-64
+    kind: behavioral
+    desc: >-
+      Confirmation gate (G_MAXFREQ_CONFIRM = N). A candidate max is the
+      LARGEST of the last N consecutive validated intervals and is offered
+      only once N intervals have closed since the window opened (enable or
+      re-arm). With N = 4, a runt pulse WIDER than the floor in the middle
+      of a half-period (three pieces, each >= G_MAXFREQ_MIN_INTERVAL) does
+      not change `ED_MAX_INTERVAL` and pulses no `ED_MAX_NEW`; fewer than N
+      intervals of a faster line latch nothing; N or more latch exactly that
+      line's half-period. PROHIBITION: no interval shorter than the largest
+      of its N-interval window is ever latched. N = 1 is the single-interval
+      tracker of EDGE-REQ-53..56.

@@ -1,0 +1,224 @@
+# zs_msg_framer — Requirements catalog (contract-first per ROUTERTL convention)
+#
+# Wraps every incoming (datalogger_id, msg_class, msg_type, flags, timestamp,
+# payload) tuple into a packed 24-byte zs_msg frame (20-byte header +
+# G_PAYLOAD_WORDS*4 bytes of payload) emitted one 32-bit word per cycle
+# into the rr-ddr-stream FIFO. PS-side DdrRingDataSource walks the
+# resulting ring with valid framing (magic 0x5A53) and parses each
+# frame via sw/stream/zs_msg.parse_header.
+#
+# Wire format spec:
+#   docs/software/data_plane/message_formats/common_header.md
+#   sw/stream/zs_msg.py  (PS-side parser — the sanctioned oracle)
+#
+# Each ZSF-REQ-N below is referenced by ≥1 cocotb test in
+# hw/sim/cocotb/tests/datalogger/infra/test_zs_msg_framer.py via @requires().
+# Adversarial-by-default: every requirement is exercised with hostile
+# input shapes (back-pressure storms, RST mid-emission, randomized
+# tuples, sustained valid). Surfaced DUT defects file as T-tier
+# (no in-session fixes) per the file-don't-fix convention.
+
+ip: zs_msg_framer
+version: 1.0
+schema_version: 1
+
+port_contract:
+  slaves: []
+  masters: []
+  scalars:
+    - { name: IN_VALID,   dir: in,  width: "1" }
+    - { name: IN_READY,   dir: out, width: "1" }
+    - { name: DATALOGGER_ID, dir: in,  width: "7 downto 0" }
+    - { name: MSG_CLASS,  dir: in,  width: "7 downto 0" }
+    - { name: MSG_TYPE,   dir: in,  width: "15 downto 0" }
+    - { name: FLAGS,      dir: in,  width: "15 downto 0" }
+    - { name: TIMESTAMP,  dir: in,  width: "63 downto 0" }
+    - { name: PAYLOAD,    dir: in,  width: "G_PAYLOAD_WORDS*32 - 1 downto 0" }
+    - { name: PAYLOAD_WORDS_LIVE, dir: in, width: "7 downto 0",
+        default: "G_PAYLOAD_WORDS" }
+    - { name: OUT_DATA,   dir: out, width: "31 downto 0" }
+    - { name: OUT_VALID,  dir: out, width: "1" }
+    - { name: OUT_READY,  dir: in,  width: "1" }
+  clocks:
+    - { name: CLK }
+  resets:
+    - { name: RST, polarity: active_high }
+
+parameters:
+  - { name: G_PAYLOAD_WORDS, default: 1 }
+
+functional_contract:
+
+  # ── Reset / idle ─────────────────────────────────────────────────────────
+  - id: ZSF-REQ-1
+    kind: behavioral
+    desc: >-
+      Under `RST`='1', state_r=S_IDLE, word_idx_r=0, `OUT_VALID`='0',
+      and `IN_READY` mirrors S_IDLE (i.e. `IN_READY`='1' the cycle
+      `RST` drops). No spurious `OUT_VALID` pulses during or
+      immediately after reset.
+
+  - id: ZSF-REQ-2
+    kind: behavioral
+    desc: >-
+      In S_IDLE with IN_VALID='0', the framer is quiescent:
+      IN_READY='1', OUT_VALID='0', OUT_DATA arbitrary. Holds this state
+      indefinitely.
+
+  # ── Latch + emission ─────────────────────────────────────────────────────
+  - id: ZSF-REQ-3
+    kind: behavioral
+    desc: >-
+      On (IN_VALID && IN_READY) the framer latches all six input
+      tuples (datalogger_id, msg_class, msg_type, flags, timestamp,
+      payload) atomically on that rising edge. The FSM moves to
+      S_EMIT next cycle; IN_READY drops to '0' for the entire
+      emission window.
+
+  - id: ZSF-REQ-4
+    kind: behavioral
+    desc: >-
+      Emission length: exactly C_ZS_NUM_HDR_WORDS + G_PAYLOAD_WORDS
+      OUT_VALID handshakes per accepted input tuple. With the PoC
+      default (G_PAYLOAD_WORDS=1) this is 5 + 1 = 6 words.
+
+  - id: ZSF-REQ-5
+    kind: behavioral
+    desc: >-
+      IN_READY must stay low for the entire emission window — no
+      mid-frame second-tuple latch. Drive IN_VALID continuously
+      across the emission and assert that only one tuple was
+      consumed (one frame emitted).
+
+  - id: ZSF-REQ-6
+    kind: behavioral
+    desc: >-
+      Word-0 layout (the magic anchor word): bytes [0,1,2,3] in the
+      LE-packed DDR view must be [magic_lo=0x53, magic_hi=0x5A,
+      version=0x01, header_len=0x05]. Test samples `OUT_DATA` at
+      word_idx_r=0 and verifies after LE byte unpack.
+
+  - id: ZSF-REQ-7
+    kind: behavioral
+    desc: >-
+      Word-2 + word-3 carry the 64-bit timestamp LE-packed:
+      word2 = timestamp[31:0] bytes [0..3],
+      word3 = timestamp[63:32] bytes [4..7].
+      Driving TIMESTAMP=0xDEADBEEF_C0FFEE12 must produce
+      word2=0x12EEFFC0 and word3=0xEFBEADDE in the LE-byte view.
+
+  - id: ZSF-REQ-8
+    kind: behavioral
+    desc: >-
+      Round-trip: drive a known (datalogger_id, msg_class, msg_type,
+      flags, timestamp, payload) tuple → collect 6 OUT_DATA words
+      → assemble the 24-byte buffer in LE order → call
+      sw.stream.zs_msg.parse_header → assert every recovered field
+      equals what was driven. This is the load-bearing test — the
+      framer's contract IS round-trip parity with the PS parser.
+
+  # ── Back-pressure ────────────────────────────────────────────────────────
+  - id: ZSF-REQ-10
+    kind: behavioral
+    desc: >-
+      `OUT_READY`='0' during emission stalls the FSM: word_idx_r
+      holds, `OUT_VALID` stays high on the unaccepted word, no FIFO
+      is popped, no frame data is lost. After `OUT_READY` rises the
+      FSM advances from the same word_idx position.
+
+  - id: ZSF-REQ-11
+    kind: behavioral
+    desc: >-
+      Adversarial OUT_READY storm: OUT_READY toggles 0/1 every cycle
+      for the entire emission window. Frame is delivered correctly,
+      bytes in order, no drops, no duplicates. Round-trip parse_header
+      still recovers all fields.
+
+  # ── Reset mid-emission ───────────────────────────────────────────────────
+  - id: ZSF-REQ-20
+    kind: behavioral
+    desc: >-
+      RST asserted mid-emission returns the FSM to S_IDLE, drops
+      OUT_VALID, and arms for a fresh tuple. The aborted frame is
+      lost cleanly (no half-emitted bytes in subsequent traffic).
+
+  # ── Continuous traffic ───────────────────────────────────────────────────
+  - id: ZSF-REQ-30
+    kind: behavioral
+    desc: >-
+      Sustained input: drive IN_VALID='1' continuously (consumer
+      always ready). Each accepted tuple produces exactly 6 OUT_VALID
+      words; back-to-back frames are emitted with at most 1 cycle
+      gap between them (the FSM state transition). 100 frames must
+      all round-trip cleanly.
+
+  # ── Adversarial randomization ────────────────────────────────────────────
+  - id: ZSF-REQ-40
+    kind: behavioral
+    desc: >-
+      Randomized tuples — datalogger_id ∈ [0,255], msg_class ∈ {0,1,2},
+      msg_type with all 16 severity × 16 domain × 256 event_id
+      combinations exercised across the seed space, flags from full
+      16-bit space, timestamp with corner values (0, 1, 2^48,
+      2^64-1). Every recovered tuple must equal the driven one
+      bit-for-bit.
+
+  # ── Variable payload length (DS-P2.47 Phase B2) ──────────────────────────
+  - id: ZSF-REQ-50
+    kind: behavioral
+    desc: >-
+      PAYLOAD_WORDS_LIVE selects the per-frame payload word count in
+      [1, G_PAYLOAD_WORDS]. Latched on the input handshake; the FSM
+      emits exactly (5 + payload_words_r) OUT_VALID handshakes per
+      accepted tuple — not the static G_PAYLOAD_WORDS-derived count.
+      Header word 4's payload_len byte field equals
+      payload_words_r * 4.
+
+  - id: ZSF-REQ-51
+    kind: behavioral
+    desc: >-
+      Defaulted port: callers that DON'T drive PAYLOAD_WORDS_LIVE see
+      the historic fixed-length behaviour (frame = 5 + G_PAYLOAD_WORDS
+      words). Backward-compat regression — the entire pre-Phase-B2
+      suite (ZSF-REQ-1..40) must keep passing without any change to
+      its drivers.
+
+  - id: ZSF-REQ-52
+    kind: behavioral
+    desc: >-
+      Clamping: PAYLOAD_WORDS_LIVE values <1 latch as 1; values
+      >G_PAYLOAD_WORDS latch as G_PAYLOAD_WORDS. The framer never
+      emits a zero-payload frame nor a frame whose payload exceeds
+      its declared port capacity. Adversarial driver should attempt
+      0, 1, G_PAYLOAD_WORDS, and G_PAYLOAD_WORDS+1.
+
+# ── Adversarial attack vectors (filing-target list) ───────────────────────
+#
+# Documentation only (schema-validator does not accept extra top-level
+# keys today). When a defect surfaces in an adversarial run, file as
+# T-tier and continue — do NOT fix in-session.
+#
+#   single-frame-roundtrip:  one known tuple → 6 words → parse_header
+#                            recovers every field (covers ZSF-REQ-3,
+#                            4, 6, 7, 8).
+#   continuous-valid:        IN_VALID held high, OUT_READY high — exactly
+#                            one frame per accepted handshake (covers
+#                            ZSF-REQ-5).
+#   backpressure-storm:      OUT_READY toggles 0/1 every cycle; round-trip
+#                            still clean (covers ZSF-REQ-10, 11).
+#   reset-mid-emission:      RST while word_idx_r mid-frame; next post-
+#                            RST tuple emits fresh frame (covers
+#                            ZSF-REQ-20).
+#   sustained-traffic:       100 back-to-back random frames all round-
+#                            trip (covers ZSF-REQ-30, 40).
+#   corner-timestamps:       TIMESTAMP ∈ {0, 1, 2^31-1, 2^32, 2^48-1,
+#                            2^48, 2^63-1, 2^64-1} all round-trip
+#                            (covers ZSF-REQ-7, 40).
+#   corner-msg-types:        msg_type ∈ {0x0000, 0xF000, 0x0F00, 0x00FF,
+#                            0xFFFF} all round-trip (covers ZSF-REQ-40).
+#   payload-bit-pattern:     PAYLOAD ∈ {0x00000000, 0xFFFFFFFF,
+#                            0xAAAAAAAA, 0x55555555, 0xDEADBEEF,
+#                            0x5A5A5A5A — magic byte repeating, confusable
+#                            with frame headers}; all round-trip;
+#                            payload magic does NOT confuse a downstream
+#                            parser sweeping for 0x5A53.

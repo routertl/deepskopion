@@ -1,0 +1,196 @@
+{
+  "contract": "wave_stream_v1",
+  "name": "reject_wrong_direction",
+  "expect": "reject",
+  "why": "STATS on the consumer-to-producer stream. Direction is part of each tag's definition; a frame arriving from the wrong end means one side has the tag's role backwards, which is the same failure mode as a tag collision with a nicer disguise.",
+  "expect_fields": [
+    "frame[2].tag"
+  ],
+  "frames": [
+    {
+      "dir": "p2c",
+      "tag": 0,
+      "payload": {
+        "ver": "wave_stream_v1",
+        "producer": "deepskopion-daemon/0.1.0",
+        "sample_clk_hz": 100000000,
+        "channels": [
+          {
+            "id": 8,
+            "name": "uart_rx",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 9,
+            "name": "uart_tx",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 10,
+            "name": "i2c_sda",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 11,
+            "name": "i2c_scl",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 12,
+            "name": "can_rx",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 13,
+            "name": "can_tx",
+            "width": 1,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          },
+          {
+            "id": 100,
+            "name": "uart_byte",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 101,
+            "name": "i2c_frame",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 102,
+            "name": "spi_xact",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 103,
+            "name": "jtag_tap",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 105,
+            "name": "can_msg",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Hexadecimal"
+          },
+          {
+            "id": 202,
+            "name": "protocol_stats",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "DecimalUnsigned"
+          },
+          {
+            "id": 920,
+            "name": "edge_lane",
+            "width": 0,
+            "type": "Signal",
+            "role": "Wire",
+            "radix": "Binary"
+          }
+        ],
+        "channel_total_bits": 6
+      }
+    },
+    {
+      "dir": "c2p",
+      "tag": 1,
+      "payload": {
+        "consumer": "routewave/1.7.0",
+        "max_rate_hint_hz": 5000000
+      }
+    },
+    {
+      "dir": "c2p",
+      "tag": 11,
+      "payload": {
+        "seq": 20,
+        "daemon_ver": "0.3.1-2-gabc1234",
+        "rtl_git_hash": "7d5e9058",
+        "rtl_build_date": "0x00012301",
+        "ring_bytes": 268435456,
+        "ring_used_bytes": 1048576,
+        "ddr_backpressure_cnt": 0,
+        "ring_alarm": {
+          "excursions": 2,
+          "active": false
+        },
+        "proto_stats": {
+          "can": {
+            "pkts": null,
+            "errs": null,
+            "drops": null
+          },
+          "edge": {
+            "pkts": 90210,
+            "errs": 37,
+            "drops": null
+          },
+          "i2c": {
+            "pkts": 44,
+            "errs": 0,
+            "drops": 0
+          },
+          "jtag": {
+            "pkts": null,
+            "errs": null,
+            "drops": null
+          },
+          "spi": {
+            "pkts": 18,
+            "errs": 0,
+            "drops": 0
+          },
+          "uart": {
+            "pkts": 1200,
+            "errs": 0,
+            "drops": 0,
+            "decode_errs": 4809
+          }
+        },
+        "proto_decode_errs": {
+          "i2c": 1,
+          "spi": 0,
+          "uart": 4809
+        },
+        "fifo_overflows": 1,
+        "fifo_high_watermark": 512,
+        "arb_grants": null,
+        "heartbeat": 918273,
+        "clk_ddr_ticks": 5000000,
+        "ddr_reset_status": 6
+      }
+    }
+  ]
+}

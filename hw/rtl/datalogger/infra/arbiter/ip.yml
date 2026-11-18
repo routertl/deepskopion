@@ -1,0 +1,45 @@
+# arbiter — Round-robin arbiter with token-message insertion
+#
+# Used as both 1st-layer (per-protocol) and 2nd-layer (per-class)
+# arbiter inside datalogger_gather. Each input has its own FWFT FIFO;
+# the round-robin policy is optionally weighted (G_RR_FILL_LEVEL_EN).
+# Token messages are inserted every G_TOKEN_INTERVAL valid words.
+#
+# Part of the DS-P3.21 infra-IP bundle (arbiter + timestamp_sync +
+# config_control). See docs/standards/datalogger_compliance_checklist.md
+# section 8b for R1..R8.
+
+ip:
+  name: arbiter
+  library: tich
+  language: vhdl
+  description: |
+    N-input round-robin arbiter with per-input FWFT FIFO, periodic
+    token-message insertion (G_TOKEN_INTERVAL), optional weighting
+    (G_RR_FILL_LEVEL_EN), and FLUSH-to-pad behaviour. Output is a
+    single arbitrated stream with metadata token annotations.
+
+hdl:
+  top_module: arbiter
+  top_sim:    arbiter
+
+paths:
+  sources: .
+
+synthesis:
+  mode: rtl
+  sources:
+    - arbiter.vhd
+
+build:
+  simulation:
+    sources: []
+    test_dir: ../../../../sim/cocotb/tests/datalogger/infra/arbiter
+    simulator: nvc
+    waves:
+      formats: [fst]
+
+requirements: requirements.yml
+
+ips:
+  - ../../../fifo/ip.yml

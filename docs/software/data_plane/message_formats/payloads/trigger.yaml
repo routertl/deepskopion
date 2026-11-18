@@ -1,0 +1,40 @@
+# Trigger Message Payload Specification
+name: TRIGGER
+id: 0x07 # Matches the DOMAIN enum
+payload_size_bytes: variable # Minimum 6 bytes + optional data
+description: "Emitted when the Trigger Engine matches a configured rule."
+
+fields:
+  - name: trigger_id
+    offset: 0
+    size: 1
+    type: uint8
+    description: "ID of the rule that fired (0-255)."
+
+  - name: flags
+    offset: 1
+    size: 1
+    type: uint8
+    description: "Bit 0: Edge type, Bit 1: One-shot, etc."
+
+  - name: condition_mask
+    offset: 2
+    size: 2
+    type: uint16
+    description: "Bitmask indicating which sub-conditions acted as sources."
+
+  - name: seq_number
+    offset: 4
+    size: 2
+    type: uint16
+    description: "Incrementing counter. Detects missed triggers or resets."
+
+  - name: snapshot_data
+    offset: 6
+    size: dynamic
+    type: uint8_array
+    description: "Optional snapshot of input bits or debug data."
+
+notes:
+  - "Timestamp corresponds to the exact cycle the condition was met."
+  - "Software uses seq_number to detect if the trigger engine was reset or dropped a message."

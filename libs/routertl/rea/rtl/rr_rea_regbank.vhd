@@ -1,0 +1,859 @@
+-- SPDX-FileCopyrightText: 2026 Daniel J. Mazure
+-- SPDX-License-Identifier: MIT
+--
+-- rr_rea_regbank — memory-mapped register file for the REA IP.
+--
+-- Sits between the JTAG protocol decoder (rr_rea_jtag_iface) and the
+-- capture_i FSM (rr_rea_capture_fsm). Implements the SW-interface
+-- contract from SPEC.md (REA-REQ-010..012, REA-REQ-971). Synchronous to jtag_clk_i;
+-- CDC to/from sample_clk_i is the separate rr_rea_cdc block's job.
+--
+-- v0.1 register map (full table in SPEC.md):
+--   0x00 RO  VERSION       0x5245410F ('REA' + v0.15 feature tier; single-sourced
+--                          as rr_rea_pkg.C_REA_VERSION — never re-typed)
+--   0x04 WO  CTRL          arm_toggle/reset_toggle
+--   0x08 RO  STATUS        armed_o/triggered_o/done_o/overflow_o
+--   0x0C RO  SAMPLE_W      synth-time generic
+--   0x10 RO  DEPTH         synth-time generic
+--   0x14 RW  PRETRIG
+--   0x18 RW  POSTTRIG
+--   0x1C RO  CAPTURE_LEN   = pretrig + posttrig + 1
+--   0x20 RW  TRIG_MODE     bit[0] = value_match
+--   0x24 RW  TRIG_VALUE
+--   0x28 RW  TRIG_MASK
+--   0xA0 RW  CHAN_SEL      v0.1: must be 0
+--   0xA4 RO  NUM_CHAN      v0.1: =1
+--   0xB0 RW  DECIM         decimation ratio (24-bit, bits 31:24 read 0, REA-P2.23)
+--   0xC4 RO  TIMESTAMP_W   synth-time generic
+--   0xD8 RW  DATA_PLANE_SEL 0=sample, 1=timestamp
+--   0xC8 RO  START_PTR     captured address of oldest sample (post-done_o)
+--   0xCC RW  DATA_WORD_SEL capture_i-data word selector (RTL-P1.91)
+--   0xD0 RO  FEATURES      generic-derived config fingerprint (RTL-P3.1198)
+--   0xD4 RO  BUILD_ID      source/content hash (C_REA_BUILD_ID pkg; RTL-P3.1198/T2.119)
+--
+-- The CTRL register is "write-toggle": every write XORs the addressed
+-- bit position into a sticky toggle register. Downstream rr_rea_cdc
+-- edge-detects each toggle to produce a single sample_clk_i pulse.
+-- This is the standard JTAG → fast-clock pulse-coupling pattern.
+
+library ieee;
+    use ieee.std_logic_1164.all;
+    use ieee.numeric_std.all;
+
+library work;
+    use work.rr_rea_pkg.all;
+    -- RTL-T2.119: BUILD_ID (0xD4) reads C_REA_BUILD_ID from this package
+    -- DIRECTLY (not via a generic). A std_logic_vector generic carrying the hash
+    -- down the wrapper hierarchy synthesised to 0 on Vivado silicon (worked in
+    -- nvc sim); a package constant referenced in the architecture does not — it
+    -- is the same mechanism the C_ADDR_* case labels already use.
+    use work.rr_rea_build_id_pkg.all;
+
+entity rr_rea_regbank is
+    generic (
+        G_SAMPLE_W    : positive := 12;
+        G_DEPTH       : positive := 4096;
+        G_TIMESTAMP_W : natural  := 32;
+        G_NUM_CHAN    : positive := 1;
+        G_TRIG_CONDS  : positive := 4;  -- v0.5 comparator-array slots (P3.647)
+        G_NUM_SOURCE  : positive := 1;  -- v0.5 write-side source bits (P2.837)
+        -- REA-P2.5: iff true, an axi_stream_window dump engine is elaborated in
+        -- rr_rea_top; FEATURES[20] advertises it. Generic-derived, never hand-set
+        -- (REA-REQ-913).
+        G_AXIS_WINDOW : boolean  := false;
+        -- REA-P2.7: storage-qualifier slots (0 = none elaborated). FEATURES[22]
+        -- and [27:24] advertise it (REQ-958).
+        G_QUAL_CONDS  : natural  := 0;
+        -- REA-P3.7: sequencer depth (0..C_MAX_TRIG_STAGES); decodes the SEQ
+        -- window for stages 0..G_TRIG_STAGES-1 (REA-REQ-607). 0 (the default)
+        -- decodes nothing: the pre-P3.7 register bank, byte for byte.
+        G_TRIG_STAGES : natural  := 0;
+        -- REA-P2.20: true iff the JTAG door uses the 50-bit guarded DR
+        -- (rr_rea_top passes G_DR_GUARD and G_REG_IFACE = "jtag"). Only
+        -- FEATURES[31] reads it (REA-REQ-969).
+        G_DR_GUARD    : boolean  := false
+        -- RTL-T2.119: G_BUILD_ID generic removed — BUILD_ID (0xD4) now reads
+        -- C_REA_BUILD_ID directly from rr_rea_build_id_pkg (a std_logic_vector
+        -- generic didn't survive Vivado synthesis).
+    );
+    port (
+        jtag_clk_i : in  std_logic;
+        jtag_rst_i : in  std_logic;
+
+        -- ── Register-port interface (from rr_rea_jtag_iface) ─────
+        wr_en_i    : in  std_logic;
+        wr_addr_i  : in  std_logic_vector(15 downto 0);
+        wr_data_i  : in  std_logic_vector(31 downto 0);
+        rd_addr_i  : in  std_logic_vector(15 downto 0);
+        rd_data_o  : out std_logic_vector(31 downto 0);
+
+        -- ── Status inputs (from sample-clk domain, sync'd) ───────
+        armed_i     : in std_logic;
+        triggered_i : in std_logic;
+        done_i      : in std_logic;
+        overflow_i  : in std_logic;
+        start_ptr_i : in std_logic_vector(clog2(G_DEPTH) - 1 downto 0);
+
+        -- ── v0.8 readback-integrity status (jtag_clk_i domain; crossed
+        --    from sample_clk_i in rr_rea_top). REA-P2.2. ───────────────
+        -- Defaults let the regbank unit tests instantiate without wiring the
+        -- v0.8 surface; rr_rea_top drives them explicitly.
+        crc_sample_i       : in std_logic_vector(31 downto 0) := (others => '0');
+        crc_ts_i           : in std_logic_vector(31 downto 0) := (others => '0');
+        capture_epoch_i    : in std_logic_vector(31 downto 0) := (others => '0');
+        -- RTL-T1.16: pre-trigger cells contiguous with this capture.
+        pretrig_valid_i    : in std_logic_vector(31 downto 0) := (others => '0');
+        crc_valid_i        : in std_logic := '0';
+        selftest_busy_i    : in std_logic := '0';  -- 0 in P2.2 (fill lands in P2.3)
+        selftest_mode_i    : in std_logic := '0';  -- 0 in P2.2
+        selftest_refused_i : in std_logic := '0';  -- 0 in P2.2
+
+        -- ── Config outputs (to sample-clk domain, will be sync'd) ─
+        pretrig_len_o  : out std_logic_vector(clog2(G_DEPTH) - 1 downto 0);
+        posttrig_len_o : out std_logic_vector(clog2(G_DEPTH) - 1 downto 0);
+        trig_value_o   : out std_logic_vector(G_SAMPLE_W - 1 downto 0);
+        trig_mask_o    : out std_logic_vector(G_SAMPLE_W - 1 downto 0);
+        trig_mode_o    : out std_logic_vector(31 downto 0);
+        chan_sel_o     : out std_logic_vector(7 downto 0);
+        decim_ratio_o  : out std_logic_vector(23 downto 0);
+        data_word_sel_o : out std_logic_vector(7 downto 0);
+        data_plane_sel_o : out std_logic;
+        -- v0.8 selftest (REA-P2.3): fill-toggle level + seed → sample domain.
+        selftest_ctrl_o : out std_logic;                       -- bit[0] fill toggle
+        selftest_seed_o : out std_logic_vector(31 downto 0);
+
+        -- ── Per-condition comparator array (RTL-P3.647) ──────────
+        -- Expanded full-width per slot: the compact {valid,op,width,lsb}
+        -- + 32-bit value written via COND_SEL/CFG/VAL becomes a shifted
+        -- G_SAMPLE_W value + field mask + 4-bit op + valid, ready for the
+        -- FSM's per-condition comparator. array_enable rides in
+        -- trig_mode_o bit[2] (the top extracts it post-CDC).
+        cond_values_o  : out std_logic_vector(
+            G_TRIG_CONDS * G_SAMPLE_W - 1 downto 0);
+        cond_masks_o   : out std_logic_vector(
+            G_TRIG_CONDS * G_SAMPLE_W - 1 downto 0);
+        cond_ops_o     : out std_logic_vector(G_TRIG_CONDS * 4 - 1 downto 0);
+        cond_valid_o   : out std_logic_vector(G_TRIG_CONDS - 1 downto 0);
+
+        -- ── Write-side source (RTL-P2.837) ───────────────────────
+        -- JTAG-writable control bits driven INTO the design. Still in the
+        -- jtag_clk_i domain here — rr_rea_top crosses it to sample_clk_i via
+        -- rr_rea_sync_word before it reaches the DUT-facing port. Resets
+        -- to 0 (safe/inactive default; no auto-release).
+        source_o       : out std_logic_vector(G_NUM_SOURCE - 1 downto 0);
+
+        -- ── REA-P2.7 storage qualifier (REA-REQ-952/958) ─────────
+        -- QUAL_MODE {or, enable} and the slots, expanded full-width exactly
+        -- like the comparator array. jtag_clk_i domain; rr_rea_top crosses
+        -- them as quasi-static words and the FSM latches them on arm.
+        qual_mode_o    : out std_logic_vector(1 downto 0);
+        qual_values_o  : out std_logic_vector(
+            max_nat(1, G_QUAL_CONDS) * G_SAMPLE_W - 1 downto 0);
+        qual_masks_o   : out std_logic_vector(
+            max_nat(1, G_QUAL_CONDS) * G_SAMPLE_W - 1 downto 0);
+        qual_ops_o     : out std_logic_vector(max_nat(1, G_QUAL_CONDS) * 4 - 1 downto 0);
+        qual_valid_o   : out std_logic_vector(max_nat(1, G_QUAL_CONDS) - 1 downto 0);
+
+        -- ── Pulse toggles (to rr_rea_cdc → sample_clk_i pulses) ────
+        -- REA-P3.7: per-stage sequencer configuration, flop-sourced for the
+        -- CDC (the FSM latches it on arm). Stage K occupies
+        -- [(K+1)*W-1 : K*W]; W = G_SAMPLE_W for value/mask, 16 for counts.
+        -- Sized max(1, G_TRIG_STAGES) so a 0-stage build keeps legal (zero)
+        -- ports, like the qual_* ports.
+        seq_values_o   : out std_logic_vector(
+            max_nat(1, G_TRIG_STAGES) * G_SAMPLE_W - 1 downto 0);
+        seq_masks_o    : out std_logic_vector(
+            max_nat(1, G_TRIG_STAGES) * G_SAMPLE_W - 1 downto 0);
+        seq_counts_o   : out std_logic_vector(
+            max_nat(1, G_TRIG_STAGES) * C_SEQ_COUNT_W - 1 downto 0);
+
+        arm_toggle_o   : out std_logic;
+        reset_toggle_o : out std_logic
+    );
+end entity;
+
+architecture rtl of rr_rea_regbank is
+
+    constant C_PTR_W : positive := clog2(G_DEPTH);
+
+    -- ── Storage for RW registers ─────────────────────────────────
+    signal pretrig_r    : std_logic_vector(31 downto 0) := (others => '0');
+    signal posttrig_r   : std_logic_vector(31 downto 0) := (others => '0');
+    signal trig_mode_r  : std_logic_vector(31 downto 0) := (others => '0');
+    -- RTL-P2.658(b): banked trigger value/mask. trig_words(G_SAMPLE_W) =
+    -- ceil(W/32) 32-bit words held in a flat vector; the JTAG datapath
+    -- pages through them via trig_word_sel_r (0x2C). For G_SAMPLE_W<=32
+    -- there is exactly one word and trig_word_sel_r stays 0, so the
+    -- 0x24/0x28 register behaviour is byte-identical to the legacy path.
+    constant C_TRIG_WORDS : positive := trig_words(G_SAMPLE_W);
+    signal trig_value_flat : std_logic_vector(C_TRIG_WORDS * 32 - 1 downto 0)
+                                 := (others => '0');
+    signal trig_mask_flat  : std_logic_vector(C_TRIG_WORDS * 32 - 1 downto 0)
+                                 := (others => '0');
+    signal trig_word_sel_r : unsigned(7 downto 0) := (others => '0');
+    -- REA-P3.7: sequencer stage value/mask, banked like trig_value/mask
+    -- (C_TRIG_WORDS words per stage, paged by trig_word_sel_r), and each
+    -- stage's 16-bit count_target (SEQ_CFG[15:0]).
+    constant C_SEQ_STAGES : positive := max_nat(1, G_TRIG_STAGES);
+    signal seq_value_flat : std_logic_vector(
+        C_SEQ_STAGES * C_TRIG_WORDS * 32 - 1 downto 0) := (others => '0');
+    signal seq_mask_flat  : std_logic_vector(
+        C_SEQ_STAGES * C_TRIG_WORDS * 32 - 1 downto 0) := (others => '0');
+    signal seq_count_flat : std_logic_vector(
+        C_SEQ_STAGES * C_SEQ_COUNT_W - 1 downto 0) := (others => '0');
+
+    -- Byte address of stage k's field at offset off inside the SEQ window.
+    function seq_addr(k, off : natural) return unsigned is
+    begin
+        return C_ADDR_SEQ_BASE + to_unsigned(k * C_SEQ_STRIDE + off, 16);
+    end function;
+    signal data_word_sel_r : unsigned(7 downto 0) := (others => '0');
+    signal data_plane_sel_r : std_logic := '0';
+    signal selftest_ctrl_r  : std_logic := '0';
+    signal selftest_seed_r  : std_logic_vector(31 downto 0) := (others => '0');
+    signal chan_sel_r   : std_logic_vector(31 downto 0) := (others => '0');
+    -- REA-P2.23: DECIM is 24-bit (bits 31:24 read 0 and are not stored).
+    signal decim_r      : std_logic_vector(23 downto 0) := (others => '0');
+    -- RTL-P2.837: write-side source storage. Resets to 0 so the low
+    -- G_NUM_SOURCE bits (source_o) power up holding the gated DUT signal
+    -- in its safe/inactive state until the host writes SOURCE (0x3C).
+    signal source_r     : std_logic_vector(31 downto 0) := (others => '0');
+
+    -- ── Per-condition comparator array storage (RTL-P3.647) ──────
+    -- Compact 32-bit slots paged via cond_sel_r (COND_SEL). cfg holds
+    -- {valid[31],op[27:24],width[23:16],lsb[15:8]}; val holds the 32-bit
+    -- compare value (right-aligned in the field). Expanded combinationally
+    -- below into the full-width cond_*_out the FSM consumes.
+    signal cond_cfg_flat : std_logic_vector(G_TRIG_CONDS * 32 - 1 downto 0)
+                               := (others => '0');
+    signal cond_val_flat : std_logic_vector(G_TRIG_CONDS * 32 - 1 downto 0)
+                               := (others => '0');
+    signal cond_sel_r    : unsigned(7 downto 0) := (others => '0');
+
+    -- ── REA-P2.7 storage-qualifier storage (same compact slot encoding) ──
+    constant C_QUAL_SLOTS : positive := max_nat(1, G_QUAL_CONDS);
+    signal qual_mode_r   : std_logic_vector(31 downto 0) := (others => '0');
+    signal qual_cfg_flat : std_logic_vector(C_QUAL_SLOTS * 32 - 1 downto 0)
+                               := (others => '0');
+    signal qual_val_flat : std_logic_vector(C_QUAL_SLOTS * 32 - 1 downto 0)
+                               := (others => '0');
+    -- REA-P2.10: combinational expansion, registered by p_expand_reg.
+    signal cond_masks_c  : std_logic_vector(G_TRIG_CONDS * G_SAMPLE_W - 1 downto 0);
+    signal cond_values_c : std_logic_vector(G_TRIG_CONDS * G_SAMPLE_W - 1 downto 0);
+    signal cond_ops_c    : std_logic_vector(G_TRIG_CONDS * 4 - 1 downto 0);
+    signal cond_valid_c  : std_logic_vector(G_TRIG_CONDS - 1 downto 0);
+    signal qual_masks_c  : std_logic_vector(C_QUAL_SLOTS * G_SAMPLE_W - 1 downto 0);
+    signal qual_values_c : std_logic_vector(C_QUAL_SLOTS * G_SAMPLE_W - 1 downto 0);
+    signal qual_ops_c    : std_logic_vector(C_QUAL_SLOTS * 4 - 1 downto 0);
+    signal qual_valid_c  : std_logic_vector(C_QUAL_SLOTS - 1 downto 0);
+    signal qual_sel_r    : unsigned(7 downto 0) := (others => '0');
+
+    -- field_low_mask(w): w low bits set, in a G_SAMPLE_W vector (clamped).
+    function field_low_mask(w : natural) return unsigned is
+        variable ones : unsigned(G_SAMPLE_W - 1 downto 0) := (others => '1');
+    begin
+        if w = 0 then
+            return (G_SAMPLE_W - 1 downto 0 => '0');
+        elsif w >= G_SAMPLE_W then
+            return ones;
+        else
+            return shift_right(ones, G_SAMPLE_W - w);  -- w low bits set
+        end if;
+    end function;
+
+    function is_01(v : std_logic_vector) return boolean is
+    begin
+        for i in v'range loop
+            if v(i) /= '0' and v(i) /= '1' then
+                return false;
+            end if;
+        end loop;
+        return true;
+    end function;
+
+    -- ── Toggle bits — flipped on every write to CTRL.bit[N] ──────
+    signal arm_toggle_r   : std_logic := '0';
+    signal reset_toggle_r : std_logic := '0';
+
+    -- ── RO computed: capture_len ─────────────────────────────────
+    signal capture_len_w : std_logic_vector(31 downto 0);
+
+    -- ── Sized constants for the RO informational regs ────────────
+    function u32(v : natural) return std_logic_vector is
+    begin
+        return std_logic_vector(to_unsigned(v, 32));
+    end function;
+
+    constant C_REG_SAMPLE_W    : std_logic_vector(31 downto 0) := u32(G_SAMPLE_W);
+    constant C_REG_DEPTH       : std_logic_vector(31 downto 0) := u32(G_DEPTH);
+    constant C_REG_TIMESTAMP_W : std_logic_vector(31 downto 0) := u32(G_TIMESTAMP_W);
+    -- REA-T2.6: 0xF4 TRIG_LATENCY, the capture FSM's trigger-pipeline depth.
+    constant C_REG_TRIG_LATENCY : std_logic_vector(31 downto 0) :=
+        u32(rea_trig_latency(G_SAMPLE_W, G_TRIG_CONDS));
+    constant C_REG_NUM_CHAN    : std_logic_vector(31 downto 0) := u32(G_NUM_CHAN);
+
+    -- ── FEATURES register (0xD0, RTL-P3.1198) ────────────────────
+    -- Generic-derived configuration fingerprint. Built once from the
+    -- generics; every field self-describes the synthesized build, so a
+    -- diverged copy cannot report canonical's value without canonical's
+    -- generics. See the field layout in rr_rea_pkg.vhd.
+    function build_features return std_logic_vector is
+        variable v : std_logic_vector(31 downto 0) := (others => '0');
+    begin
+        v(C_FEAT_TRIG_CONDS_LSB + 7 downto C_FEAT_TRIG_CONDS_LSB) :=
+            std_logic_vector(to_unsigned(G_TRIG_CONDS, 8));
+        v(C_FEAT_NUM_SOURCE_LSB + 7 downto C_FEAT_NUM_SOURCE_LSB) :=
+            std_logic_vector(to_unsigned(G_NUM_SOURCE, 8));
+        if G_SAMPLE_W > C_DATA_WORD_W then
+            v(C_FEAT_WIDE_SAMPLE_BIT) := '1';
+        end if;
+        -- RTL-P2.876: advertise the 11-bit extended field_lsb decode when the
+        -- probe is wide enough for a comparator field to sit above bit 255.
+        -- The host writes lsb_hi (COND_CFG[30:28]) only when this bit is set.
+        if G_SAMPLE_W > C_COND_LSB8_REACH then
+            v(C_FEAT_WIDE_COND_BIT) := '1';
+        end if;
+        if G_TIMESTAMP_W > 0 then
+            v(C_FEAT_TIMESTAMP_BIT) := '1';
+        end if;
+        -- REA-P2.2/P2.3: FEATURES[19] derives from the elaboration constant that
+        -- gates the sweep/selftest logic (never hand-set) — false through P2.2,
+        -- true when P2.3 completes the tier (REQ-806).
+        if C_HAS_READBACK_INTEGRITY then
+            v(C_FEAT_READBACK_INTEGRITY_BIT) := '1';
+        end if;
+        -- REA-P2.5/REQ-913: [20] tracks the elaborated axi_stream_window dump
+        -- engine (G_AXIS_WINDOW). [21] (udp_window) stays reserved 0.
+        if G_AXIS_WINDOW then
+            v(C_FEAT_AXIS_WINDOW_BIT) := '1';
+        end if;
+        -- REA-P2.7/REQ-958: [22] and [27:24] track G_QUAL_CONDS.
+        if G_QUAL_CONDS > 0 then
+            v(C_FEAT_STORAGE_QUAL_BIT) := '1';
+            v(C_FEAT_QUAL_CONDS_LSB + 3 downto C_FEAT_QUAL_CONDS_LSB) :=
+                std_logic_vector(to_unsigned(G_QUAL_CONDS, 4));
+        end if;
+        -- REA-P2.20/REQ-969: [31] tracks the guarded DR (REA-P1.1).
+        if G_DR_GUARD then
+            v(C_FEAT_DR_GUARD_BIT) := '1';
+        end if;
+        -- REA-P3.7: [30:28] = G_TRIG_STAGES, the sequencer depth.
+        v(C_FEAT_TRIG_STAGES_LSB + 2 downto C_FEAT_TRIG_STAGES_LSB) :=
+            std_logic_vector(to_unsigned(G_TRIG_STAGES, 3));
+        return v;
+    end function;
+
+    constant C_REG_FEATURES : std_logic_vector(31 downto 0) := build_features;
+
+begin
+
+    -- capture_len = pretrig + posttrig + 1 (combinational)
+    capture_len_w <= std_logic_vector(
+        unsigned(pretrig_r) + unsigned(posttrig_r) + 1
+    );
+
+    -- Drive config outputs (lower bits sliced for the FSM's bus widths)
+    pretrig_len_o  <= pretrig_r(C_PTR_W - 1 downto 0);
+    posttrig_len_o <= posttrig_r(C_PTR_W - 1 downto 0);
+    data_plane_sel_o <= data_plane_sel_r;
+    selftest_ctrl_o  <= selftest_ctrl_r;
+    selftest_seed_o  <= selftest_seed_r;
+    -- Full-width trigger value/mask to the FSM comparator. The flat
+    -- vector is C_TRIG_WORDS*32 bits (>= G_SAMPLE_W), so the slice is
+    -- always in range; bits above G_SAMPLE_W in the top word are unused.
+    trig_value_o   <= trig_value_flat(G_SAMPLE_W - 1 downto 0);
+    g_seq_out : for k in 0 to C_SEQ_STAGES - 1 generate
+        seq_values_o((k + 1) * G_SAMPLE_W - 1 downto k * G_SAMPLE_W) <=
+            seq_value_flat(k * C_TRIG_WORDS * 32 + G_SAMPLE_W - 1
+                           downto k * C_TRIG_WORDS * 32);
+        seq_masks_o((k + 1) * G_SAMPLE_W - 1 downto k * G_SAMPLE_W) <=
+            seq_mask_flat(k * C_TRIG_WORDS * 32 + G_SAMPLE_W - 1
+                          downto k * C_TRIG_WORDS * 32);
+    end generate;
+    seq_counts_o <= seq_count_flat;
+    trig_mask_o    <= trig_mask_flat(G_SAMPLE_W - 1 downto 0);
+    trig_mode_o    <= trig_mode_r;
+    chan_sel_o     <= chan_sel_r(7 downto 0);
+    decim_ratio_o  <= decim_r;
+    data_word_sel_o <= std_logic_vector(data_word_sel_r);
+    -- RTL-P2.837: low G_NUM_SOURCE bits of the SOURCE register drive the
+    -- write-side control bits (still jtag_clk_i domain; CDC'd in rr_rea_top).
+    source_o       <= source_r(G_NUM_SOURCE - 1 downto 0);
+    arm_toggle_o   <= arm_toggle_r;
+    reset_toggle_o <= reset_toggle_r;
+
+    -- ── Per-condition expansion (RTL-P3.647) ─────────────────────
+    -- REA-P2.10: the expansion below is COMBINATIONAL; it drives the *_c
+    -- signals and p_expand_reg registers them onto the ports. The ports feed
+    -- rr_rea_sync_word synchronizers into sample_clk_i, and a synchronizer's
+    -- first flop must be driven straight from a flop in the source domain:
+    -- combinational logic in front of it (Vivado CDC-10) can glitch a
+    -- transient value into the capture domain and is not a timeable path.
+    -- Decode each compact slot {valid,op,width,lsb}+val32 into a shifted
+    -- full-width field value + field mask (op/valid passed through). The
+    -- dynamic shift_left positions the field at its lsb; the FSM then does
+    -- a plain masked-op compare per condition.
+    g_cond_expand : for k in 0 to G_TRIG_CONDS - 1 generate
+        signal cfg_k  : std_logic_vector(31 downto 0);
+        signal val_k  : std_logic_vector(31 downto 0);
+    begin
+        cfg_k <= cond_cfg_flat(k * 32 + 31 downto k * 32);
+        val_k <= cond_val_flat(k * 32 + 31 downto k * 32);
+        process (cfg_k, val_k)
+            variable wid_v  : natural range 0 to 255;
+            -- RTL-P2.876: field_lsb is now 11 bits (lsb_hi[30:28] & lsb_lo[15:8]),
+            -- reaching 0..2047 so a comparator field can address bits above 255.
+            variable lsb_v  : natural range 0 to 2047;
+            variable lowm_v : unsigned(G_SAMPLE_W - 1 downto 0);
+        begin
+            cond_valid_c(k) <= cfg_k(C_COND_VALID_BIT);
+            cond_ops_c(k * 4 + 3 downto k * 4) <=
+                cfg_k(C_COND_OP_LSB + 3 downto C_COND_OP_LSB);
+            cond_masks_c(k * G_SAMPLE_W + G_SAMPLE_W - 1 downto k * G_SAMPLE_W) <=
+                (others => '0');
+            cond_values_c(k * G_SAMPLE_W + G_SAMPLE_W - 1 downto k * G_SAMPLE_W) <=
+                (others => '0');
+
+            if cfg_k(C_COND_VALID_BIT) = '1' then
+                if is_01(cfg_k(C_COND_WIDTH_LSB + 7 downto C_COND_WIDTH_LSB)) and
+                   is_01(cfg_k(C_COND_LSB_HI_LSB + 2 downto C_COND_LSB_HI_LSB)) and
+                   is_01(cfg_k(C_COND_LSB_LSB + 7 downto C_COND_LSB_LSB)) and
+                   is_01(val_k) then
+                    wid_v := to_integer(unsigned(
+                        cfg_k(C_COND_WIDTH_LSB + 7 downto C_COND_WIDTH_LSB)));
+                    -- 11-bit field_lsb = {lsb_hi[30:28], lsb_lo[15:8]}. lsb_hi is
+                    -- 0 for a legacy host (reserved bits) → byte-identical decode.
+                    lsb_v := to_integer(unsigned(
+                        cfg_k(C_COND_LSB_HI_LSB + 2 downto C_COND_LSB_HI_LSB) &
+                        cfg_k(C_COND_LSB_LSB + 7 downto C_COND_LSB_LSB)));
+                    lowm_v := field_low_mask(wid_v);
+
+                    cond_masks_c(k * G_SAMPLE_W + G_SAMPLE_W - 1 downto k * G_SAMPLE_W) <=
+                        std_logic_vector(shift_left(lowm_v, lsb_v));
+                    cond_values_c(k * G_SAMPLE_W + G_SAMPLE_W - 1 downto k * G_SAMPLE_W) <=
+                        std_logic_vector(shift_left(
+                            resize(unsigned(val_k), G_SAMPLE_W) and lowm_v, lsb_v));
+                else
+                    cond_masks_c(k * G_SAMPLE_W + G_SAMPLE_W - 1 downto k * G_SAMPLE_W) <=
+                        (others => 'X');
+                    cond_values_c(k * G_SAMPLE_W + G_SAMPLE_W - 1 downto k * G_SAMPLE_W) <=
+                        (others => 'X');
+                end if;
+            end if;
+        end process;
+    end generate;
+
+    -- ── REA-P2.7 storage-qualifier expansion (REA-REQ-952) ───────
+    -- Same decode as g_cond_expand: {valid, op, 11-bit lsb, width} + val32
+    -- becomes a shifted full-width value and field mask. A slot with a
+    -- metavalue in its geometry expands to an empty (zero) mask.
+    qual_mode_o <= qual_mode_r(C_QUAL_MODE_BIT_OR downto C_QUAL_MODE_BIT_ENABLE)
+                   when G_QUAL_CONDS > 0 else (others => '0');
+
+    g_qual_expand : for k in 0 to C_QUAL_SLOTS - 1 generate
+        signal cfg_k  : std_logic_vector(31 downto 0);
+        signal val_k  : std_logic_vector(31 downto 0);
+    begin
+        cfg_k <= qual_cfg_flat(k * 32 + 31 downto k * 32);
+        val_k <= qual_val_flat(k * 32 + 31 downto k * 32);
+        process (all)
+            variable wid_v  : natural range 0 to 255;
+            variable lsb_v  : natural range 0 to 2047;
+            variable lowm_v : unsigned(G_SAMPLE_W - 1 downto 0);
+        begin
+            qual_valid_c(k) <= cfg_k(C_COND_VALID_BIT);
+            qual_ops_c(k * 4 + 3 downto k * 4) <=
+                cfg_k(C_COND_OP_LSB + 3 downto C_COND_OP_LSB);
+            qual_masks_c(k * G_SAMPLE_W + G_SAMPLE_W - 1 downto k * G_SAMPLE_W) <=
+                (others => '0');
+            qual_values_c(k * G_SAMPLE_W + G_SAMPLE_W - 1 downto k * G_SAMPLE_W) <=
+                (others => '0');
+            if is_01(cfg_k(C_COND_WIDTH_LSB + 7 downto C_COND_WIDTH_LSB)) and
+               is_01(cfg_k(C_COND_LSB_HI_LSB + 2 downto C_COND_LSB_HI_LSB)) and
+               is_01(cfg_k(C_COND_LSB_LSB + 7 downto C_COND_LSB_LSB)) and
+               is_01(val_k) then
+                wid_v := to_integer(unsigned(
+                    cfg_k(C_COND_WIDTH_LSB + 7 downto C_COND_WIDTH_LSB)));
+                lsb_v := to_integer(unsigned(
+                    cfg_k(C_COND_LSB_HI_LSB + 2 downto C_COND_LSB_HI_LSB) &
+                    cfg_k(C_COND_LSB_LSB + 7 downto C_COND_LSB_LSB)));
+                lowm_v := field_low_mask(wid_v);
+                qual_masks_c(k * G_SAMPLE_W + G_SAMPLE_W - 1 downto k * G_SAMPLE_W) <=
+                    std_logic_vector(shift_left(lowm_v, lsb_v));
+                qual_values_c(k * G_SAMPLE_W + G_SAMPLE_W - 1 downto k * G_SAMPLE_W) <=
+                    std_logic_vector(shift_left(
+                        resize(unsigned(val_k), G_SAMPLE_W) and lowm_v, lsb_v));
+            end if;
+        end process;
+    end generate;
+
+    -- REA-P2.10: register the expanded comparator/qualifier words in
+    -- jtag_clk_i so each synchronizer's first stage sees a flop output, not
+    -- the barrel shift. One TCK of latency on a quasi-static value that the
+    -- FSM only latches on the next arm (itself a later JTAG transaction).
+    p_expand_reg : process (jtag_clk_i, jtag_rst_i)
+    begin
+        if jtag_rst_i = '1' then
+            cond_masks_o  <= (others => '0');
+            cond_values_o <= (others => '0');
+            cond_ops_o    <= (others => '0');
+            cond_valid_o  <= (others => '0');
+            qual_masks_o  <= (others => '0');
+            qual_values_o <= (others => '0');
+            qual_ops_o    <= (others => '0');
+            qual_valid_o  <= (others => '0');
+        elsif rising_edge(jtag_clk_i) then
+            cond_masks_o  <= cond_masks_c;
+            cond_values_o <= cond_values_c;
+            cond_ops_o    <= cond_ops_c;
+            cond_valid_o  <= cond_valid_c;
+            qual_masks_o  <= qual_masks_c;
+            qual_values_o <= qual_values_c;
+            qual_ops_o    <= qual_ops_c;
+            qual_valid_o  <= qual_valid_c;
+        end if;
+    end process;
+
+    -- ── Write port (jtag_clk_i-synchronous) ────────────────────────
+    process (jtag_clk_i, jtag_rst_i)
+    begin
+        if jtag_rst_i = '1' then
+            pretrig_r      <= (others => '0');
+            posttrig_r     <= (others => '0');
+            trig_mode_r    <= (others => '0');
+            trig_value_flat <= (others => '0');
+            trig_mask_flat  <= (others => '0');
+            trig_word_sel_r <= (others => '0');
+            seq_value_flat  <= (others => '0');
+            seq_mask_flat   <= (others => '0');
+            seq_count_flat  <= (others => '0');
+            data_word_sel_r <= (others => '0');
+            data_plane_sel_r <= '0';
+            selftest_ctrl_r <= '0';
+            selftest_seed_r <= (others => '0');
+            cond_cfg_flat  <= (others => '0');
+            cond_val_flat  <= (others => '0');
+            cond_sel_r     <= (others => '0');
+            qual_mode_r    <= (others => '0');
+            qual_cfg_flat  <= (others => '0');
+            qual_val_flat  <= (others => '0');
+            qual_sel_r     <= (others => '0');
+            chan_sel_r     <= (others => '0');
+            decim_r        <= (others => '0');
+            source_r       <= (others => '0');
+            arm_toggle_r   <= '0';
+            reset_toggle_r <= '0';
+
+        elsif rising_edge(jtag_clk_i) then
+            -- REA-P2.24: when an optional bank is disabled, its write loops
+            -- are statically empty. Explicit clocked-zero assignments keep GHDL from
+            -- interpreting async-reset-only storage as transparent latches.
+            if G_TRIG_STAGES = 0 then
+                seq_value_flat <= (others => '0');
+                seq_mask_flat <= (others => '0');
+                seq_count_flat <= (others => '0');
+            end if;
+            if G_QUAL_CONDS = 0 then
+                qual_mode_r <= (others => '0');
+                qual_cfg_flat <= (others => '0');
+                qual_val_flat <= (others => '0');
+                qual_sel_r <= (others => '0');
+            end if;
+
+            if wr_en_i = '1' then
+                case unsigned(wr_addr_i) is
+                    when C_ADDR_CTRL =>
+                        -- Toggle bits — XOR each requested bit into
+                        -- the sticky toggle register. The downstream
+                        -- CDC edge-detects each toggle to make a
+                        -- one-cycle sample_clk_i pulse.
+                        if wr_data_i(C_CTRL_BIT_ARM) = '1' then
+                            arm_toggle_r <= not arm_toggle_r;
+                        end if;
+                        if wr_data_i(C_CTRL_BIT_RESET) = '1' then
+                            reset_toggle_r <= not reset_toggle_r;
+                        end if;
+
+                    when C_ADDR_PRETRIG =>
+                        pretrig_r <= wr_data_i;
+                    when C_ADDR_POSTTRIG =>
+                        posttrig_r <= wr_data_i;
+                    when C_ADDR_TRIG_MODE =>
+                        trig_mode_r <= wr_data_i;
+                    when C_ADDR_TRIG_VALUE =>
+                        -- RTL-P2.658(b): write the 32-bit word selected by
+                        -- trig_word_sel_r. Static-bound slice gated on a
+                        -- dynamic compare — the nvc-safe paging idiom (no
+                        -- dynamic vector slice, no array-element-from-port
+                        -- latch). An out-of-range sel_i matches no word, so
+                        -- the write is dropped (defensive, no aliasing).
+                        for i in 0 to C_TRIG_WORDS - 1 loop
+                            if to_integer(trig_word_sel_r) = i then
+                                trig_value_flat((i + 1) * 32 - 1 downto i * 32)
+                                    <= wr_data_i;
+                            end if;
+                        end loop;
+                    when C_ADDR_TRIG_MASK =>
+                        for i in 0 to C_TRIG_WORDS - 1 loop
+                            if to_integer(trig_word_sel_r) = i then
+                                trig_mask_flat((i + 1) * 32 - 1 downto i * 32)
+                                    <= wr_data_i;
+                            end if;
+                        end loop;
+                    when C_ADDR_TRIG_WORD_SEL =>
+                        trig_word_sel_r <= unsigned(wr_data_i(7 downto 0));
+                    when C_ADDR_DATA_WORD_SEL =>
+                        data_word_sel_r <= unsigned(wr_data_i(7 downto 0));
+                    when C_ADDR_DATA_PLANE_SEL =>
+                        data_plane_sel_r <= wr_data_i(0);
+                    when C_ADDR_SELFTEST_CTRL =>
+                        selftest_ctrl_r <= wr_data_i(0);
+                    when C_ADDR_SELFTEST_SEED =>
+                        selftest_seed_r <= wr_data_i;
+                    when C_ADDR_COND_SEL =>
+                        -- RTL-P3.647: select which comparator-array slot the
+                        -- next COND_CFG/COND_VAL write targets (paged, like
+                        -- TRIG_WORD_SEL).
+                        cond_sel_r <= unsigned(wr_data_i(7 downto 0));
+                    when C_ADDR_COND_CFG =>
+                        -- Write the selected slot's {valid,op,width,lsb} word.
+                        -- Static-bound slice gated on the dynamic sel_i (nvc-safe;
+                        -- out-of-range sel_i matches no slot → write dropped).
+                        for i in 0 to G_TRIG_CONDS - 1 loop
+                            if to_integer(cond_sel_r) = i then
+                                cond_cfg_flat((i + 1) * 32 - 1 downto i * 32)
+                                    <= wr_data_i;
+                            end if;
+                        end loop;
+                    when C_ADDR_COND_VAL =>
+                        for i in 0 to G_TRIG_CONDS - 1 loop
+                            if to_integer(cond_sel_r) = i then
+                                cond_val_flat((i + 1) * 32 - 1 downto i * 32)
+                                    <= wr_data_i;
+                            end if;
+                        end loop;
+                    when C_ADDR_SOURCE =>
+                        -- RTL-P2.837: latch the write-side source word. The
+                        -- low G_NUM_SOURCE bits reach the design (post-CDC);
+                        -- upper bits are stored for round-trip readback but
+                        -- unused. A plain register write — the host raises a
+                        -- bit to release the gated DUT signal, clears it to
+                        -- re-gate. No toggle/pulse semantics.
+                        source_r <= wr_data_i;
+                    when C_ADDR_CHAN_SEL =>
+                        chan_sel_r <= wr_data_i;
+                    when C_ADDR_DECIM =>
+                        -- REA-P2.23: store only the applied 24 bits so readback
+                        -- matches what the capture decimator uses.
+                        decim_r <= wr_data_i(23 downto 0);
+                    -- REA-P2.7 (REA-REQ-958): on a G_QUAL_CONDS=0 core these
+                    -- decode nowhere, exactly like any unmapped address.
+                    when C_ADDR_QUAL_MODE =>
+                        if G_QUAL_CONDS > 0 then
+                            qual_mode_r <= (others => '0');
+                            qual_mode_r(C_QUAL_MODE_BIT_OR downto
+                                        C_QUAL_MODE_BIT_ENABLE) <=
+                                wr_data_i(C_QUAL_MODE_BIT_OR downto
+                                          C_QUAL_MODE_BIT_ENABLE);
+                        end if;
+                    when C_ADDR_QUAL_SEL =>
+                        if G_QUAL_CONDS > 0 then
+                            qual_sel_r <= unsigned(wr_data_i(7 downto 0));
+                        end if;
+                    when C_ADDR_QUAL_CFG =>
+                        for i in 0 to G_QUAL_CONDS - 1 loop
+                            if to_integer(qual_sel_r) = i then
+                                qual_cfg_flat((i + 1) * 32 - 1 downto i * 32)
+                                    <= wr_data_i;
+                            end if;
+                        end loop;
+                    when C_ADDR_QUAL_VAL =>
+                        for i in 0 to G_QUAL_CONDS - 1 loop
+                            if to_integer(qual_sel_r) = i then
+                                qual_val_flat((i + 1) * 32 - 1 downto i * 32)
+                                    <= wr_data_i;
+                            end if;
+                        end loop;
+
+                    when others =>
+                        -- REA-P3.7 (REA-REQ-607): the SEQ window. Stage k's
+                        -- cfg keeps count_target [15:0]; value/mask write the
+                        -- word trig_word_sel_r selects. Reserved offsets
+                        -- (+0x0C/+0x10) and stages >= G_TRIG_STAGES match
+                        -- nothing. REA-REQ-012: every other RO/unmapped
+                        -- write is dropped on the floor.
+                        for k in 0 to G_TRIG_STAGES - 1 loop
+                            if unsigned(wr_addr_i) = seq_addr(k, C_SEQ_OFF_CFG) then
+                                seq_count_flat((k + 1) * C_SEQ_COUNT_W - 1
+                                               downto k * C_SEQ_COUNT_W)
+                                    <= wr_data_i(C_SEQ_COUNT_W - 1 downto 0);
+                            end if;
+                            for i in 0 to C_TRIG_WORDS - 1 loop
+                                if to_integer(trig_word_sel_r) = i then
+                                    if unsigned(wr_addr_i) = seq_addr(k, C_SEQ_OFF_VALUE) then
+                                        seq_value_flat((k * C_TRIG_WORDS + i + 1) * 32 - 1
+                                                       downto (k * C_TRIG_WORDS + i) * 32)
+                                            <= wr_data_i;
+                                    end if;
+                                    if unsigned(wr_addr_i) = seq_addr(k, C_SEQ_OFF_MASK) then
+                                        seq_mask_flat((k * C_TRIG_WORDS + i + 1) * 32 - 1
+                                                      downto (k * C_TRIG_WORDS + i) * 32)
+                                            <= wr_data_i;
+                                    end if;
+                                end if;
+                            end loop;
+                        end loop;
+                end case;
+            end if;
+        end if;
+    end process;
+
+    -- ── Read port (combinational decode → REGISTERED output) ─────
+    --
+    -- RTL-P1.96: the case-mux output is REGISTERED on jtag_clk_i before it
+    -- reaches the JTAG iface's DR capture_i. At wide G_SAMPLE_W the
+    -- combinational read cone (this case-mux + the paged TRIG/COND words)
+    -- grew to ~100:1 restructured muxes feeding the DR capture_i directly,
+    -- and Quartus Pro 26.1 on Arria 10 miscompiled that cone: any read
+    -- value with bit0=1 captured as all-ones across the whole 49-bit DR
+    -- (silicon-proven width-dependent — 12-bit clean, 704-bit broken,
+    -- same source). Registering here breaks the cone into a plain
+    -- reg-to-reg load. Protocol cost: rd_data_o is valid ONE jtag_clk_i edge
+    -- after rd_addr_i commits (the read command's Update-DR); the earliest
+    -- possible DR capture_i is two TAP states later, so every 1149.1 walk
+    -- satisfies it by construction.
+    process (jtag_clk_i)
+        variable status : std_logic_vector(31 downto 0);
+        variable spr    : std_logic_vector(31 downto 0);
+    begin
+        if rising_edge(jtag_clk_i) then
+        status := (others => '0');
+        status(C_STATUS_BIT_ARMED)     := armed_i;
+        status(C_STATUS_BIT_TRIGGERED) := triggered_i;
+        status(C_STATUS_BIT_DONE)      := done_i;
+        status(C_STATUS_BIT_OVERFLOW)  := overflow_i;
+        status(C_STATUS_BIT_CRC_VALID)        := crc_valid_i;
+        status(C_STATUS_BIT_SELFTEST_BUSY)    := selftest_busy_i;
+        status(C_STATUS_BIT_SELFTEST_MODE)    := selftest_mode_i;
+        status(C_STATUS_BIT_SELFTEST_REFUSED) := selftest_refused_i;
+
+        spr := (others => '0');
+        spr(C_PTR_W - 1 downto 0) := start_ptr_i;
+
+        case unsigned(rd_addr_i) is
+            when C_ADDR_VERSION     => rd_data_o <= C_REA_VERSION;
+            when C_ADDR_STATUS      => rd_data_o <= status;
+            when C_ADDR_SAMPLE_W    => rd_data_o <= C_REG_SAMPLE_W;
+            when C_ADDR_DEPTH       => rd_data_o <= C_REG_DEPTH;
+            when C_ADDR_PRETRIG     => rd_data_o <= pretrig_r;
+            when C_ADDR_POSTTRIG    => rd_data_o <= posttrig_r;
+            when C_ADDR_CAPTURE_LEN => rd_data_o <= capture_len_w;
+            when C_ADDR_TRIG_MODE   => rd_data_o <= trig_mode_r;
+            when C_ADDR_TRIG_VALUE  =>
+                -- Read back the 32-bit word selected by trig_word_sel_r.
+                rd_data_o <= (others => '0');
+                for i in 0 to C_TRIG_WORDS - 1 loop
+                    if to_integer(trig_word_sel_r) = i then
+                        rd_data_o <= trig_value_flat(
+                            (i + 1) * 32 - 1 downto i * 32);
+                    end if;
+                end loop;
+            when C_ADDR_TRIG_MASK   =>
+                rd_data_o <= (others => '0');
+                for i in 0 to C_TRIG_WORDS - 1 loop
+                    if to_integer(trig_word_sel_r) = i then
+                        rd_data_o <= trig_mask_flat(
+                            (i + 1) * 32 - 1 downto i * 32);
+                    end if;
+                end loop;
+            when C_ADDR_TRIG_WORD_SEL =>
+                rd_data_o <= (others => '0');
+                rd_data_o(7 downto 0) <= std_logic_vector(trig_word_sel_r);
+            when C_ADDR_COND_SEL =>
+                rd_data_o <= (others => '0');
+                rd_data_o(7 downto 0) <= std_logic_vector(cond_sel_r);
+            when C_ADDR_COND_CFG =>
+                -- Read back the selected slot's cfg word.
+                rd_data_o <= (others => '0');
+                for i in 0 to G_TRIG_CONDS - 1 loop
+                    if to_integer(cond_sel_r) = i then
+                        rd_data_o <= cond_cfg_flat((i + 1) * 32 - 1 downto i * 32);
+                    end if;
+                end loop;
+            when C_ADDR_COND_VAL =>
+                rd_data_o <= (others => '0');
+                for i in 0 to G_TRIG_CONDS - 1 loop
+                    if to_integer(cond_sel_r) = i then
+                        rd_data_o <= cond_val_flat((i + 1) * 32 - 1 downto i * 32);
+                    end if;
+                end loop;
+            when C_ADDR_SOURCE      => rd_data_o <= source_r;
+            when C_ADDR_CHAN_SEL    => rd_data_o <= chan_sel_r;
+            when C_ADDR_NUM_CHAN    => rd_data_o <= C_REG_NUM_CHAN;
+            when C_ADDR_DECIM       => rd_data_o <= x"00" & decim_r;
+            when C_ADDR_QUAL_MODE   => rd_data_o <= qual_mode_r;
+            when C_ADDR_QUAL_SEL =>
+                rd_data_o <= (others => '0');
+                rd_data_o(7 downto 0) <= std_logic_vector(qual_sel_r);
+            when C_ADDR_QUAL_CFG =>
+                rd_data_o <= (others => '0');
+                for i in 0 to G_QUAL_CONDS - 1 loop
+                    if to_integer(qual_sel_r) = i then
+                        rd_data_o <= qual_cfg_flat((i + 1) * 32 - 1 downto i * 32);
+                    end if;
+                end loop;
+            when C_ADDR_QUAL_VAL =>
+                rd_data_o <= (others => '0');
+                for i in 0 to G_QUAL_CONDS - 1 loop
+                    if to_integer(qual_sel_r) = i then
+                        rd_data_o <= qual_val_flat((i + 1) * 32 - 1 downto i * 32);
+                    end if;
+                end loop;
+            when C_ADDR_TIMESTAMP_W => rd_data_o <= C_REG_TIMESTAMP_W;
+            when C_ADDR_START_PTR   => rd_data_o <= spr;
+            when C_ADDR_DATA_WORD_SEL =>
+                rd_data_o <= (others => '0');
+                rd_data_o(7 downto 0) <= std_logic_vector(data_word_sel_r);
+            when C_ADDR_FEATURES    => rd_data_o <= C_REG_FEATURES;
+            when C_ADDR_BUILD_ID    => rd_data_o <= C_REA_BUILD_ID;
+            when C_ADDR_DATA_PLANE_SEL =>
+                rd_data_o <= (others => '0');
+                rd_data_o(0) <= data_plane_sel_r;
+            -- v0.8 readback integrity (REA-P2.2). RO; valid gated by STATUS[4].
+            when C_ADDR_CRC_SAMPLE    => rd_data_o <= crc_sample_i;
+            when C_ADDR_CRC_TS        => rd_data_o <= crc_ts_i;
+            when C_ADDR_CAPTURE_EPOCH => rd_data_o <= capture_epoch_i;
+            when C_ADDR_PRETRIG_VALID => rd_data_o <= pretrig_valid_i;
+            when C_ADDR_TRIG_LATENCY  => rd_data_o <= C_REG_TRIG_LATENCY;
+            when C_ADDR_SELFTEST_CTRL =>
+                rd_data_o <= (others => '0');
+                rd_data_o(0) <= selftest_ctrl_r;
+            when C_ADDR_SELFTEST_SEED => rd_data_o <= selftest_seed_r;
+            when others             =>
+                -- REA-P3.7: SEQ window read-back (same selectors as the
+                -- write side); anything else unmapped reads 0.
+                rd_data_o <= (others => '0');
+                for k in 0 to G_TRIG_STAGES - 1 loop
+                    if unsigned(rd_addr_i) = seq_addr(k, C_SEQ_OFF_CFG) then
+                        rd_data_o(C_SEQ_COUNT_W - 1 downto 0) <=
+                            seq_count_flat((k + 1) * C_SEQ_COUNT_W - 1
+                                           downto k * C_SEQ_COUNT_W);
+                    end if;
+                    for i in 0 to C_TRIG_WORDS - 1 loop
+                        if to_integer(trig_word_sel_r) = i then
+                            if unsigned(rd_addr_i) = seq_addr(k, C_SEQ_OFF_VALUE) then
+                                rd_data_o <= seq_value_flat((k * C_TRIG_WORDS + i + 1) * 32 - 1
+                                                            downto (k * C_TRIG_WORDS + i) * 32);
+                            end if;
+                            if unsigned(rd_addr_i) = seq_addr(k, C_SEQ_OFF_MASK) then
+                                rd_data_o <= seq_mask_flat((k * C_TRIG_WORDS + i + 1) * 32 - 1
+                                                           downto (k * C_TRIG_WORDS + i) * 32);
+                            end if;
+                        end if;
+                    end loop;
+                end loop;
+        end case;
+        end if;
+    end process;
+
+end architecture;

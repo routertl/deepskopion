@@ -1,0 +1,149 @@
+ip: deepskopion
+hdl_file: hw/rtl/deepskopion_core.vhd
+# DS-P2.192: system-level contract. It makes the project a project-level FDD
+# target (rr fdd), so FDD.md beside it aggregates this file, ip.yml and
+# project_regbank.yml. The anchor is deepskopion_core, the portable core every
+# Linux target wraps (Zybo deepskopion_top, DE25 deepskopion_de25_top,
+# PolarFire deepskopion_pfsoc_top). port_contract was scaffolded with
+# `rr ip contract init hw/rtl/deepskopion_core.vhd`; the reset polarity is
+# active high (rst_sys_q, core p_rst_sys_q; rst_sys_in_ddr init '1').
+# The per-block contracts stay in hw/rtl/**/requirements.yml.
+#
+# Witnesses. coverage-map reads cocotb @requires tags only, so it reports the
+# four REQs below as missing; each has a pytest witness under tools/tests:
+#   DS-SYS-PORT-001  test_de25_shell_contract.py::test_portable_core_has_no_vendor_dependency
+#                    test_portable_fifo_contract.py::test_portable_core_has_no_vendor_fifo_or_primitive_dependency
+#   DS-SYS-CLK-001   test_core_sys_clk_generic_guard.py
+#   DS-SYS-DDR-001   test_core_ddr_base_generic_guard.py
+#   DS-SYS-REG-001   test_regbank_preamble_ds_t2_87.py::test_declared_constants_match_their_sources
+version: 0.1
+schema_version: 1
+
+port_contract:
+  slaves:
+    - { name: canfd0_apb, protocol: apb }
+    - { name: canfd1_apb, protocol: apb }
+  masters:
+    []
+  scalars:
+    - { name: led, dir: out, width: "3 downto 0" }
+    - { name: ja, dir: in, width: "7 downto 0" }
+    - { name: jb, dir: in, width: "7 downto 0" }
+    - { name: s_axil_awaddr_i, dir: in, width: "31 downto 0" }
+    - { name: s_axil_awprot_i, dir: in, width: "2 downto 0" }
+    - { name: s_axil_awvalid_i, dir: in, width: "1" }
+    - { name: s_axil_awready_o, dir: out, width: "1" }
+    - { name: s_axil_wdata_i, dir: in, width: "31 downto 0" }
+    - { name: s_axil_wstrb_i, dir: in, width: "3 downto 0" }
+    - { name: s_axil_wvalid_i, dir: in, width: "1" }
+    - { name: s_axil_wready_o, dir: out, width: "1" }
+    - { name: s_axil_bresp_o, dir: out, width: "1 downto 0" }
+    - { name: s_axil_bvalid_o, dir: out, width: "1" }
+    - { name: s_axil_bready_i, dir: in, width: "1" }
+    - { name: s_axil_araddr_i, dir: in, width: "31 downto 0" }
+    - { name: s_axil_arprot_i, dir: in, width: "2 downto 0" }
+    - { name: s_axil_arvalid_i, dir: in, width: "1" }
+    - { name: s_axil_arready_o, dir: out, width: "1" }
+    - { name: s_axil_rdata_o, dir: out, width: "31 downto 0" }
+    - { name: s_axil_rresp_o, dir: out, width: "1 downto 0" }
+    - { name: s_axil_rvalid_o, dir: out, width: "1" }
+    - { name: s_axil_rready_i, dir: in, width: "1" }
+    - { name: m_axi_h2c_o, dir: out, width: "1" }
+    - { name: m_axi_c2h_i, dir: in, width: "1" }
+    - { name: irq_o, dir: out, width: "2 downto 0" }
+    - { name: emio_uart_tx_i, dir: in, width: "1" }
+    - { name: emio_uart_rx_o, dir: out, width: "1" }
+    - { name: emio_i2c_scl_o_i, dir: in, width: "1" }
+    - { name: emio_i2c_scl_t_i, dir: in, width: "1" }
+    - { name: emio_i2c_sda_o_i, dir: in, width: "1" }
+    - { name: emio_i2c_sda_t_i, dir: in, width: "1" }
+    - { name: emio_i2c_scl_i_o, dir: out, width: "1" }
+    - { name: emio_i2c_sda_i_o, dir: out, width: "1" }
+    - { name: emio_spi_sclk_o_i, dir: in, width: "1" }
+    - { name: emio_spi_sclk_t_i, dir: in, width: "1" }
+    - { name: emio_spi_mosi_o_i, dir: in, width: "1" }
+    - { name: emio_spi_mosi_t_i, dir: in, width: "1" }
+    - { name: emio_spi_miso_o_i, dir: in, width: "1" }
+    - { name: emio_spi_miso_t_i, dir: in, width: "1" }
+    - { name: emio_spi_ss_o_i, dir: in, width: "1" }
+    - { name: emio_spi_ss_t_i, dir: in, width: "1" }
+    - { name: emio_spi_sclk_i_o, dir: out, width: "1" }
+    - { name: emio_spi_mosi_i_o, dir: out, width: "1" }
+    - { name: emio_spi_miso_i_o, dir: out, width: "1" }
+    - { name: emio_spi_ss_i_o, dir: out, width: "1" }
+    - { name: emio_gpio_o_i, dir: in, width: "1" }
+    - { name: emio_gpio_t_i, dir: in, width: "1" }
+    - { name: emio_gpio_i_o, dir: out, width: "1" }
+    - { name: emio_can0_tx_i, dir: in, width: "1" }
+    - { name: emio_can1_tx_i, dir: in, width: "1" }
+    - { name: emio_can_rx_o, dir: out, width: "1" }
+    - { name: stim_uart_tx_o, dir: out, width: "1" }
+    - { name: stim_i2c_scl_o_o, dir: out, width: "1" }
+    - { name: stim_i2c_scl_t_o, dir: out, width: "1" }
+    - { name: stim_i2c_sda_o_o, dir: out, width: "1" }
+    - { name: stim_i2c_sda_t_o, dir: out, width: "1" }
+    - { name: stim_spi_sclk_o_o, dir: out, width: "1" }
+    - { name: stim_spi_mosi_o_o, dir: out, width: "1" }
+    - { name: stim_spi_ss_o_o, dir: out, width: "1" }
+    - { name: mss_uart_tx_i, dir: in, width: "1" }
+    - { name: mss_uart_rx_o, dir: out, width: "1" }
+    - { name: mss_i2c_scl_oe_i, dir: in, width: "1" }
+    - { name: mss_i2c_sda_oe_i, dir: in, width: "1" }
+    - { name: mss_i2c_scl_o, dir: out, width: "1" }
+    - { name: mss_i2c_sda_o, dir: out, width: "1" }
+    - { name: mss_spi_do_i, dir: in, width: "1" }
+    - { name: mss_spi_do_oe_i, dir: in, width: "1" }
+    - { name: mss_spi_clk_oe_i, dir: in, width: "1" }
+    - { name: mss_spi_ss_i, dir: in, width: "1" }
+    - { name: mss_spi_ss_oe_i, dir: in, width: "1" }
+    - { name: mss_spi_di_o, dir: out, width: "1" }
+    - { name: mss_can_tx_i, dir: in, width: "1" }
+    - { name: mss_can_rx_o, dir: out, width: "1" }
+    - { name: rea_probe_o, dir: out, width: "31 downto 0" }
+    - { name: rea_trigger_i, dir: in, width: "1" }
+    - { name: rea_tap_tck_i, dir: in, width: "1" }
+    - { name: rea_tap_tms_i, dir: in, width: "1" }
+    - { name: rea_tap_tdi_i, dir: in, width: "1" }
+    - { name: rea_tap_tdo_i, dir: in, width: "1" }
+  clocks:
+    - { name: clk_sys_i }
+    - { name: clk_ddr_i }
+    - { name: mss_spi_clk_i }
+  resets:
+    - { name: rst_sys_i, polarity: active_high }
+    - { name: rst_ddr_i, polarity: active_high }
+
+parameters:
+  - { name: G_DDR_BASE_ADDR, type: unsigned(31 downto 0), default: "x\"1000_0000\"" }
+  - { name: G_DDR_WIN_WIDTH, type: integer, default: 28 }
+  - { name: G_AXI_MAX_BURST, type: positive, default: 16 }
+  - { name: G_DDR_DATA_WIDTH, type: positive, default: 128 }
+  - { name: G_SYS_CLK_HZ, type: positive, default: "100_000_000" }
+  - { name: G_DDR_BACKEND, type: string, default: "axi" }
+
+functional_contract:
+  - id: DS-SYS-PORT-001
+    kind: negative
+    desc: >-
+      deepskopion_core must not reference a vendor primitive library (unisim,
+      altera, intel), a vendor FIFO, the Vivado block design, or a vendor REA
+      wrapper; vendor logic lives only in the target tops.
+  - id: DS-SYS-CLK-001
+    kind: behavioral
+    desc: >-
+      Every clock-scaled generic of a datalogger-path instance in
+      deepskopion_core is driven from G_SYS_CLK_HZ, never a literal, and
+      G_SYS_CLK_HZ equals the clk_sys frequency of each target top.
+  - id: DS-SYS-DDR-001
+    kind: behavioral
+    desc: >-
+      deepskopion_core passes G_DDR_BASE_ADDR to the DDR stream writer as a
+      full 32-bit vector, so a ring base at or above 0x80000000 (0xA0000000 on
+      DE25 and PolarFire SoC) elaborates without integer conversion.
+  - id: DS-SYS-REG-001
+    kind: behavioral
+    desc: >-
+      The constant registers of project_regbank.yml match their sources:
+      REGBANK_VERSION equals the packed regbank version, CONTRACT_ABI_VER
+      equals the core constant, and RING_BYTES equals 2**G_DDR_WIN_WIDTH with
+      G_DDR_WIN_WIDTH = 28 in every target top.

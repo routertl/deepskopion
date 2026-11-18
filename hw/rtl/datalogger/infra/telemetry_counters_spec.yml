@@ -1,0 +1,295 @@
+# =============================================================================
+# Telemetry Counters Module Specification
+# =============================================================================
+# Module:    telemetry_counters
+# Location:  hw/rtl/datalogger/infra/telemetry_counters.vhd
+# Purpose:   Dashboard-driven HW performance counters for observability
+# Roadmap:   routertl/docs/roadmap/fpga_observability_dashboards.md
+# =============================================================================
+
+module:
+  name: telemetry_counters
+  description: >
+    Centralized telemetry counter block that sits inside datalogger_gather.
+    Counts packet handshakes, protocol errors, FIFO overflows, arbiter grants,
+    and dropped messages. Provides atomic snapshot capability for skew-free reads.
+  version: "1.0"
+  author: Daniel J. Mazure
+  created: 2026-03-12
+
+# =============================================================================
+# Generics
+# =============================================================================
+generics:
+  - name: G_NUM_BURST_PROTOCOLS
+    type: natural
+    default: 5
+    description: >
+      Number of burst protocol types (I2C, SPI, UART, QSPI, Edge).
+      Determines array width of per-protocol counters.
+
+  - name: G_NUM_STREAM_PROTOCOLS
+    type: natural
+    default: 1
+    description: >
+      Number of stream protocol types (I2S).
+
+  - name: G_COUNTER_WIDTH
+    type: natural
+    default: 32
+    description: >
+      Width of each saturating counter. 32-bit gives ~4 billion events
+      before saturation (sufficient for weeks of continuous operation).
+
+  - name: G_FIFO_CNT_WIDTH
+    type: natural
+    default: 10
+    description: >
+      Width of the FIFO occupancy signal, determines watermark register width.
+
+# =============================================================================
+# Ports
+# =============================================================================
+ports:
+  # ── Clock & Reset ──────────────────────────────────────────────────────────
+  - name: CLK
+    direction: in
+    type: std_logic
+    description: System clock
+
+  - name: RST
+    direction: in
+    type: std_logic
+    description: Active-high synchronous reset
+
+  # ── Packet Handshake Inputs (per-protocol) ─────────────────────────────────
+  - name: BURST_VLD
+    direction: in
+    type: std_logic_vector(G_NUM_BURST_PROTOCOLS-1 downto 0)
+    description: >
+      Per-protocol burst message valid signal. Each bit represents one
+      protocol type (0=I2C, 1=SPI, 2=UART, 3=QSPI, 4=Edge).
+      Asserted when a message is available at the arbiter input.
+
+  - name: BURST_RDY
+    direction: in
+    type: std_logic_vector(G_NUM_BURST_PROTOCOLS-1 downto 0)
+    description: >
+      Per-protocol burst message ready signal (from arbiter FIFO).
+      When VLD && RDY, a message is accepted → increment PKT_CNT.
+      When VLD && !RDY, a message is dropped → increment DROP_CNT.
+
+  - name: STREAM_VLD
+    direction: in
+    type: std_logic_vector(G_NUM_STREAM_PROTOCOLS-1 downto 0)
+    description: Per-protocol stream message valid.
+
+  - name: STREAM_RDY
+    direction: in
+    type: std_logic_vector(G_NUM_STREAM_PROTOCOLS-1 downto 0)
+    description: Per-protocol stream message ready.
+
+  # ── Error Inputs (per-protocol) ────────────────────────────────────────────
+  - name: BURST_ERR
+    direction: in
+    type: std_logic_vector(G_NUM_BURST_PROTOCOLS-1 downto 0)
+    description: >
+      Per-protocol error flag (OR-reduce of each datalogger's *_ERRORS bus).
+      Rising-edge counted.
+
+  # ── FIFO Status Inputs ─────────────────────────────────────────────────────
+  - name: BURST_FIFO_FULL
+    direction: in
+    type: std_logic
+    description: Burst endpoint FIFO full flag. Rising-edge → overflow count.
+
+  - name: STREAM_FIFO_FULL
+    direction: in
+    type: std_logic
+    description: Stream endpoint FIFO full flag.
+
+  - name: BURST_FIFO_CNT
+    direction: in
+    type: std_logic_vector(G_FIFO_CNT_WIDTH-1 downto 0)
+    description: Current burst FIFO occupancy (for high watermark tracking).
+
+  - name: STREAM_FIFO_CNT
+    direction: in
+    type: std_logic_vector(G_FIFO_CNT_WIDTH-1 downto 0)
+    description: Current stream FIFO occupancy.
+
+  # ── Arbiter Grant Inputs ───────────────────────────────────────────────────
+  - name: BURST_ARB_GRANT
+    direction: in
+    type: std_logic
+    description: Rising-edge counted pulse from 2nd-layer burst arbiter grant.
+
+  - name: STREAM_ARB_GRANT
+    direction: in
+    type: std_logic
+    description: Rising-edge counted pulse from 1st-layer stream arbiter grant.
+
+  # ── Control Inputs (from regbank) ──────────────────────────────────────────
+  - name: COUNTER_RESET
+    direction: in
+    type: std_logic
+    description: Write-1-to-clear all counters. Self-clearing.
+
+  - name: SNAPSHOT_TRIGGER
+    direction: in
+    type: std_logic
+    description: Write-1 to latch all counters atomically into shadow regs.
+
+  # ── Register Outputs (to regbank) ──────────────────────────────────────────
+  - name: HEARTBEAT
+    direction: out
+    type: std_logic_vector(G_COUNTER_WIDTH-1 downto 0)
+    description: Free-running heartbeat counter value.
+
+  - name: OVERFLOW_CNT_BURST
+    direction: out
+    type: std_logic_vector(G_COUNTER_WIDTH-1 downto 0)
+    description: Burst FIFO overflow count.
+
+  - name: OVERFLOW_CNT_STREAM
+    direction: out
+    type: std_logic_vector(G_COUNTER_WIDTH-1 downto 0)
+    description: Stream FIFO overflow count.
+
+  - name: PKT_CNTS
+    direction: out
+    type: t_counter_array(0 to G_NUM_BURST_PROTOCOLS+G_NUM_STREAM_PROTOCOLS-1)
+    description: Per-protocol packet count array (I2C, SPI, UART, QSPI, Edge, I2S).
+
+  - name: ERR_CNTS
+    direction: out
+    type: t_counter_array(0 to G_NUM_BURST_PROTOCOLS-1)
+    description: Per-protocol error count array.
+
+  - name: GRANT_CNT_BURST
+    direction: out
+    type: std_logic_vector(G_COUNTER_WIDTH-1 downto 0)
+    description: Burst arbiter total grant count.
+
+  - name: GRANT_CNT_STREAM
+    direction: out
+    type: std_logic_vector(G_COUNTER_WIDTH-1 downto 0)
+    description: Stream arbiter total grant count.
+
+  - name: DROP_CNTS
+    direction: out
+    type: t_counter_array(0 to G_NUM_BURST_PROTOCOLS-1)
+    description: Per-protocol drop count array.
+
+  - name: WATERMARK_BURST
+    direction: out
+    type: std_logic_vector(G_FIFO_CNT_WIDTH-1 downto 0)
+    description: Peak burst FIFO occupancy since reset.
+
+  - name: WATERMARK_STREAM
+    direction: out
+    type: std_logic_vector(G_FIFO_CNT_WIDTH-1 downto 0)
+    description: Peak stream FIFO occupancy since reset.
+
+# =============================================================================
+# Behavior
+# =============================================================================
+behavior:
+  clock_domain: CLK (single clock domain, same as datalogger_gather)
+
+  counter_type: >
+    32-bit saturating. On overflow the counter stays at 0xFFFF_FFFF.
+    This prevents wrap-around ambiguity in long-running deployments.
+
+  reset_policy:
+    global_reset: >
+      All counters clear to 0 on RST assertion.
+    software_reset: >
+      Writing 1 to COUNTER_RESET clears all telemetry counters (addresses
+      48-68) without affecting the rest of the system. Heartbeat continues
+      running (not cleared by software reset).
+    auto_clear: >
+      COUNTER_RESET and SNAPSHOT_TRIGGER are self-clearing — the module
+      deasserts them 1 clock cycle after assertion.
+
+  snapshot_mechanism: >
+    When SNAPSHOT_TRIGGER is asserted, all live counters are latched into
+    a parallel shadow register bank in a single clock cycle. Subsequent
+    regbank reads return shadow values. This prevents counter skew when
+    the PS reads multiple registers sequentially over AXI-Lite.
+
+  counting_rules:
+    packet_count: >
+      Increments on the rising edge of (VLD && RDY) for each protocol.
+      This counts accepted messages only.
+    drop_count: >
+      Increments on the rising edge of (VLD && !RDY) for each protocol.
+      This counts messages lost due to arbiter backpressure.
+    error_count: >
+      Increments on the rising edge of OR-reduce(protocol_errors).
+      One increment per error event, regardless of how many error bits
+      are simultaneously asserted.
+    overflow_count: >
+      Increments on the rising edge of FIFO_FULL (0→1 transition).
+      Does not count sustained full condition — only the transition.
+    watermark: >
+      Updated every clock cycle: if current FIFO_CNT > watermark,
+      watermark = FIFO_CNT. Only clears on software reset.
+
+# =============================================================================
+# Resource Estimate
+# =============================================================================
+resources:
+  registers: >
+    ~23 × 32-bit = 736 FFs (live counters)
+    + 23 × 32-bit = 736 FFs (shadow bank)
+    + 5 × edge detectors = 5 FFs
+    Total: ~1,480 FFs
+  luts: >
+    ~23 saturating adders (1-bit increment) + comparators for watermarks.
+    Estimated: ~200 LUTs
+  bram: None
+  timing_impact: >
+    Zero critical path impact. All counters are simple registered
+    increments. No combinational logic in the data path.
+
+# =============================================================================
+# Integration
+# =============================================================================
+integration:
+  parent: datalogger_gather.vhd
+  location: >
+    Instantiated inside datalogger_gather between the datalogger blocks and
+    the 2nd-layer arbiters. Taps existing handshake and error signals
+    without modifying the data path.
+  wiring_example: |
+    i_telemetry : entity tich.telemetry_counters
+      generic map (
+        G_NUM_BURST_PROTOCOLS  => 5,
+        G_NUM_STREAM_PROTOCOLS => 1,
+        G_COUNTER_WIDTH        => 32,
+        G_FIFO_CNT_WIDTH       => 10
+      )
+      port map (
+        CLK              => CLK,
+        RST              => RST,
+        BURST_VLD        => (i2cReq(0), spiReq(0), uartReq(0), qspiReq(0), edReq(0)),
+        BURST_RDY        => (i2cAck(0), spiAck(0), uartAck(0), qspiAck(0), edAck(0)),
+        STREAM_VLD       => (i2sReq(0)),
+        STREAM_RDY       => (i2sAck(0)),
+        BURST_ERR        => (or_reduce(i2cErrors(0)), or_reduce(spiErrors(0)),
+                            or_reduce(uartErrors(0)), or_reduce(qspiErrors(0)),
+                            or_reduce(edErrors(0))),
+        BURST_FIFO_FULL  => FIFO_CSR.fifoStatus.full,
+        STREAM_FIFO_FULL => FIFO_STREAM_CSR.fifoStatus.full,
+        BURST_FIFO_CNT   => burst_fifo_cnt_signal,
+        STREAM_FIFO_CNT  => stream_fifo_cnt_signal,
+        BURST_ARB_GRANT  => epArbiterOutputs.valid,
+        STREAM_ARB_GRANT => epStreamArbiterOutputs.valid,
+        COUNTER_RESET    => regbank_telemetry_ctrl(0),
+        SNAPSHOT_TRIGGER => regbank_snapshot_trigger(0),
+        -- Outputs → regbank mapping
+        HEARTBEAT          => reg_heartbeat_cnt,
+        OVERFLOW_CNT_BURST => reg_burst_overflow_cnt,
+        -- ... (remaining outputs mapped to regbank addresses 48-68)
+      );

@@ -1,0 +1,8 @@
+# DS-P2.105: this U-Boot tag's pylibfdt output is not compatible with SWIG
+# 4.5 (it retains the removed Python-2 PyInt_AsLong API), and binman imports
+# pkg_resources, removed from setuptools 81.  Keep hashes beside both pins so
+# a clean-clone stage cannot silently consume different host executables.
+swig==4.1.1 \
+    --hash=sha256:3f9da5564718bb81234dd497dc265025b0456c6c9378dfa8206cda56a7fa65ba
+setuptools==80.9.0 \
+    --hash=sha256:062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922

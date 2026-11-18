@@ -1,0 +1,67 @@
+# config_control — Requirements catalog (contract-first per ROUTERTL convention)
+#
+# Per-datalogger CONFIG demux + latch: the regbank drives one shared
+# CONFIG bus, and each datalogger instance instantiates a config_control
+# pinned to its own G_DEV_ID. The block compares CONFIG[15:11] to
+# G_DEV_ID and latches the lower bits into CONFIG_OUT when matched,
+# holding the last good value until a fresh write for the same ID
+# arrives.
+#
+# Each CC-REQ-N below is referenced by ≥1 cocotb test in
+# hw/sim/cocotb/tests/datalogger/infra/test_config_control.py via @requires().
+#
+# v0.1 SCOPE: one provable REQ (reset determinism). Follow-on
+# (DS-P3.<a>) will add the demux REQs: CC-REQ-1 (matching ID writes
+# CONFIG_OUT), CC-REQ-2 (non-matching ID is a no-op), CC-REQ-3
+# (latched value persists across non-matching writes).
+
+ip: config_control
+version: 0.1
+schema_version: 1
+
+port_contract:
+  slaves: []
+  masters: []
+  scalars:
+    - { name: CONFIG,     dir: in,  width: "G_CONFIG_WIDTH-1 downto 0" }
+    - { name: CONFIG_OUT, dir: out, width: "G_CONFIG_WIDTH-G_DEV_ID_WIDTH-1 downto 0" }
+    # DS-T2.31: per-datalogger reset. Active-high; the owning datalogger uses it as
+    # its synchronous reset. Asserted under global RST OR while this device's
+    # latched ENABLE bit (CONFIG_OUT[0]) is 0. This makes a SW ENABLE=0 a
+    # full, per-datalogger state flush — the documented reconfiguration reset.
+    - { name: CAPTURE_RST,  dir: out, width: "std_logic" }
+  clocks:
+    - { name: CLK }
+  resets:
+    - { name: RST, polarity: active_high }
+
+parameters:
+  - { name: G_DEV_ID_WIDTH, default: 5 }
+  - { name: G_DEV_ID,       default: 24 }
+  - { name: G_CONFIG_WIDTH, default: 16 }
+  - { name: G_SIM_EN,       default: 0 }
+  - { name: G_ILA_EN,       default: 1 }
+
+functional_contract:
+  - id: CC-REQ-50
+    kind: behavioral
+    desc: >-
+      On RST='1' (active high), `CONFIG_OUT` is cleared. After
+      RST de-assert with `CONFIG` driven to zero (no matching
+      device-id write), `CONFIG_OUT` remains all-zero.
+
+  - id: CC-REQ-51
+    kind: behavioral
+    desc: >-
+      Per-datalogger reset (DS-T2.31). `CAPTURE_RST` is asserted (='1')
+      whenever global `RST`='1' OR the latched ENABLE bit
+      (CONFIG_OUT[0]) is '0'. It de-asserts only when this device is
+      enabled (a matching-ID write with bit0='1' has been latched).
+      Contract intent: a datalogger that consumes `CAPTURE_RST` as its sole
+      synchronous reset is fully flushed (calibration FSM, accumulators,
+      edge FIFO/BRAM) while disabled, so toggling ENABLE 0->1 from SW
+      yields a deterministic, stale-free re-initialisation. This is the
+      sanctioned reconfiguration path: to change a datalogger's format/mode,
+      write ENABLE=0 (reset) then ENABLE=1 with the new config. Verified
+      end-to-end at the UART datalogger by
+      test_uart_reset_reachable.reset_reachable_from_sw.

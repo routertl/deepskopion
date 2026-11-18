@@ -1,0 +1,332 @@
+# can_datalogger — Requirements catalog (contract-first per ROUTERTL convention)
+#
+# Passive CAN / CAN-FD datalogger (DS-P3.100). Watches a single post-transceiver RX
+# line as an INPUT, recovers CAN bit timing, removes stuff bits, mirrors the
+# frame FSM, captures arbitration ID + control + data + CRC-15, and emits 32-bit
+# zs_msg messages on DOMAIN_CAN (0xA, system_ids.yml). Complementary to:
+#   * hw/rtl/datalogger/can/can_datalogger_protocol.yml   (the HW word format)
+#   * hw/rtl/datalogger/can/CAN_DATALOGGER_SCOPING.md      (architecture + build plan)
+#   * deepskopion/system_ids.yml                     (the domain code)
+#
+# Each CAN-REQ-N is referenced by >=1 cocotb test via @requires(CAN-REQ-N) once
+# the RTL + harness land. `rr sim coverage-map` enforces the mapping. Adversarial
+# discipline: tests attack the DUT with HARD-CODED expected values (ROUTERTL-002),
+# never derived from DUT output at runtime. STATUS: DRAFT v0.1 — pre-RTL scope.
+
+ip: can_datalogger
+version: 0.1
+schema_version: 1
+
+port_contract:
+  slaves: []
+  masters: []
+  # Standard datalogger contract (mirrors jtag/uart): CLK, RST, CAN_PINS(0)=RX,
+  # CONFIG, TIMESTAMP, CAN_MSG_OUT/VLD/RDY, CAN_ERRORS.
+
+functional_contract:
+  - id: CAN-REQ-1
+    kind: structural
+    desc: >-
+      Reset determinism — post-reset with no enable and an idle (recessive) bus,
+      the datalogger emits NO messages and CAN_MSG_VLD stays low.
+
+  - id: CAN-REQ-2
+    kind: behavioral
+    desc: >-
+      Lifecycle — on the CONFIG enable rising edge emit one event ENABLED (0x03)
+      carrying device_id; on the disable edge emit DISABLED (0x00). Shared
+      datalogger lifecycle convention.
+
+  - id: CAN-REQ-3
+    kind: behavioral
+    desc: >-
+      Standard data frame (11-bit) — a clean 2.0A data frame with a known ID and
+      0..8 data bytes produces: frame_begin, control(IDE=0,RTR=0,DLC), 2 id_payload
+      bytes, DLC data_payload bytes, 2 crc_payload bytes, ack_observed, frame_end —
+      all routed to the CAN device_id, the ID + data bytes byte-exact (MSB-first).
+
+  - id: CAN-REQ-4
+    kind: behavioral
+    desc: >-
+      Extended data frame (29-bit) — a 2.0B frame yields control(IDE=1) + 4
+      id_payload bytes; the reassembled 29-bit identifier matches the driven value.
+
+  - id: CAN-REQ-5
+    kind: behavioral
+    desc: >-
+      Bit de-stuffing — a frame whose ID/data force >=5 consecutive identical
+      bits (stuff bits inserted on the wire) decodes to the ORIGINAL unstuffed
+      ID/data; the inserted stuff bits never appear in id/data payloads.
+
+  - id: CAN-REQ-6
+    kind: behavioral
+    desc: >-
+      Remote frame (RTR=1) — control carries RTR=1 and DLC, and NO data_payload
+      messages are emitted (remote frames have no data field).
+
+  - id: CAN-REQ-7
+    kind: behavioral
+    desc: >-
+      CRC validation — the datalogger computes CRC-15 over the de-stuffed frame and
+      emits crc_payload (the captured CRC); a deliberately corrupted CRC raises a
+      crc_error event, a good CRC does not.
+
+  - id: CAN-REQ-8
+    kind: behavioral
+    desc: >-
+      Stuff error — 6 consecutive identical bits in a stuff-active field raise a
+      stuff_error event (the datalogger must detect, not silently de-stuff, a fault).
+
+  - id: CAN-REQ-9
+    kind: behavioral
+    desc: >-
+      ACK observation — a dominant ACK slot raises ack_observed; an all-recessive
+      ACK slot raises ack_error (nobody on the bus ACKed).
+
+  - id: CAN-REQ-10
+    kind: behavioral
+    desc: >-
+      Back-to-back frames — two frames separated by the minimum interframe space
+      are both fully captured (the FSM returns to idle and re-arms on the next SOF;
+      no field bleeds across the frame_end/frame_begin boundary).
+
+  - id: CAN-REQ-11
+    kind: behavioral
+    desc: >-
+      Gather routing (SGA-REQ-3 family) — driven through the full datalogger_gather,
+      every CAN message routes to DOUT_DATALOGGER_ID = the CAN device_id with the
+      ID/data bytes byte-exact (the can BFM-harness, mirrors i2c/uart/spi/edge/jtag).
+
+  # ===========================================================================
+  # CAN-FD (DS-P2.64) — v0.2, pre-RTL contract-first scope.
+  #
+  # SPEC-LINKED (ROUTERTL convention): every FD requirement cites the PUBLIC
+  # protocol spec it models. For a standard protocol the spec IS the BFM oracle —
+  # the testbench drives spec-legal frames and asserts spec-defined fields, so the
+  # `spec:` ref is the ground truth a reviewer checks the REQ against (not our
+  # paraphrase). Two freely-available sources:
+  #   ISO   = ISO 11898-1:2015  (CAN + CAN-FD data link layer)
+  #   BOSCH = Bosch "CAN with Flexible Data-Rate" Specification v1.0 (2012)
+  # Exact constants (CRC polynomials, DLC table) are quoted FROM the spec, never
+  # hand-derived — the contract points at the authority, the RTL/BFM must match it.
+  # ===========================================================================
+
+  - id: CAN-REQ-12
+    kind: behavioral
+    desc: >-
+      FDF detection (no classic regression) — the reserved bit after IDE (std) /
+      r1 (ext) is FDF. Dominant ⇒ classic 2.0 frame, decoded exactly as CAN-REQ-3/4.
+      Recessive ⇒ CAN-FD frame, fork to the FD control field (res, BRS, ESI, DLC).
+      A mixed classic+FD stream on one bus decodes both, byte-exact, no bleed.
+    spec:
+      - doc: "ISO 11898-1:2015"
+        clause: "FDF (FD Format) bit; frame format selection"
+      - doc: "BOSCH CAN with Flexible Data-Rate Specification v1.0 (2012)"
+        clause: "§3.1.2 (Control Field), FDF bit"
+
+  - id: CAN-REQ-13
+    kind: behavioral
+    desc: >-
+      Bit-rate switch (BRS) — when BRS is recessive the datalogger switches to the
+      CONFIGured data-phase bit timing for the bits from the ESI/DLC onward through
+      the data-phase CRC; when BRS is dominant the whole frame stays at the nominal
+      rate. The transmitted ESI/DLC/data/CRC are then sampled at the fast rate.
+    spec:
+      - doc: "ISO 11898-1:2015"
+        clause: "BRS (Bit Rate Switch) bit; arbitration vs data bit rate"
+      - doc: "BOSCH CAN with Flexible Data-Rate Specification v1.0 (2012)"
+        clause: "§3.1.2, §5 (bit timing, two bit-rate configurations)"
+
+  - id: CAN-REQ-14
+    kind: behavioral
+    desc: >-
+      Data-phase resync — at the BRS→data transition the timing recovery does a
+      FORCED resync (it cannot rely on a falling edge at the switch instant),
+      anchored to the BRS bit boundary, then hard-syncs on every recessive→dominant
+      edge in the data phase. Every data-phase bit is sampled at the configured
+      fast sample point with no slip across the (sparser, fixed-stuffed) data field.
+    spec:
+      - doc: "ISO 11898-1:2015"
+        clause: "bit timing, hard synchronization & resynchronization; rate switch at the BRS sample point"
+
+  - id: CAN-REQ-15
+    kind: behavioral
+    desc: >-
+      ESI capture — the Error State Indicator bit (dominant = error-active txer,
+      recessive = error-passive) is captured and surfaced as an FD control flag.
+    spec:
+      - doc: "ISO 11898-1:2015"
+        clause: "ESI (Error State Indicator) bit"
+
+  - id: CAN-REQ-16
+    kind: behavioral
+    desc: >-
+      Extended DLC (0..64 bytes) — DLC 0..8 ⇒ that many data bytes; DLC 9..15 ⇒
+      12/16/20/24/32/48/64 bytes per the FD DLC coding table. The data-byte counter
+      decodes the non-linear table (NOT a raw 0..15 count). Boundary cases 0, 8,
+      12, 64 each captured byte-exact.
+    spec:
+      - doc: "ISO 11898-1:2015"
+        clause: "DLC coding (Table: DLC 9..15 → 12..64 data bytes)"
+      - doc: "BOSCH CAN with Flexible Data-Rate Specification v1.0 (2012)"
+        clause: "§3.1.2 (DLC), Table 1"
+
+  - id: CAN-REQ-17
+    kind: behavioral
+    desc: >-
+      Stuffing mode switch — dynamic bit-stuffing (5-identical rule) applies up to
+      the data phase; the FD CRC field uses FIXED stuff bits (one fixed stuff bit
+      preceding every CRC word boundary, inverse of the previous bit). The destuffer
+      switches modes at the FD CRC boundary and removes fixed stuff bits correctly.
+    spec:
+      - doc: "ISO 11898-1:2015"
+        clause: "fixed stuff bits in the FD CRC field"
+      - doc: "BOSCH CAN with Flexible Data-Rate Specification v1.0 (2012)"
+        clause: "§3.1.2 (CRC Field, fixed stuff bits)"
+
+  - id: CAN-REQ-18
+    kind: behavioral
+    desc: >-
+      Stuff-bit count + parity — the FD frame carries a 3-bit stuff-bit-count
+      (gray-coded) plus a parity bit ahead of the CRC. The datalogger captures it and
+      flags a mismatch (count/parity inconsistent) as a form/stuff error, never
+      silently.
+    spec:
+      - doc: "ISO 11898-1:2015"
+        clause: "stuff bit count (3-bit gray) + parity, FD frame"
+      - doc: "BOSCH CAN with Flexible Data-Rate Specification v1.0 (2012)"
+        clause: "§3.1.2 (Stuff Count)"
+      - "CONFIRMED (Vector/CiA, 2026-06-14 research): stuff-bit-count = number of dynamic stuff bits mod 8, transmitted GRAY-coded (bits 0..2) followed by an EVEN-parity bit. Parity-OK ⇔ XOR(gray2,gray1,gray0,parity)=0. Two safeguards: gray code + even parity."
+
+  - id: CAN-REQ-19
+    kind: behavioral
+    desc: >-
+      CRC-17 (payload ≤ 16 bytes) — FD frames with ≤16 data bytes use CRC-17.
+      The datalogger's CRC-17 engine output `CRC`, fed the spec-defined covered bits
+      (incl. fixed stuff bits per the spec), matches the captured CRC; a real mismatch raises
+      crc_error, a clean frame raises NONE. Polynomial is taken FROM the spec.
+    spec:
+      - doc: "ISO 11898-1:2015"
+        clause: "CRC_17 polynomial"
+        constant: "CAN-FD.CRC17=0x1685B"
+      - doc: "BOSCH CAN with Flexible Data-Rate Specification v1.0 (2012)"
+        clause: "§3.1.2 (CRC Field, CRC_17)"
+      - doc: "reveng CRC catalogue"
+        clause: "CRC-17/CAN-FD"
+        quote: "poly=0x1685B init=0 refin=false refout=false xorout=0 check=0x04F03 (CRC of \"123456789\") — VERIFIED; note the x^3 term IS present (some web prose drops it), confirmed by the check value. External Layer-0 anchor for test_can_crc17."
+      - "COVERAGE (CONFIRMED, Vector/CiA research 2026-06-14): UNLIKE classic CAN, the CAN-FD CRC INCLUDES the dynamic stuff bits (the engine is fed the STUFFED stream, not de-stuffed), plus the fixed stuff bits before the CRC sequence are protected. CRC register preset with a leading '1'. The CRC VERDICT (exact covered-bit boundary) therefore needs an external golden FD FRAME to validate end-to-end — NOT the polynomial check alone — via DS-P3.15 (CTU CAN FD). At the FSM level the crc_error COMPARE is tested by driving CRC17/21_COMPUTED directly (mirrors classic test_can_frame_fsm)."
+
+  - id: CAN-REQ-20
+    kind: behavioral
+    desc: >-
+      CRC-21 (payload > 16 bytes) — FD frames with >16 data bytes use CRC-21,
+      selected by payload length. Same validate-don't-loosen discipline as REQ-19.
+    spec:
+      - doc: "ISO 11898-1:2015"
+        clause: "CRC_21 polynomial"
+        constant: "CAN-FD.CRC21=0x102899"
+      - doc: "BOSCH CAN with Flexible Data-Rate Specification v1.0 (2012)"
+        clause: "§3.1.2 (CRC Field, CRC_21)"
+      - doc: "reveng CRC catalogue"
+        clause: "CRC-21/CAN-FD"
+        quote: "poly=0x102899 init=0 refin=false refout=false xorout=0 check=0x0ED841 (CRC of \"123456789\") — VERIFIED. External Layer-0 anchor for test_can_crc21."
+
+  - id: CAN-REQ-21
+    kind: behavioral
+    desc: >-
+      No remote frames in FD — the classic RTR bit position is RRS, always
+      dominant, in an FD frame. The datalogger must NOT emit a remote-frame
+      interpretation for an FD frame (RTR is meaningless once FDF=1).
+    spec:
+      - doc: "ISO 11898-1:2015"
+        clause: "RRS (reserved) bit replaces RTR in FD; no remote frames"
+
+  - id: CAN-REQ-22
+    kind: behavioral
+    desc: >-
+      Switch back to nominal — at the data-phase CRC delimiter the timing recovery
+      returns to the nominal bit rate for the ACK slot, ACK delimiter and EOF
+      (which are always at the arbitration rate). A forced resync at the delimiter
+      re-anchors the nominal grid.
+    spec:
+      - doc: "ISO 11898-1:2015"
+        clause: "bit rate switches back to nominal at the CRC delimiter sample point"
+
+  - id: CAN-REQ-23
+    kind: behavioral
+    desc: >-
+      Equivalence carry-over (silicon-validation preservation) — if the v0.1
+      single-rate timing block is refactored (B2 unified direct-count sampler),
+      a back-to-back equivalence test drives the SAME stimulus (randomized + the
+      real captured silicon edges) into the old TQ block and the new unified block
+      on the NOMINAL config and asserts BIT_VALID/BIT_VALUE/BIT_START are
+      bit-identical — so the proven classic-CAN behaviour transfers by construction.
+    spec:
+      - non_spec: true
+        reason: "derived from DS-P3.103 silicon validation (v0.3.0-can-emio-silicon); no external protocol clause — this is a refactor-safety invariant, an explicit NON-spec-linked exception."
+
+  - id: CAN-REQ-24
+    kind: behavioral
+    desc: >-
+      Runtime data-phase prescaler via BANKED config (DS-P3.108b) — the CAN-FD
+      data-phase bit period is SW-settable at runtime through a BANKED DATALOGGER_CONFIG
+      word on the CAN datalogger's OWN device_id (one id, no pseudo-id). Payload bit
+      [10] is a type bit: 0 ⇒ primary {bit_prescaler[9:1], enable[0]}; 1 ⇒ data
+      bank, whose [9]=0 sub-word is {data_cyc_per_bit[8:0]} (max 511; [9]=1 carries
+      the sample points, CAN-REQ-26). Two config_control instances on the same id latch the
+      two banks independently — a type-1 (data) write must NOT disturb enable/
+      bit_prescaler, and a type-0 (primary) write must NOT disturb the data rate.
+      Unprogrammed data bank ⇒ the power-on default (2 Mbit @ 100 MHz = 50 cyc/bit);
+      the data sample point is its own register (CAN-REQ-26). The configured rate is used only in
+      the BRS-recessive data phase — validated by a BRS=1 dual-rate frame decoding
+      byte-exact at BOTH the default and a SW-set rate (proving the value reached the
+      sampler), with classic 0xA033 still reading as enable+prescaler-25 (bit[10]=0).
+    spec:
+      - non_spec: true
+        reason: "deepskopion banked-config platform contract (DS-P3.108b, decision D.25). No external CAN clause — config DELIVERY is a datalogger-platform mechanism; the data-rate VALUE serves CAN-FD's BRS data phase (CAN-REQ-13/14). Verified by test_can_datalogger_datacfg."
+
+  - id: CAN-REQ-25
+    kind: behavioral
+    desc: >-
+      FD CRC coverage independence across the back-to-back boundary (the FD analog of
+      CAN-REQ-10, for the CRC verdict). A CAN-FD frame's FD CRC coverage (the
+      FdCrcCovered window over SOF..stuff-count) MUST be independent of any preceding
+      frame at the minimum interframe space: the SAME FD frame driven standalone and
+      driven immediately after another frame must yield a BIT-IDENTICAL computed FD
+      CRC (CRC17/21_COMPUTED), and therefore the same crc_error verdict. No covered bit
+      may bleed across the frame_end→SOF boundary — neither the SOF first-covered bit
+      dropped, nor a boundary bit counted on the wrong side of the R.State register
+      update, nor stale CRC-engine state carried from the previous frame. ADVERSARIAL:
+      drives the same FD frame standalone and back-to-back and asserts the datalogger's
+      internal Crc17/21_COMPUTED is identical (the crc_error boolean alone is blind
+      here — an arbitrary wire CRC makes it always-present; the COMPUTED value is the
+      discriminator). Per the bug-finding-is-success rule this test is EXPECTED to fail
+      until DS-T2.49 is fixed — a green run is the yellow flag. INCIDENT (DS-T2.49):
+      the datalogger emitted a spurious crc_error storm (~1 per frame) on back-to-back FD
+      frames while the bus was verifiably clean (CTU controllers ERROR-ACTIVE, TEC/REC=0,
+      no error frames); RTL-localized to the FD_CRC_EN = BIT_VALID and FdCrcCovered(R.State)
+      coverage gate (line 298), asymmetric vs the de-stuffed-gated classic CRC_EN (line 294).
+    spec:
+      - doc: "ISO 11898-1:2015"
+        clause: "FD CRC field coverage; interframe space (IFS) ≥3 recessive bits; each frame independently CRC-protected"
+
+  - id: CAN-REQ-26
+    kind: behavioral
+    desc: >-
+      The nominal and data sample points follow the bus (DS-T2.97). Both are
+      software-set fractions of their own bit in 1/256 — bank-1 sub-words [9]=1, [8]=0
+      nominal / [8]=1 data, 0 ⇒ 192 (75 %), reset 192 — and each latches only from
+      its own sub-word: a data_cyc write leaves both sample points unchanged and a
+      sample-point write leaves data_cyc unchanged. A CAN FD transmitter switches to
+      the data rate at its own nominal sample point and the rest of BRS is its data
+      phase-2 segment, so the datalogger switches at its BRS sample and continues the
+      data phase from the data sample point. With the sample points set to the bus
+      values, at 250 kbit/s / 2 Mbit/s (measured on the Zybo CTU cores: 87.5 % = 224,
+      0.740 = 189; BRS ends 350 + 13 = 363 clk into a 400-clk bit) the datalogger's
+      switch and its ESI sample land within ±1/8 data bit (±6 clk) of the
+      transmitter's, for ESI 0 and ESI 1, and the real CTU wire decodes exactly.
+      At the reset value the same wire decodes as the Zybo capture: every field
+      after BRS one bit late.
+    spec:
+      - doc: "ISO 11898-1:2015"
+        clause: "CAN FD bit-rate switching at the sample point of the BRS bit; data phase timing (phase segment 2) after the switch"

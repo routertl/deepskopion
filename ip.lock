@@ -1,0 +1,435 @@
+version: 1
+_meta:
+  generated_by: rr pkg remove
+  sdk_commit: 8016a7137
+  resolver_version: 5.4.0
+  source: mixed
+enclustra/en_cl_fix_resize:
+  resolved_version: HEAD
+  url: https://github.com/enclustra/en_cl_fix.git
+  commit: d2ce1a617bc8ba466244a4e500a6edbeea6dba7a
+  local_path: libs/enclustra/en_cl_fix_resize
+  library: en_tb
+  library_deps: []
+  files:
+  - libs/enclustra/en_cl_fix_resize/hdl/en_cl_fix_private_pkg.vhd
+  - libs/enclustra/en_cl_fix_resize/hdl/en_cl_fix_pkg.vhd
+  - libs/enclustra/en_cl_fix_resize/hdl/en_cl_fix_resize.vhd
+  - libs/enclustra/en_cl_fix_resize/hdl/en_cl_fix_round.vhd
+  - libs/enclustra/en_cl_fix_resize/hdl/en_cl_fix_saturate.vhd
+  file_hashes:
+    libs/enclustra/en_cl_fix_resize/hdl/en_cl_fix_private_pkg.vhd: a9abdc510ba11b768b4ad0d6bf07b05b48547d2b1c41473ad31556324a01a400
+    libs/enclustra/en_cl_fix_resize/hdl/en_cl_fix_pkg.vhd: 92535d16b49c5b221cfe67f8a53e6894e27d1dee6c646445433168a7aa4af886
+    libs/enclustra/en_cl_fix_resize/hdl/en_cl_fix_resize.vhd: 3be265faf23ae3aa2d44a704fa890b1ecc00c77abf4e0baac1adb55db3b15660
+    libs/enclustra/en_cl_fix_resize/hdl/en_cl_fix_round.vhd: 47c119f9b3c6f0f1f7630647491c047dd3c788170d71258dbd5dbe7f8f35e3a7
+    libs/enclustra/en_cl_fix_resize/hdl/en_cl_fix_saturate.vhd: 2b51a9ccc7db9a5ebfccc8b72e6fdeb75d604f5b218a9416a6f6ee8d2be79910
+  metadata_source: index_compat
+  provides_packages:
+  - en_cl_fix_pkg
+  - en_cl_fix_private_pkg
+  requested_version: ^d2ce1a617bc8
+open-logic/olo_base:
+  resolved_version: 4.4.1
+  url: https://github.com/open-logic/open-logic.git
+  commit: d1407a7427d9201a7bcd8c37749ec083b13006dc
+  local_path: libs/open-logic/olo_base
+  library: olo
+  library_deps: []
+  files:
+  - libs/open-logic/olo_base/src/base/vhdl/olo_base_pkg_array.vhd
+  - libs/open-logic/olo_base/src/base/vhdl/olo_base_pkg_math.vhd
+  - libs/open-logic/olo_base/src/base/vhdl/olo_base_pkg_logic.vhd
+  - libs/open-logic/olo_base/src/base/vhdl/olo_base_pkg_attribute.vhd
+  - libs/open-logic/olo_base/src/base/vhdl/olo_base_pkg_string.vhd
+  file_hashes:
+    libs/open-logic/olo_base/src/base/vhdl/olo_base_pkg_array.vhd: 5481df24f6c0e81329b7146cb22f56b323bdcac36080f20556a8067bafaa744d
+    libs/open-logic/olo_base/src/base/vhdl/olo_base_pkg_math.vhd: 98dc671df1be2a346814662dd293e3baff9987075d9c443e1d5f7ee11473fa5d
+    libs/open-logic/olo_base/src/base/vhdl/olo_base_pkg_logic.vhd: 4f3d36350ee730470ad485adb91670cfe67a4cc744e5e84046033d1bcb2c6584
+    libs/open-logic/olo_base/src/base/vhdl/olo_base_pkg_attribute.vhd: 31ab339ab6d3ddce57c8b95ff813d53d56b6b0a740a594283aab35032396ad16
+    libs/open-logic/olo_base/src/base/vhdl/olo_base_pkg_string.vhd: 549fb9a85d30e71510f3ecc59a394c2020e890ca1276d652c9962cf51976e0d4
+  metadata_source: index_compat
+  provides_packages:
+  - olo_base_pkg_array
+  - olo_base_pkg_attribute
+  - olo_base_pkg_logic
+  - olo_base_pkg_math
+  - olo_base_pkg_string
+  requested_version: 4.4.1
+open-logic/olo_base_fifo_async:
+  resolved_version: 4.4.1
+  url: https://github.com/open-logic/open-logic.git
+  commit: d1407a7427d9201a7bcd8c37749ec083b13006dc
+  local_path: libs/open-logic/olo_base_fifo_async
+  library: olo
+  library_deps: []
+  files:
+  - libs/open-logic/olo_base_fifo_async/src/base/vhdl/olo_base_cc_bits.vhd
+  - libs/open-logic/olo_base_fifo_async/src/base/vhdl/olo_base_cc_reset.vhd
+  - libs/open-logic/olo_base_fifo_async/src/base/vhdl/olo_base_ram_sdp.vhd
+  - libs/open-logic/olo_base_fifo_async/src/base/vhdl/olo_base_fifo_async.vhd
+  - libs/open-logic/olo_base_fifo_async/src/base/vhdl/olo_base_pkg_attribute.vhd
+  - libs/open-logic/olo_base_fifo_async/src/base/vhdl/olo_base_pkg_math.vhd
+  - libs/open-logic/olo_base_fifo_async/src/base/vhdl/olo_base_pkg_string.vhd
+  - libs/open-logic/olo_base_fifo_async/src/base/vhdl/olo_base_pkg_logic.vhd
+  - libs/open-logic/olo_base_fifo_async/src/base/vhdl/olo_base_pkg_array.vhd
+  file_hashes:
+    libs/open-logic/olo_base_fifo_async/src/base/vhdl/olo_base_cc_bits.vhd: 62ec4838dd926845b1be4f2b2df2daaaa0b7f7e828322fccdf676e68bb63c347
+    libs/open-logic/olo_base_fifo_async/src/base/vhdl/olo_base_cc_reset.vhd: 7ca3e388b854fa0ce5f4aaaaa8fce5291b9a691678dd9479eb0be72142a0626c
+    libs/open-logic/olo_base_fifo_async/src/base/vhdl/olo_base_ram_sdp.vhd: 149fae9e8cd65165b0d7f698ffe07a0618ea8a66f19c93d68e2a08c369aa0490
+    libs/open-logic/olo_base_fifo_async/src/base/vhdl/olo_base_fifo_async.vhd: 7891082e4366c4013f7050436bbef303418117b0ceac32b65be88288ba101faa
+    libs/open-logic/olo_base_fifo_async/src/base/vhdl/olo_base_pkg_attribute.vhd: 31ab339ab6d3ddce57c8b95ff813d53d56b6b0a740a594283aab35032396ad16
+    libs/open-logic/olo_base_fifo_async/src/base/vhdl/olo_base_pkg_math.vhd: 98dc671df1be2a346814662dd293e3baff9987075d9c443e1d5f7ee11473fa5d
+    libs/open-logic/olo_base_fifo_async/src/base/vhdl/olo_base_pkg_string.vhd: 549fb9a85d30e71510f3ecc59a394c2020e890ca1276d652c9962cf51976e0d4
+    libs/open-logic/olo_base_fifo_async/src/base/vhdl/olo_base_pkg_logic.vhd: 4f3d36350ee730470ad485adb91670cfe67a4cc744e5e84046033d1bcb2c6584
+    libs/open-logic/olo_base_fifo_async/src/base/vhdl/olo_base_pkg_array.vhd: 5481df24f6c0e81329b7146cb22f56b323bdcac36080f20556a8067bafaa744d
+  metadata_source: index_compat
+  provides_packages: []
+  package_deps:
+    open-logic/olo_base: 4.4.1
+  requested_version: ^4.4.1
+open-logic/olo_base_fifo_sync:
+  resolved_version: 4.4.1
+  url: https://github.com/open-logic/open-logic.git
+  commit: d1407a7427d9201a7bcd8c37749ec083b13006dc
+  local_path: libs/open-logic/olo_base_fifo_sync
+  library: olo
+  library_deps: []
+  files:
+  - libs/open-logic/olo_base_fifo_sync/src/base/vhdl/olo_base_ram_sdp.vhd
+  - libs/open-logic/olo_base_fifo_sync/src/base/vhdl/olo_base_fifo_sync.vhd
+  - libs/open-logic/olo_base_fifo_sync/src/base/vhdl/olo_base_pkg_attribute.vhd
+  - libs/open-logic/olo_base_fifo_sync/src/base/vhdl/olo_base_pkg_math.vhd
+  - libs/open-logic/olo_base_fifo_sync/src/base/vhdl/olo_base_pkg_string.vhd
+  - libs/open-logic/olo_base_fifo_sync/src/base/vhdl/olo_base_pkg_array.vhd
+  file_hashes:
+    libs/open-logic/olo_base_fifo_sync/src/base/vhdl/olo_base_ram_sdp.vhd: 149fae9e8cd65165b0d7f698ffe07a0618ea8a66f19c93d68e2a08c369aa0490
+    libs/open-logic/olo_base_fifo_sync/src/base/vhdl/olo_base_fifo_sync.vhd: 0b62cb337c4874677ec8da878d8b5483a7e0c8dbf2085e4ed25d026e36fa53c6
+    libs/open-logic/olo_base_fifo_sync/src/base/vhdl/olo_base_pkg_attribute.vhd: 31ab339ab6d3ddce57c8b95ff813d53d56b6b0a740a594283aab35032396ad16
+    libs/open-logic/olo_base_fifo_sync/src/base/vhdl/olo_base_pkg_math.vhd: 98dc671df1be2a346814662dd293e3baff9987075d9c443e1d5f7ee11473fa5d
+    libs/open-logic/olo_base_fifo_sync/src/base/vhdl/olo_base_pkg_string.vhd: 549fb9a85d30e71510f3ecc59a394c2020e890ca1276d652c9962cf51976e0d4
+    libs/open-logic/olo_base_fifo_sync/src/base/vhdl/olo_base_pkg_array.vhd: 5481df24f6c0e81329b7146cb22f56b323bdcac36080f20556a8067bafaa744d
+  metadata_source: index_compat
+  provides_packages: []
+  package_deps:
+    open-logic/olo_base: 4.4.1
+  requested_version: ^4.4.1
+open-logic/olo_base_wconv_n2xn:
+  resolved_version: 4.4.1
+  url: https://github.com/open-logic/open-logic.git
+  commit: d1407a7427d9201a7bcd8c37749ec083b13006dc
+  local_path: libs/open-logic/olo_base_wconv_n2xn
+  library: olo
+  library_deps: []
+  files:
+  - libs/open-logic/olo_base_wconv_n2xn/src/base/vhdl/olo_base_wconv_n2xn.vhd
+  - libs/open-logic/olo_base_wconv_n2xn/src/base/vhdl/olo_base_pkg_logic.vhd
+  - libs/open-logic/olo_base_wconv_n2xn/src/base/vhdl/olo_base_pkg_math.vhd
+  - libs/open-logic/olo_base_wconv_n2xn/src/base/vhdl/olo_base_pkg_array.vhd
+  file_hashes:
+    libs/open-logic/olo_base_wconv_n2xn/src/base/vhdl/olo_base_wconv_n2xn.vhd: c45ec083252991c7f019cb61bd81ad509a7b275aae19699e0d26ac81dd1a9426
+    libs/open-logic/olo_base_wconv_n2xn/src/base/vhdl/olo_base_pkg_logic.vhd: 4f3d36350ee730470ad485adb91670cfe67a4cc744e5e84046033d1bcb2c6584
+    libs/open-logic/olo_base_wconv_n2xn/src/base/vhdl/olo_base_pkg_math.vhd: 98dc671df1be2a346814662dd293e3baff9987075d9c443e1d5f7ee11473fa5d
+    libs/open-logic/olo_base_wconv_n2xn/src/base/vhdl/olo_base_pkg_array.vhd: 5481df24f6c0e81329b7146cb22f56b323bdcac36080f20556a8067bafaa744d
+  metadata_source: index_compat
+  provides_packages: []
+  package_deps:
+    open-logic/olo_base: 4.4.1
+  requested_version: ^4.4.1
+open-logic/olo_base_wconv_xn2n:
+  resolved_version: 4.4.1
+  url: https://github.com/open-logic/open-logic.git
+  commit: d1407a7427d9201a7bcd8c37749ec083b13006dc
+  local_path: libs/open-logic/olo_base_wconv_xn2n
+  library: olo
+  library_deps: []
+  files:
+  - libs/open-logic/olo_base_wconv_xn2n/src/base/vhdl/olo_base_wconv_xn2n.vhd
+  - libs/open-logic/olo_base_wconv_xn2n/src/base/vhdl/olo_base_pkg_logic.vhd
+  - libs/open-logic/olo_base_wconv_xn2n/src/base/vhdl/olo_base_pkg_math.vhd
+  - libs/open-logic/olo_base_wconv_xn2n/src/base/vhdl/olo_base_pkg_array.vhd
+  file_hashes:
+    libs/open-logic/olo_base_wconv_xn2n/src/base/vhdl/olo_base_wconv_xn2n.vhd: 1abc70521a8c6a60a501d44addad5c00ecd75d4a56b1dc42d4125b03768e83d8
+    libs/open-logic/olo_base_wconv_xn2n/src/base/vhdl/olo_base_pkg_logic.vhd: 4f3d36350ee730470ad485adb91670cfe67a4cc744e5e84046033d1bcb2c6584
+    libs/open-logic/olo_base_wconv_xn2n/src/base/vhdl/olo_base_pkg_math.vhd: 98dc671df1be2a346814662dd293e3baff9987075d9c443e1d5f7ee11473fa5d
+    libs/open-logic/olo_base_wconv_xn2n/src/base/vhdl/olo_base_pkg_array.vhd: 5481df24f6c0e81329b7146cb22f56b323bdcac36080f20556a8067bafaa744d
+  metadata_source: index_compat
+  provides_packages: []
+  package_deps:
+    open-logic/olo_base: 4.4.1
+  requested_version: ^4.4.1
+routertl/edge_counter:
+  resolved_version: local
+  url: sdk://src/units/edge_counter.vhd
+  commit: sdk-builtin
+  local_path: libs/routertl/edge_counter
+  library: work
+  files:
+  - libs/routertl/edge_counter/edge_counter.vhd
+  file_hashes:
+    libs/routertl/edge_counter/edge_counter.vhd: 4c5afb9499353785bbd3b46217e96893801a68a3fb67e4f494aecbc41d31dee1
+  metadata_source: sdk-builtin
+routertl/edge_detector:
+  resolved_version: local
+  url: sdk://src/units/edge_detector.vhd
+  commit: sdk-builtin
+  local_path: libs/routertl/edge_detector
+  library: work
+  files:
+  - libs/routertl/edge_detector/edge_detector.vhd
+  file_hashes:
+    libs/routertl/edge_detector/edge_detector.vhd: c5e5b37fff59152c95402d443915e6ab5502a6dc6f09558b1218d57ecfb115a5
+  metadata_source: sdk-builtin
+routertl/infilter:
+  resolved_version: local
+  url: sdk://src/units/infilter.vhd
+  commit: sdk-builtin
+  local_path: libs/routertl/infilter
+  library: work
+  files:
+  - libs/routertl/infilter/infilter.vhd
+  file_hashes:
+    libs/routertl/infilter/infilter.vhd: 079eecefe9205d95d38e1b06157d1f3a26d61f9185efbe531cbb66bc00b21043
+  metadata_source: sdk-builtin
+routertl/infilter_array:
+  resolved_version: local
+  url: sdk://src/units/infilter_array.vhd
+  commit: sdk-builtin
+  local_path: libs/routertl/infilter_array
+  library: work
+  files:
+  - libs/routertl/infilter_array/infilter_array.vhd
+  file_hashes:
+    libs/routertl/infilter_array/infilter_array.vhd: af14d692f5895a9c3d887828a59657b1738f3b9e79d72fd00932655418c14774
+  metadata_source: sdk-builtin
+routertl/lfsr:
+  resolved_version: local
+  url: sdk://src/units/lfsr.vhd
+  commit: sdk-builtin
+  local_path: libs/routertl/lfsr
+  library: work
+  files:
+  - libs/routertl/lfsr/lfsr.vhd
+  file_hashes:
+    libs/routertl/lfsr/lfsr.vhd: bc762ffaf3ef767aabd7148fc2c5c1cdf9e065bf9233480d4e721e8a2efca0dc
+  metadata_source: sdk-builtin
+routertl/phase_accumulator:
+  resolved_version: local
+  url: sdk://src/units/phase_accumulator.vhd
+  commit: sdk-builtin
+  local_path: libs/routertl/phase_accumulator
+  library: work
+  files:
+  - libs/routertl/phase_accumulator/phase_accumulator.vhd
+  file_hashes:
+    libs/routertl/phase_accumulator/phase_accumulator.vhd: ccbf89616d4b2b5ff4831d9bf54c7c14cd93275efcf537ade2d603e361bd480d
+  metadata_source: sdk-builtin
+routertl/ram_dual_port:
+  resolved_version: local
+  url: sdk://src/units/ram_dual_port.vhd
+  commit: sdk-builtin
+  local_path: libs/routertl/ram_dual_port
+  library: work
+  files:
+  - libs/routertl/ram_dual_port/ram_dual_port.vhd
+  file_hashes:
+    libs/routertl/ram_dual_port/ram_dual_port.vhd: 71ed18c0123219d62090d9a3417d57535a9deb0ff46195811d1da514c49f90b1
+  metadata_source: sdk-builtin
+routertl/ram_lut:
+  resolved_version: local
+  url: sdk://src/units/ram_lut.vhd
+  commit: sdk-builtin
+  local_path: libs/routertl/ram_lut
+  library: work
+  files:
+  - libs/routertl/ram_lut/ram_lut.vhd
+  file_hashes:
+    libs/routertl/ram_lut/ram_lut.vhd: a9e1592e992e3e1c5af46b61c7804239f6597482e6f951a17c2e377023a6962d
+  metadata_source: sdk-builtin
+routertl/rea:
+  resolved_version: 1.12.4
+  url: https://github.com/djmazure/rr-rea.git
+  commit: 82cfcc75b75159cf66e1e8b07c0db12b20ccccd5
+  local_path: libs/routertl/rea
+  library: rr_rea
+  library_deps: []
+  files:
+  - libs/routertl/rea/rtl/rr_rea_pkg.vhd
+  - libs/routertl/rea/rtl/rr_rea_dpram.vhd
+  - libs/routertl/rea/rtl/rr_rea_capture_fsm.vhd
+  - libs/routertl/rea/rtl/rr_rea_regbank.vhd
+  - libs/routertl/rea/rtl/rr_rea_cdc.vhd
+  - libs/routertl/rea/rtl/rr_rea_jtag_iface.vhd
+  - libs/routertl/rea/rtl/rr_rea_fill_fsm.vhd
+  - libs/routertl/rea/rtl/rr_rea_crc_sweep.vhd
+  - libs/routertl/rea/rtl/rr_rea_trust_core.vhd
+  - libs/routertl/rea/rtl/rr_rea_axi4lite.vhd
+  - libs/routertl/rea/rtl/rr_rea_axis_window.vhd
+  - libs/routertl/rea/rtl/rr_rea_top.vhd
+  - libs/routertl/rea/rtl/rr_rea_trig_xbar.vhd
+  file_hashes:
+    libs/routertl/rea/rtl/rr_rea_pkg.vhd: e9d04ce92a4953fa80c81bf231f89ee78e7d60c80e16f87d966192ce04fde510
+    libs/routertl/rea/rtl/rr_rea_dpram.vhd: 3ceffddcea604b7ab8e0e92635c8d2a6b7ac975514aba91e9cd709ec90622af1
+    libs/routertl/rea/rtl/rr_rea_capture_fsm.vhd: eaa9ea8be0061d8360ec8dd602a6a29f6e29b5f676ea6c821bd05cca458918fb
+    libs/routertl/rea/rtl/rr_rea_regbank.vhd: e1c1d0d256fdadee25b460920987982524c8b252c8a958a41d6cee35729ba4bc
+    libs/routertl/rea/rtl/rr_rea_cdc.vhd: a6cbcba0fffe13f30188f890da1af72b8d6b0a095bf8edb01e6cd218ea207d8f
+    libs/routertl/rea/rtl/rr_rea_jtag_iface.vhd: 9209d086596d30448adfea9a6b5259e980f97b2f11e5a72ddca14807f626f699
+    libs/routertl/rea/rtl/rr_rea_fill_fsm.vhd: 3d6f45e718ab4c9b1cb74f4e5412e63c60890bbe4678515eafc5ac1534cef6b9
+    libs/routertl/rea/rtl/rr_rea_crc_sweep.vhd: 3b92cc6f5f265f7fdcb5c624d8d45af214c2dcc5042e40b2d6dcdace5e03d77f
+    libs/routertl/rea/rtl/rr_rea_trust_core.vhd: 5ae1ce9282737f4ca298f8525b3e2a77096fb68043a15f6faa327bb58a103ab8
+    libs/routertl/rea/rtl/rr_rea_axi4lite.vhd: 6e1e011389d2c17edb39b2c2876d39d0e7a0a5cb2f66c47b82aae8df1d807f90
+    libs/routertl/rea/rtl/rr_rea_axis_window.vhd: cf7097f2736f1191c92d3c6ca23953b386aa98afa375517cb68e58e7252f1906
+    libs/routertl/rea/rtl/rr_rea_top.vhd: 27fd56c9337af7ee50597eb070a155e3cc5f7a797ced9dc16ad22cda35ec484a
+    libs/routertl/rea/rtl/rr_rea_trig_xbar.vhd: 2e8e9674267d989618bfc00248ea0847423e6d4eb7f4224a8b80e85fa7eb0ea7
+    libs/routertl/rea/rtl/rr_rea_jtag_xilinx7.vhd: aff1afc150f55b99af2f3019f33a0b35fc93a6038db08b5335d13f499c5edd24
+    libs/routertl/rea/rtl/rr_rea_jtag_intel.vhd: 30b422c4a6accb2a570b0a2382098d16335a1e3bb7698c4e0af2a2471d26596b
+    libs/routertl/rea/rtl/rr_rea_jtag_microchip.vhd: ac9ee5a2c7baf4be3f8c4fc47efff26476d665519aa3690ca64b779c054c22c2
+    libs/routertl/rea/constraints/rr_rea_scoped.xdc: 5597ad21258ef87b361473bf200ac4d91b996f349e52f7c08871578919bc62f4
+    libs/routertl/rea/constraints/rr_rea_xilinx7_scoped.xdc: a9f8af58907f20f5f9ee8e2342908120d875762d4b01541d366f206b745e373b
+    libs/routertl/rea/constraints/rr_rea_scoped.sdc: 9f518f38cef8e1460cf4f47112a783fcadc98bed3902e803b854bc428172f8b5
+    libs/routertl/rea/constraints/rr_rea_scoped_microchip.sdc: 7601235205ceb44e4fd78c11cfe42fd0852bbd6f85f06cc5a6535fce13d362b9
+    libs/routertl/rea/requirements.yml: c8655fcabaea3498977493b1cdd7061fc8224f271889983ba3864451e0edd68f
+    libs/routertl/rea/rea_regbank.yml: 53f048279d8e166103fb5f2da80788ef1aee99b13564c11792898dc91c2caad6
+    libs/routertl/rea/verif/rr_rea_build_id_stub.vhd: c8f6eea3bbfd691cf03766cd356af2f2453b558e1c0ffa69e80d5b26fd80504d
+  metadata_source: ip.yml
+  provides_packages: []
+  synth_only_files:
+  - libs/routertl/rea/rtl/rr_rea_jtag_xilinx7.vhd
+  - libs/routertl/rea/rtl/rr_rea_jtag_intel.vhd
+  - libs/routertl/rea/rtl/rr_rea_jtag_microchip.vhd
+  synth_only_files_by_vendor:
+    xilinx:
+    - libs/routertl/rea/rtl/rr_rea_jtag_xilinx7.vhd
+    altera:
+    - libs/routertl/rea/rtl/rr_rea_jtag_intel.vhd
+    microchip:
+    - libs/routertl/rea/rtl/rr_rea_jtag_microchip.vhd
+  scoped_constraints:
+  - path: libs/routertl/rea/constraints/rr_rea_scoped.xdc
+    ref: rr_rea_top
+  - path: libs/routertl/rea/constraints/rr_rea_xilinx7_scoped.xdc
+    ref: rr_rea_xilinx7
+  - path: libs/routertl/rea/constraints/rr_rea_scoped.sdc
+    kind: sdc
+    ref: rr_rea_top
+  - path: libs/routertl/rea/constraints/rr_rea_scoped_microchip.sdc
+    kind: sdc
+    ref: rr_rea_top
+    vendor: microchip
+  regbank_schema: libs/routertl/rea/rea_regbank.yml
+  requirements: libs/routertl/rea/requirements.yml
+  generation_hooks:
+    pre_build:
+    - name: rr_rea_build_id
+      script: routertl:sdk/scripts/rr_rea_build_id.py
+      args:
+      - --ip-yml
+      - libs/routertl/rea/ip.yml
+      - --out
+      - ${generated_dir}/rr_rea_build_id_pkg.vhd
+      watch:
+      - libs/routertl/rea/rtl/*.vhd
+      - libs/routertl/rea/ip.yml
+      outputs:
+      - path: ${generated_dir}/rr_rea_build_id_pkg.vhd
+        library: rr_rea
+  generated_files:
+  - path: ${generated_dir}/rr_rea_build_id_pkg.vhd
+    library: rr_rea
+  requested_version: ==1.12.4
+routertl/rr_ddr_stream:
+  resolved_version: 0.3.7
+  url: https://github.com/djmazure/rr-ddr-stream.git
+  commit: 2319261cb86f39b3a91d37cff0e716b12ea65112
+  local_path: libs/routertl/rr_ddr_stream
+  library: rr
+  library_deps:
+  - olo
+  files:
+  - libs/routertl/rr_ddr_stream/rtl/ddr_stream_pkg.vhd
+  - libs/routertl/rr_ddr_stream/rtl/support/functions_pkg.vhd
+  - libs/routertl/rr_ddr_stream/rtl/support/ddr_sync_cdc.vhd
+  - libs/routertl/rr_ddr_stream/rtl/support/xilinx/rr_fifo_async_mixed_xpm_body.vhd
+  - libs/routertl/rr_ddr_stream/rtl/support/rr_fifo_async_mixed.vhd
+  - libs/routertl/rr_ddr_stream/rtl/support/xilinx/rr_fifo_sync_xpm_body.vhd
+  - libs/routertl/rr_ddr_stream/rtl/support/rr_fifo_sync.vhd
+  - libs/routertl/rr_ddr_stream/rtl/ddr_fifo_intf.vhd
+  - libs/routertl/rr_ddr_stream/rtl/axi4r.vhd
+  - libs/routertl/rr_ddr_stream/rtl/ptr_mgr.vhd
+  - libs/routertl/rr_ddr_stream/rtl/burstr_setter.vhd
+  - libs/routertl/rr_ddr_stream/rtl/downloader.vhd
+  - libs/routertl/rr_ddr_stream/rtl/support/skid_buffer.vhd
+  - libs/routertl/rr_ddr_stream/rtl/axi4w.vhd
+  - libs/routertl/rr_ddr_stream/rtl/burstw_setter.vhd
+  - libs/routertl/rr_ddr_stream/rtl/uploader.vhd
+  - libs/routertl/rr_ddr_stream/rtl/ddr_stream_axi.vhd
+  - libs/routertl/rr_ddr_stream/rtl/avmm/avmm_r.vhd
+  - libs/routertl/rr_ddr_stream/rtl/avmm/downloader_avmm.vhd
+  - libs/routertl/rr_ddr_stream/rtl/avmm/avmm_w.vhd
+  - libs/routertl/rr_ddr_stream/rtl/avmm/uploader_avmm.vhd
+  - libs/routertl/rr_ddr_stream/rtl/ddr_stream_avmm.vhd
+  - libs/routertl/rr_ddr_stream/rtl/ddr_stream_fic.vhd
+  file_hashes:
+    libs/routertl/rr_ddr_stream/rtl/ddr_stream_pkg.vhd: 5ac65eccb127395b3174c9805d0a9b7fa1d0d69adcfd48482db15c7b4d55b11d
+    libs/routertl/rr_ddr_stream/rtl/support/functions_pkg.vhd: bf22ad044dd3ec7cb895f1ada1770d2d93a6ecfc9c5d5e48e96543f0f585d7fc
+    libs/routertl/rr_ddr_stream/rtl/support/ddr_sync_cdc.vhd: ff6ab942edd5b69ff6550a6cac4f8bc035bf4b89e2b11cc908e46c5d19cd11d5
+    libs/routertl/rr_ddr_stream/rtl/support/xilinx/rr_fifo_async_mixed_xpm_body.vhd: 4a062993dc207b249a7f0764729341df0c22cbf01bbf04cb2c351739b788eda0
+    libs/routertl/rr_ddr_stream/rtl/support/rr_fifo_async_mixed.vhd: bf290f4ad095933b58b2158672fa4c2e6418acf3d0fc3394e60898552ee119c7
+    libs/routertl/rr_ddr_stream/rtl/support/xilinx/rr_fifo_sync_xpm_body.vhd: e59ae163b8b92b1469a8555822b46e08585b5d17912bb4cbc5005bfab9901be2
+    libs/routertl/rr_ddr_stream/rtl/support/rr_fifo_sync.vhd: 48ca1e5981ad2b4d7e8095d88c1338b18aa45b126961365dc8b3d4f8335d3197
+    libs/routertl/rr_ddr_stream/rtl/ddr_fifo_intf.vhd: 56a098b4c515e37c5e88f7f54b16ed267d8fea0e53dfd0f29a3b1c8bcb8fdf47
+    libs/routertl/rr_ddr_stream/rtl/axi4r.vhd: cac7adc95832e62b2c44387651806519cb5981029883c2b09fd1781fb5ef1aa6
+    libs/routertl/rr_ddr_stream/rtl/ptr_mgr.vhd: 5b611bba9e09f81afb6dc95cfba51aaa5dee8ea861b1bb551e80fed45cd02962
+    libs/routertl/rr_ddr_stream/rtl/burstr_setter.vhd: d10cb713c9e66fa9851cd0844a234ada8692ea46e87152eb832f7f1a7d93d102
+    libs/routertl/rr_ddr_stream/rtl/downloader.vhd: acedb04b18877bfdbdffe1236ad579d889c48a2cab47b814b5d68a0aaecc4e45
+    libs/routertl/rr_ddr_stream/rtl/support/skid_buffer.vhd: 0292096dc6eb7e894a3a2006c53329685a1a85cd04fc67d0ce627119eb0fa804
+    libs/routertl/rr_ddr_stream/rtl/axi4w.vhd: 903bc4cfe3283709552f3006a5fce048f8a031a0fa827461081dd8d48e1befeb
+    libs/routertl/rr_ddr_stream/rtl/burstw_setter.vhd: c515d19b7d91295f03b90d8e0517ebc3ca9a5d4575b05b9848ab32a9b895d087
+    libs/routertl/rr_ddr_stream/rtl/uploader.vhd: 0dfb0e7a42fefd27bf76367ff20460b312b1034d6ce9ed79fbee7b1228dba855
+    libs/routertl/rr_ddr_stream/rtl/ddr_stream_axi.vhd: 7c2954953a565f3dd593acccacbbd5a0ba28f65e87a48c0e787ed9a8e51daee0
+    libs/routertl/rr_ddr_stream/rtl/avmm/avmm_r.vhd: 194394b087765bbc538873bc27930d500febe3b0cec77f072d4c559641249df7
+    libs/routertl/rr_ddr_stream/rtl/avmm/downloader_avmm.vhd: 39009a716ef9454558445010ef8db04e537b344614acc8e0e762ec5da647b3eb
+    libs/routertl/rr_ddr_stream/rtl/avmm/avmm_w.vhd: 9873900ee9eaa44eec6e83a8cb10200da2ca6b5d62a13069c2b849f65b0a0436
+    libs/routertl/rr_ddr_stream/rtl/avmm/uploader_avmm.vhd: e015d4267efee010eb007ffdb923744e2d35a3964b256e01704848b334c98c82
+    libs/routertl/rr_ddr_stream/rtl/ddr_stream_avmm.vhd: 7a71ee5d4dd893525de2dc6c5ebf3d9cb1d419da78bf99fe9fa956ee675fc114
+    libs/routertl/rr_ddr_stream/rtl/ddr_stream_fic.vhd: 5773f23953f0c83a98b8b8e838ceaf7dfb921a6cd7a04f81107a46888b8759a3
+    libs/routertl/rr_ddr_stream/rtl/support/xilinx/rr_fifo_async_xpm_body.vhd: 6f52f71e5bb666b69a56d1c155571c6bb2089948db7b8a8de67691752f402c30
+    libs/routertl/rr_ddr_stream/rtl/support/intel/rr_fifo_sync_xpm_body_stub.vhd: 9d29f394ebd9c98a6e3887f8b002b464ea774ff95905aa469febd867cdfad9fe
+    libs/routertl/rr_ddr_stream/rtl/support/intel/rr_fifo_async_xpm_body_stub.vhd: c85b3b253ee6992ce6ee33b94674cfacca0bbfc91f1f8d02b63a0f47bfff36d0
+    libs/routertl/rr_ddr_stream/rtl/support/intel/rr_fifo_async_mixed_xpm_body_stub.vhd: b94f75c9d38e0644164cfa3f01ba5fbe36e5c789741e86b417533c1824fb69fb
+    libs/routertl/rr_ddr_stream/constraints/ddr_stream_cdc_scoped.xdc: 54cfb5d141ee6f3bc7a3d85a08cf6b79abfc189189e120965e12ce4cd2145307
+    libs/routertl/rr_ddr_stream/constraints/ddr_stream_cdc_scoped.sdc: f8186f8172a43238919a07a132c6097dc9a08167f5af9d582f032df51055735e
+    libs/routertl/rr_ddr_stream/requirements.yml: aca69b559d3eafba359ef01c39329a31648eb9fd72eadcf936d27c145f759d85
+  metadata_source: ip.yml
+  provides_packages: []
+  synth_only_files:
+  - libs/routertl/rr_ddr_stream/rtl/support/xilinx/rr_fifo_sync_xpm_body.vhd
+  - libs/routertl/rr_ddr_stream/rtl/support/xilinx/rr_fifo_async_xpm_body.vhd
+  - libs/routertl/rr_ddr_stream/rtl/support/xilinx/rr_fifo_async_mixed_xpm_body.vhd
+  - libs/routertl/rr_ddr_stream/rtl/support/intel/rr_fifo_sync_xpm_body_stub.vhd
+  - libs/routertl/rr_ddr_stream/rtl/support/intel/rr_fifo_async_xpm_body_stub.vhd
+  - libs/routertl/rr_ddr_stream/rtl/support/intel/rr_fifo_async_mixed_xpm_body_stub.vhd
+  synth_only_files_by_vendor:
+    xilinx:
+    - libs/routertl/rr_ddr_stream/rtl/support/xilinx/rr_fifo_sync_xpm_body.vhd
+    - libs/routertl/rr_ddr_stream/rtl/support/xilinx/rr_fifo_async_xpm_body.vhd
+    - libs/routertl/rr_ddr_stream/rtl/support/xilinx/rr_fifo_async_mixed_xpm_body.vhd
+    altera:
+    - libs/routertl/rr_ddr_stream/rtl/support/intel/rr_fifo_sync_xpm_body_stub.vhd
+    - libs/routertl/rr_ddr_stream/rtl/support/intel/rr_fifo_async_xpm_body_stub.vhd
+    - libs/routertl/rr_ddr_stream/rtl/support/intel/rr_fifo_async_mixed_xpm_body_stub.vhd
+    microchip:
+    - libs/routertl/rr_ddr_stream/rtl/support/intel/rr_fifo_sync_xpm_body_stub.vhd
+    - libs/routertl/rr_ddr_stream/rtl/support/intel/rr_fifo_async_xpm_body_stub.vhd
+    - libs/routertl/rr_ddr_stream/rtl/support/intel/rr_fifo_async_mixed_xpm_body_stub.vhd
+    microsemi:
+    - libs/routertl/rr_ddr_stream/rtl/support/intel/rr_fifo_sync_xpm_body_stub.vhd
+    - libs/routertl/rr_ddr_stream/rtl/support/intel/rr_fifo_async_xpm_body_stub.vhd
+    - libs/routertl/rr_ddr_stream/rtl/support/intel/rr_fifo_async_mixed_xpm_body_stub.vhd
+  scoped_constraints:
+  - path: libs/routertl/rr_ddr_stream/constraints/ddr_stream_cdc_scoped.xdc
+    ref: ddr_stream_axi
+  - path: libs/routertl/rr_ddr_stream/constraints/ddr_stream_cdc_scoped.sdc
+    kind: sdc
+    ref: ddr_stream_axi
+  requirements: libs/routertl/rr_ddr_stream/requirements.yml
+  requested_version: ^0.3.6

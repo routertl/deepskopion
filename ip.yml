@@ -1,0 +1,208 @@
+# deepskopion — declarative Agilex 5 HPS manifest (DS-P1.52, DS-P2.196).
+#
+# The HPS, its fabric bridges and its io96b DDR4 EMIF are declared here by
+# parameter. `rr synth run`'s pre-synth HPS generator owns the rest: with
+# `hps_regenerate: true` (RTL-P2.2101) it makes agilex_hps.ip and
+# emif_io96b_hps.ip from these values under the user's Quartus Pro, in
+# build/rr_ip_regen/, adds both to the system BY FILE (add_component), and the
+# full-system qsys-generate builds their synthesis trees in context. The
+# source tree holds no Altera-generated file.
+#
+# add_component by file is the mechanism proven on silicon: add_instance
+# resolves the HPS by IP-catalog type, which on this bench's catalog falls back
+# to an empty Generic Component that fits clean and leaves no HPS partition in
+# the .sof (quartus_pfg Error 20809, DS-P1.52). The retired hand-authored
+# hw/quartus/de25/de25_hps_subsys.tcl took that path. The bridge and EMIF shape
+# mirrors rr-ddr-stream's de25_agilex5_ddr_validator (export_f2sdram +
+# export_lwh2f + hps_emif), validated end-to-end on DE25 silicon.
+#
+# Pure-rr discipline: no vendor TCL workaround.
+
+platform:
+  hps:
+    system: hps_subsys
+    vendor: altera
+
+ips:
+  # ── Agilex 5 hard processor system ──
+  - name: hps
+    type: intel_agilex_5_soc
+    vendor: altera
+    # Tool fact: Quartus Pro 25.3 provides intel_agilex_5_soc 13.0.0.
+    version: "13.0.0"
+    config:
+      # RTL-P2.2101 (DS-P2.196): rr regenerates the HPS and EMIF .ip files from the
+      # values below, under build/rr_ip_regen/, with the user's Quartus Pro 25.3.
+      # No Altera-generated file is committed. Values harvested from the former
+      # GUI-made .ip files (0 parameter differences on regeneration).
+      hps_regenerate: true
+      hps_parameters:
+        F2H_IRQ_Enable: true
+        I2C1_Mode: default
+        IO_INPUT_DELAY14: 21
+        IO_OUTPUT_DELAY12: 21
+        MPU_Events_Enable: false
+        Periph_clk_emac0_sel: 250
+        Periph_clk_emac1_sel: 250
+        Periph_clk_emac2_sel: 250
+        Pwr_mpu_l3_cache_size: 2
+        SPIM0_Mode: Single_slave_selects
+        USB0_Mode: default
+      emif_parameters:
+        EMIF_PROTOCOL: DDR4_COMP
+        EMIF_TOPOLOGY: 1x32
+        EMIF_RZQ_SHARING: false
+        EMIF_REF_CLK_SHARING: false
+      emif_child_parameters:
+        emif_0_ddr4comp:
+          CTRL_RD_DBI_EN: true
+          JEDEC_OVERRIDE_TABLE_PARAM_NAME: MEM_TCCD_L_NS,MEM_TCCD_S_NS,MEM_TRRD_L_NS,MEM_TRRD_S_NS,MEM_TRCD_NS,MEM_TRP_NS,MEM_TWTR_L_NS,MEM_TWTR_S_NS,MEM_TCKSRE_NS,MEM_TCKSRX_NS,MEM_TCKE_NS,MEM_TRC_NS,MEM_TCKESR_CYC
+          MEM_CL_CYC: 18.0
+          MEM_DIE_DENSITY_GBITS: 4
+          MEM_SPEEDBIN: 2666T
+          MEM_TCCD_L_NS: 6.0
+          MEM_TCCD_S_NS: 4.0
+          MEM_TCKESR_CYC: 8.0
+          MEM_TCKE_NS: 7.0
+          MEM_TCKSRE_NS: 13.0
+          MEM_TCKSRX_NS: 13.0
+          MEM_TDQSCK_MAX_MIN_NS: 0.17
+          MEM_TRCD_NS: 13.5
+          MEM_TRC_NS: 45.5
+          MEM_TRFC_NS: 260.0
+          MEM_TRP_NS: 13.5
+          MEM_TRRD_L_NS: 7.0
+          MEM_TRRD_S_NS: 6.0
+          MEM_TWTR_L_NS: 8.0
+          MEM_TWTR_S_NS: 3.0
+          MEM_TXS_NS: 270.0
+          PHY_REFCLK_ADVANCED_SELECT_EN: true
+          PHY_REFCLK_FREQ_MHZ: 150.0
+          PHY_REFCLK_FREQ_MHZ_AUTOSET_EN: false
+          PHY_SWIZZLE_MAP: PIN_SWIZZLE_CH0_DQS0=0 2 4 6 3 1 5 7;PIN_SWIZZLE_CH0_DQS1=8 10 14 12 9 11 13 15;PIN_SWIZZLE_CH0_DQS2=21 20 18 16 17 19 22 23;PIN_SWIZZLE_CH0_DQS3=30 28 24 26 27 31 29 25;
+      emif_ports:
+      - noc_aclk_0
+      - noc_rst_n_0
+      - s0_noc_axi4lite_clock
+      - s0_noc_axi4lite_reset_n
+      - s0_noc_axi4lite_awaddr
+      - s0_noc_axi4lite_awvalid
+      - s0_noc_axi4lite_awready
+      - s0_noc_axi4lite_araddr
+      - s0_noc_axi4lite_arvalid
+      - s0_noc_axi4lite_arready
+      - s0_noc_axi4lite_wdata
+      - s0_noc_axi4lite_wvalid
+      - s0_noc_axi4lite_wready
+      - s0_noc_axi4lite_rresp
+      - s0_noc_axi4lite_rdata
+      - s0_noc_axi4lite_rvalid
+      - s0_noc_axi4lite_rready
+      - s0_noc_axi4lite_bresp
+      - s0_noc_axi4lite_bvalid
+      - s0_noc_axi4lite_bready
+      - s0_noc_axi4lite_awprot
+      - s0_noc_axi4lite_wstrb
+      - s0_noc_axi4lite_arprot
+      - s0_axi4_awaddr
+      - s0_axi4_awburst
+      - s0_axi4_awid
+      - s0_axi4_awlen
+      - s0_axi4_awlock
+      - s0_axi4_awqos
+      - s0_axi4_awsize
+      - s0_axi4_awvalid
+      - s0_axi4_awuser
+      - s0_axi4_awprot
+      - s0_axi4_awready
+      - s0_axi4_araddr
+      - s0_axi4_arburst
+      - s0_axi4_arid
+      - s0_axi4_arlen
+      - s0_axi4_arlock
+      - s0_axi4_arqos
+      - s0_axi4_arsize
+      - s0_axi4_arvalid
+      - s0_axi4_aruser
+      - s0_axi4_arprot
+      - s0_axi4_arready
+      - s0_axi4_wdata
+      - s0_axi4_wstrb
+      - s0_axi4_wlast
+      - s0_axi4_wvalid
+      - s0_axi4_wready
+      - s0_axi4_bready
+      - s0_axi4_bid
+      - s0_axi4_bresp
+      - s0_axi4_bvalid
+      - s0_axi4_rready
+      - s0_axi4_rdata
+      - s0_axi4_rid
+      - s0_axi4_rlast
+      - s0_axi4_rresp
+      - s0_axi4_rvalid
+      - s0_axi4_wuser
+      - s0_axi4_ruser
+      - mem_0_cke
+      - mem_0_odt
+      - mem_0_cs_n
+      - mem_0_a
+      - mem_0_ba
+      - mem_0_bg
+      - mem_0_act_n
+      - mem_0_par
+      - mem_0_dq
+      - mem_0_dqs_t
+      - mem_0_dqs_c
+      - mem_0_alert_n
+      - mem_0_dbi_n
+      - mem_0_ck_t
+      - mem_0_ck_c
+      - mem_0_reset_n
+      - oct_rzqin_0
+      - ref_clk
+
+      boot_device: SDMMC
+      sdmmc_mode: "4-bit"
+      uart_mode: "No_flow_control"      # UART1 console (0x10c02100, ttyS1)
+      emac0_mode: "RGMII_with_MDIO"
+      emac0_gtx_clk_mhz: 125.0
+      h2f_width: 128                     # as in the GUI-made .ip (H2F_Width 128); CSR rides lwh2f
+      lwh2f_width: 32                    # lightweight HPS->fabric AXI-Lite -> CSR
+      # f2sdram: 256-bit ACE5-Lite FPGA->HPS-DDR datapath (matches
+      # deepskopion_de25_top.vhd's f2sdram_adapter_axi4_sub_* 256-bit bus).
+      f2sdram_width: 256
+      f2sdram_mode: "ace5lite"
+      f2sdram_address_width: 32
+      f2s_width: 256                     # as in the GUI-made .ip; the coherent fpga2hps is looped internally
+      eosc1_clk_mhz: 25.0
+      f2h_free_clk_mhz: 125
+      # DS-P2.155: now TRUE — the top instantiates a fabric IOPLL
+      # (de25_fabric_pll, vendor_ip_variants below) that produces the 100 MHz clk_sys feeding
+      # fabric_clk_clk. Before DS-P2.155 this declared 100 MHz while the conduit
+      # was fed a bare 50 MHz CLOCK2_50 (the RTL-P3.1755 mismatch this fixes).
+      fabric_clk_mhz: 100.0              # CLOCK2_50 -> 100 MHz IOPLL product clock
+      # Re-export the bridge AXI interfaces at the hps_subsys top so
+      # deepskopion_de25_top.vhd's u_hps port map has real ports to bind.
+      export_f2sdram: true
+      export_lwh2f: true
+      # ── HPS DDR4 memory controller (io96b EMIF, RTL-P3.722) ──
+      # Without an EMIF the HPS has no DRAM controller and the SPL never
+      # relocates — the boot-critical fix. Adds the emif_io96b_hps instance
+      # (EMIF_PROTOCOL=DDR4_COMP + the DDR4 timings declared above, board
+      # fact — NOT re-derived; rr writes and reads back every value) and exports the DDR4
+      # physical pins deepskopion_de25_top.vhd passes straight through to
+      # the board DDR4_*/DDR4_REFCLK/DDR4_RZQ pins.
+      hps_emif: true
+# RTL-P2.2101: the DS-P2.155 fabric IOPLL (CLOCK2_50 x2 -> 100 MHz clk_sys),
+# made by rr under build/rr_ip_regen/; its .qip is added to IP_FILES.
+vendor_ip_variants:
+- name: de25_fabric_pll
+  type: altera_iopll
+  parameters:
+    gui_reference_clock_frequency: 50.0
+    gui_operation_mode: direct
+    gui_number_of_clocks: 1
+    gui_output_clock_frequency0: 100.0
+    gui_phase_shift0: 0.0
+    gui_duty_cycle0: 50.0

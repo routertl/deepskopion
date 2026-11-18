@@ -1,0 +1,153 @@
+# responder — Requirements catalog (contract-first per ROUTERTL convention)
+#
+# Each RESP-REQ-N is referenced by ≥1 cocotb test in
+# hw/sim/cocotb/tests/responder/test_*.py via @requires("RESP-REQ-N").
+# `rr sim coverage-map` enforces the mapping.
+#
+# Covers two modules — i2c_injector and spi_injector — that share the
+# same regbank-fed-FIFO + slave-drives-bus shape (DS-P2.51 Phase 2).
+#
+# v0.1 SCOPE: hostile / negative paths and FIFO-empty behaviour count.
+# Per the bug-finding-is-success rule, an adversarial run that finds
+# nothing is a yellow flag. T-tier tickets land here when a REQ proves
+# the implementation diverges from the contract.
+
+ip: responder
+hdl_file: i2c_injector.vhd
+version: 0.1
+
+# DS-P2.187: `ip: responder` names no entity, so contract-check failed with
+# no-matching-hdl and never compared a port. This contract covers two
+# entities (i2c_injector, spi_injector) but contract-check shape-checks one
+# hdl_file per contract. It pins i2c_injector, the IP's declared top
+# (ip.yml hdl.top_module). OPEN GAP: spi_injector's ports are NOT
+# shape-checked by this contract; closing it needs a separate contract (or
+# multi-entity support in contract-check). Port shape scaffolded from
+# i2c_injector (rr ip contract init) and reviewed.
+port_contract:
+  slaves:
+    []
+  masters:
+    []
+  scalars:
+    - { name: TIMESTAMP, dir: in, width: "C_TIMESTAMP_WIDTH-1 downto 0" }
+    - { name: ENABLE, dir: in, width: "1" }
+    - { name: CONTROL, dir: in, width: "31 downto 0" }
+    - { name: DATAIN, dir: in, width: "31 downto 0" }
+    - { name: DATAIN_VLD, dir: in, width: "1" }
+    - { name: STATUS, dir: out, width: "31 downto 0" }
+    - { name: SCL, dir: in, width: "1" }
+    - { name: SDA_I, dir: in, width: "1" }
+    - { name: SDA_O, dir: out, width: "1" }
+    - { name: SDA_T, dir: out, width: "1" }
+    - { name: DBG, dir: out, width: "19 downto 0" }
+    - { name: DBG_FIFO, dir: out, width: "15 downto 0" }
+    - { name: DBG_SHIFT, dir: out, width: "7 downto 0" }
+    - { name: DBG2, dir: out, width: "7 downto 0" }
+  clocks:
+    - { name: CLK }
+  resets:
+    - { name: RST, polarity: active_high }
+
+parameters:
+  - { name: G_FIFO_DEPTH, type: integer, default: 6 }
+  - { name: G_FIFO_FWFT, type: integer, default: 1 }
+  - { name: G_CLK_FREQ_HZ, type: natural, default: "100_000_000" }
+
+functional_contract:
+
+  # ── I2C injector ─────────────────────────────────────────────────────
+  - id: I2C-INJ-REQ-1
+    kind: behavioral
+    desc: >-
+      A master read at the address configured via CONTROL[7:1] returns
+      the bytes the PS pushed into DATAIN, in FIFO order. The slave
+      drives SDA_T='0', SDA_O=byte_bit per SCL edge while transmitting.
+
+  - id: I2C-INJ-REQ-2
+    kind: behavioral
+    desc: >-
+      Multi-byte master read transactions consume one FIFO entry per
+      acknowledged byte. After the master NAKs the last byte the FIFO
+      pointer rests on the next un-consumed entry.
+
+  - id: I2C-INJ-REQ-3
+    kind: behavioral
+    desc: >-
+      A master read at an unmatched address does NOT consume any FIFO
+      entry. STATUS[fifo_empty] and STATUS[fifo data count] are
+      unchanged across the failed transaction.
+
+  - id: I2C-INJ-REQ-4
+    kind: behavioral
+    desc: >-
+      DATAIN writes with DATAIN_VLD='1' and ENABLE='1' push the low 8
+      bits of DATAIN into the TX FIFO; STATUS[data count] increments;
+      STATUS[fifo_empty] clears.
+
+  - id: I2C-INJ-REQ-5
+    kind: behavioral
+    desc: >-
+      CONTROL[9]=1 drains the TX FIFO: STATUS[fifo_empty] returns to
+      '1' and the data count returns to 0 within ≤2 clk_sys cycles.
+      The bit is self-clearing.
+
+  - id: I2C-INJ-REQ-6
+    kind: behavioral
+    desc: >-
+      With the FIFO empty, a master read at the configured address
+      either NAKs or returns 0xFF (open-drain default). Behaviour is
+      pinned by this REQ — `rr sim run` records which path the
+      implementation actually takes for the v0.1 baseline.
+
+  - id: I2C-INJ-REQ-7
+    kind: behavioral
+    desc: >-
+      Bus-wedge recovery (DS-T2.21 / Haz.61). If a master abandons a read
+      mid-byte (no clean STOP) while the slave is driving SDA low, and SCL
+      then idles HIGH, the free-running SCL timeout must return the FSM to
+      I2C_WAIT_START AND release SDA (SDA_T='1'). The slave must never hold
+      SDA low while waiting for a START — otherwise the open-drain bus
+      wedges into permanent EAGAIN, unrecoverable in software.
+
+  # ── SPI injector ─────────────────────────────────────────────────────
+  - id: SPI-INJ-REQ-1
+    kind: behavioral
+    desc: >-
+      With CS_N='0' and 8 SCLK cycles applied (mode 0), MISO returns
+      the MSB-first bits of the first FIFO byte pushed via DATAIN.
+
+  - id: SPI-INJ-REQ-2
+    kind: behavioral
+    desc: >-
+      A multi-byte transaction (CS_N='0' for N×8 SCLK cycles) returns
+      the first N FIFO entries on MISO in FIFO order.
+
+  - id: SPI-INJ-REQ-3
+    kind: behavioral
+    desc: >-
+      CS_N='1' (idle) holds MISO_T='1' (Hi-Z). The bus is released
+      between transactions; the slave is silent.
+
+  - id: SPI-INJ-REQ-4
+    kind: behavioral
+    desc: >-
+      DATAIN writes with DATAIN_VLD='1' and ENABLE='1' push the low 8
+      bits of DATAIN into the TX FIFO; STATUS[data count] increments;
+      STATUS[fifo_empty] clears.
+
+  - id: SPI-INJ-REQ-5
+    kind: behavioral
+    desc: >-
+      With the FIFO empty, a master transaction reads zeros on MISO
+      (no-data default). Behaviour pinned by this REQ for the v0.1
+      baseline.
+
+  - id: SPI-INJ-REQ-6
+    kind: behavioral
+    desc: >-
+      MOSI bytes received during a transaction are exposed on the
+      SPI_RX_DOUT path of the underlying spi_slave (one byte per
+      every 8 SCLK rising edges). The injector wrapper currently
+      drops these; this REQ keeps the slave's RX contract documented
+      for future use.

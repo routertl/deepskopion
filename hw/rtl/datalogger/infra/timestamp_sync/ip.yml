@@ -1,0 +1,44 @@
+# timestamp_sync — Periodic timestamp tick emitter
+#
+# Fires a TS_MSG whenever the upper-bit slice of the global TIMESTAMP
+# bus changes. Used by datalogger_gather to mark wall-clock anchors in
+# the burst output stream (so the host can recover absolute time even
+# during quiet periods).
+#
+# Part of the DS-P3.21 infra-IP bundle. See section 8b of the
+# standards doc for R1..R8.
+
+ip:
+  name: timestamp_sync
+  library: tich
+  language: vhdl
+  description: |
+    Edge-triggered timestamp tick emitter. Watches TIMESTAMP for
+    transitions at the slice bit G_TIMESTAMP_BIT (default 14 — 16 ms
+    ticks at 1 µs counter resolution). On transition, emits a
+    TS_MSG_OUT carrying the upper TIMESTAMP slice. Used by
+    datalogger_gather as the wall-clock anchor message source.
+
+hdl:
+  top_module: timestamp_sync
+  top_sim:    timestamp_sync
+
+paths:
+  sources: .
+
+synthesis:
+  mode: rtl
+  sources:
+    - timestamp_sync.vhd
+
+build:
+  simulation:
+    sources: []
+    test_dir: ../../../../sim/cocotb/tests/datalogger/infra/timestamp_sync
+    simulator: nvc
+    waves:
+      formats: [fst]
+
+requirements: requirements.yml
+
+ips: []
