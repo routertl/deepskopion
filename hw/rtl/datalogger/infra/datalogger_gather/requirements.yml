@@ -37,8 +37,8 @@ port_contract:
     - { name: DOUT_MSG_TYPE,      dir: out, width: "15 downto 0" }
     - { name: DOUT_VALID, dir: out, width: "1" }
     - { name: DOUT_REQ,        dir: in,  width: "1" }
-    - { name: FIFO_CSR,   dir: out, width: "t_fifoCsr" }
-    - { name: PROTO_COUNTERS,   dir: out, width: "t_protoCounterArray(0 to C_NUM_PROTO_COUNTERS-1)" }
+    - { name: FIFO_CSR,   dir: out, width: "t_fifo_csr" }
+    - { name: PROTO_COUNTERS,   dir: out, width: "t_proto_counter_array(0 to C_NUM_PROTO_COUNTERS-1)" }
     - { name: EDGE_ERR_CNTS,      dir: out, width: "C_EDGE_DATALOGGERS*32-1 downto 0" }
     - { name: EDGE_MAX_IVALS,     dir: out, width: "C_EDGE_DATALOGGERS*C_EDGE_MAXFREQ_WIDTH-1 downto 0" }
     - { name: EDGE_MAX_NEW,       dir: out, width: "C_EDGE_DATALOGGERS-1 downto 0" }

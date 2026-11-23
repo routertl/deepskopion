@@ -51,10 +51,14 @@
 # ---------------------------------------------------------------------------
 # Arguments injected by rr's Microchip gen_project.tcl dispatcher.
 # ---------------------------------------------------------------------------
-# $project_dir / $mss_cxz are provided by the rr Libero backend when it sources
-# a tcl_hooks.gen_project script (see sdk/engine/supported_vendors.yml). Fall
-# back to the declared path so the file is also runnable stand-alone in Libero.
-if {![info exists mss_cxz]} {
+# $project_dir is provided by the rr Libero backend when it sources a
+# tcl_hooks.gen_project script (see sdk/engine/supported_vendors.yml). The MSS
+# component is the .cxz rr generates from the target's mss_config (.cfg) and
+# passes as $g_mc_mss_file (RTL-P1.322); a caller may still set $mss_cxz. The
+# last fallback is the declared generated path, for a stand-alone Libero run.
+if {[info exists g_mc_mss_file] && $g_mc_mss_file ne ""} {
+    set mss_cxz $g_mc_mss_file
+} elseif {![info exists mss_cxz]} {
     set mss_cxz "hw/libero/pfsoc/mss/disco_mss.cxz"
 }
 
@@ -72,12 +76,12 @@ if {![info exists mss_cxz]} {
 project_settings -vhdl_mode {VHDL_2008}
 
 
-# rr_ddr_stream ships each rr_fifo_*_xpm_body entity TWICE (support/xilinx/
-# real XPM body vs support/intel/ stub; the stub exists precisely for
-# non-Xilinx flows — its header says so). Two consequences on Libero:
-#   * the duplicate must be resolved to the stub (use_source_file; bare module
-#     name — the `<module>::<lib>` form is rejected, probed live);
-#   * Libero's auto synthesis fileset only carries HIERARCHY-REACHABLE modules,
+# rr_ddr_stream ships each rr_fifo_*_xpm_body entity in a Xilinx body and a
+# non-Xilinx stub. A Microchip build receives only the Microchip slice of the
+# package (RouteRTL RTL-P2.2246), so there is no duplicate to resolve; the
+# use_source_file block that once picked the stub made Libero print two
+# "does not define module" Errors per build and is removed (DS-P1.113).
+# Libero's auto synthesis fileset still only carries HIERARCHY-REACHABLE modules,
 #     and the stubs are referenced solely from the DORMANT (fifo_impl=olo)
 #     GEN_XPM generates of rr_fifo_async_mixed/rr_fifo_sync — so Libero drops
 #     them while Synplify's analyzer still requires the directly-instantiated
@@ -90,17 +94,6 @@ project_settings -vhdl_mode {VHDL_2008}
 #     resolver order. The Xilinx xpm bodies are excluded (`library xpm` does
 #     not exist on Microchip).
 build_design_hierarchy
-foreach {stub module} {
-    rr_fifo_async_mixed_xpm_body_stub.vhd rr_fifo_async_mixed_xpm_body
-    rr_fifo_sync_xpm_body_stub.vhd        rr_fifo_sync_xpm_body
-} {
-    set stub_path [file join $g_project_dir hdl $stub]
-    if {[file exists $stub_path]} {
-        if {[catch { use_source_file -file $stub_path -module $module } use_err]} {
-            puts "Warning: use_source_file $stub -> $module failed: $use_err"
-        }
-    }
-}
 
 # ---------------------------------------------------------------------------
 # 1. Import the frozen MSS configuration and instantiate the MSS component.

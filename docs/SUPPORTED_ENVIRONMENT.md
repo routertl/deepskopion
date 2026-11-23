@@ -34,8 +34,8 @@ true.
 | Host arch | `x86_64` | fail |
 | RAM | ≥ 24 GB as the OS sees it (WSL2: the `.wslconfig` limit) | fail |
 | Free disk | ≥ 60 GB on the checkout's filesystem | fail |
-| Python | ≥ 3.10, < 3.15 | fail |
-| RouteRTL | ≥ 5.6.0 (`pip install routertl`) | fail |
+| Python | ≥ 3.11, < 3.15; 3.10 is deprecated (still builds) | fail; warn for 3.10 |
+| RouteRTL | ≥ 5.7.0 (`pip install routertl`) | fail |
 | Vivado | 2024.1 — ML Standard (free) or ML Enterprise | fail |
 | Board | Digilent Zybo Z7-20, part `xc7z020clg400-1`, platform `zybo-z7-20` | fail |
 | Network | Ethernet; `dhcp-or-user-static`, with no address in the image | fail |
@@ -78,7 +78,7 @@ checkpoints, bitstream, Linux artifacts); it does **not** include Vivado's own
 
 ### Toolchain
 
-**Python 3.10 to 3.14, RouteRTL ≥ 5.6.0, Vivado 2024.1.**
+**Python 3.11 to 3.14, RouteRTL ≥ 5.7.0, Vivado 2024.1.**
 
 Vivado is pinned because the build is pinned: `build_options.tool_version` in
 the target names the same release, and a different one re-times and re-fits the
@@ -195,14 +195,22 @@ the CAN datalogger, both PS CAN device-tree nodes become required as well.
 
 ## Targets
 
-The product targets in `targets/`. The declaration and the preflight above
-describe the Zybo Z7-20 golden path; the other two build with their own vendor
+The product targets in `targets/`. The host, board and traffic-source sections
+above describe the Zybo Z7-20 golden path; the other two build with their own vendor
 tool, at the release the README's Requirements table names.
+
+`ds_preflight.py --stage build` judges the selected target against its own
+`targets.<name>.build` block in the declaration: part, platform, the tool release
+the target pins (`build_options.tool_version`) and the device-tree nodes its
+self-test needs. For `zybo_datalogger` it also checks the host's Vivado release.
+For `de25_datalogger` and `pfsoc_datalogger` it does not probe the Quartus Prime Pro
+or Libero SoC install: RouteRTL resolves the install at build time. A target with
+no `build` block is refused by name.
 
 | Target | Board | Vendor tool | Status | Measured on silicon (2026-11-16, pre-registered gate) |
 |---|---|---|---|---|
 | `zybo_datalogger` | Digilent Zybo Z7-20 | Vivado 2024.1 | supported | booted from SD; `REGBANK_NUM_WORDS` = 7436, build identity `0x43B88FAA` |
-| `de25_datalogger` | Terasic DE25 | Quartus Prime Pro 25.3 | supported | `REGBANK_NUM_WORDS` = 7436, identity by the regbank stamp |
+| `de25_datalogger` | Terasic DE25 | Quartus Prime Pro 25.3.1 with patch 1.02 | supported | `REGBANK_NUM_WORDS` = 7436, identity by the regbank stamp |
 | `pfsoc_datalogger` | Microchip PolarFire SoC Discovery Kit | Libero SoC 2025.2 | preview | `REGBANK_NUM_WORDS` = 7436 on 2 cold boots, build identity `0x43B88FAA`; the self-test capture is not yet verified on silicon |
 
 ## What is NOT supported
@@ -282,8 +290,8 @@ example.
 - **The clone-blocking dependency pin is gone.** `ip.lock` used to pin
   `rr_rea` to a `file://` path in the developer's home plus a sibling
   `routertl` checkout — a reason why no other machine could
-  build. A prior fix addressed it: the locked `rr_rea` is the vendored
-  in-repo `libs/local/rr_rea` tree, and
+  build. A prior fix addressed it: `rr_rea` (now `routertl/rea`) is fetched by
+  `rr pkg install` from its own repository at the commit `ip.lock` pins, and
   `tools/tests/test_no_local_path_pollution.py` guards against any tracked
   file naming a bench-local path again. The guard is armed as a leg of
   `hooks/pre-commit.local`, and that arming was demonstrated by staging a

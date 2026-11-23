@@ -18,6 +18,7 @@ In a pattern, `*` matches within one path segment and `**` matches across segmen
 | Path | Verdict | Basis |
 |---|---|---|
 | `hw/rtl/regbank/regbank_schema.bin` | SHIP | CERN-OHL-W-2.0. Output of this project's generator, from `project_regbank.yml`. |
+| `sw/stream/tests/fixtures/ds_p1_117/de25_ring_head64k.bin` | SHIP | MPL-2.0. Ring bytes recorded on a DE25 running this project's datalogger under its own test stimulus; edge records and zero pad only, no text. |
 | `libs/routertl/**` | SHIP | MIT. Declared in `REUSE.toml`. Text in `LICENSES/MIT.txt`. |
 | `sw/linux/rootfs_overlay/usr/lib/python3.12/site-packages/smbus2/**` | SHIP | MIT. Copyright Karl-Petter Lindegaard, stated in the file header. |
 | `sw/linux/rootfs_overlay/usr/lib/python3.12/site-packages/smbus2-0.6.1.dist-info/**` | SHIP | MIT. Package metadata with the licence text. |
@@ -73,6 +74,7 @@ The rows below cover the Microchip files that ship and the files that do not.
 | `targets/canfd_demo.ip.lock` | DROP | Package lock of a bench target (rr keeps per-target locks in targets/). |
 | `targets/de25_canfd.ip.lock` | DROP | Package lock of a bench target (rr keeps per-target locks in targets/). |
 | `tools/tests/test_de25_shell_contract_bench.py` | DROP | Test of a bench-only testbench (bench/sim/tb_lwh2f_ctucanfd_probe.vhd). |
+| `tools/tests/test_public_artifact_hygiene_de25_address_bench.py` | DROP | Test that has to name a real bench address. |
 | `targets/canfd_demo.routertl.lock` | DROP | Build lock of a bench target (rr keeps per-target locks in targets/). |
 | `targets/classic_eye.routertl.lock` | DROP | Build lock of a bench target (rr keeps per-target locks in targets/). |
 | `targets/de25_canfd.routertl.lock` | DROP | Build lock of a bench target (rr keeps per-target locks in targets/). |

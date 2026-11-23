@@ -51,11 +51,13 @@
   <text class="t" x="246" y="205">framer</text>
   <text class="m" x="246" y="224">zs_msg records</text>
 
-  <path class="data" d="M174,137 H214 V196 H232" marker-end="url(#ad)"/>
+  <path class="data" d="M174,137 H214"/>
   <path class="data" d="M174,181 H214"/>
-  <path class="data" d="M174,225 H214 V203"/>
-  <path class="data" d="M174,269 H214 V210"/>
-  <path class="data" d="M174,313 H214 V214 H232" marker-end="url(#ad)"/>
+  <path class="data" d="M174,225 H214"/>
+  <path class="data" d="M174,269 H214"/>
+  <path class="data" d="M174,313 H214"/>
+  <path class="data" d="M214,137 V313"/>
+  <path class="data" d="M214,203 H232" marker-end="url(#ad)"/>
 
   <rect class="blk" x="362" y="168" width="108" height="70" rx="5"/>
   <text class="t" x="372" y="190">DDR writer</text>

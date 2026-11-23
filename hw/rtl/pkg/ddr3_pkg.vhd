@@ -1,7 +1,14 @@
+-------------------------------------------------------------------------------
+-- File       : ddr3_pkg.vhd
+-- Description: Component declaration of the DDR3 memory interface core.
+-- Standard   : VHDL-2008
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
+-------------------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.all;
-use IEEE.NUMERIC_STD.all;
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
 
 package ddr3_pkg is
 
@@ -105,7 +112,7 @@ package ddr3_pkg is
       mig_ref_clk_n       : in std_logic
     );
   end component mig_xem7305;
-  
+
 end package ddr3_pkg;
 
 package body ddr3_pkg is

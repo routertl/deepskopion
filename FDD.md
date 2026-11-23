@@ -4,7 +4,7 @@
 Facts verified against `f5195e2f` on 2026-10-20.
 
 <!-- rr:fdd:generated:begin -->
-<!-- rr:fdd:inputs sha256:373f3d6a0ee2180c -->
+<!-- rr:fdd:inputs sha256:a4755bfebc135d40 -->
 <!-- rr:fdd:projection v3 -->
 > Machine-owned block — scaffolded by `rr fdd init`, refreshed by
 > `rr fdd generate`. Do not edit inside the markers;
@@ -88,7 +88,7 @@ Facts verified against `f5195e2f` on 2026-10-20.
 | FIFO_HIGH_WATERMARK_RSVD | 0x134 | RO | RESERVED — deprecated Stream-tier peak FIFO occupancy (D.4); reads 0; slot retained for address stability |
 | TELEMETRY_CTRL | 0x140 | RW | Write bit[0]=1 to clear all telemetry counters. Self-clearing. |
 | TELEMETRY_SNAPSHOT_TRIGGER | 0x144 | RW | Write bit[0]=1 to latch all counters atomically. Self-clearing. |
-| RING_WRITE_PTR | 0x150 | RO | Number of 32-bit messages written into the ring since reset (free-running, wraps at 2^32). PS computes byte offset = (RING_WRITE_PTR * 4) mod RING_BYTES. |
+| RING_WRITE_PTR | 0x150 | RO | Number of 32-bit words the DDR stream has accepted from the framer since reset (free-running, wraps at 2^32). A word is counted on the cycle the stream takes it (valid and ready); cycles where the framer holds a word the stream cannot take are counted in DDR_BACKPRESSURE_CNT, not here. The value is an enqueue count, not a DRAM byte offset, because variable-length frames and beat alignment make RING_WRITE_PTR * 4 diverge from the DMA's committed offset, which is RING_COMMIT_PTR. |
 | RING_READ_PTR | 0x154 | RW | Software-managed ring DRAIN pointer (byte offset, mod RING_BYTES — NOT the old message count). SW writes the byte offset it has CONSUMED up to, same frame/units as RING_COMMIT_PTR. Wired to ddr_stream_axi.csr_rd_ptr_addr_i (load strobe held high); the IP frees the corresponding ring space so the DMA write pointer auto-wraps — continuous, lossless SPSC drain, no double-read (the PS already has the data from mmap; it only advances the pointer). Defaults to 0 at reset → ring fills once and stalls (legacy write-only behaviour) until SW starts advancing it. If the PS falls behind, the producer stalls correctly (see DROP_CNT / ring-full feedback). |
 | RING_BASE_LOW | 0x158 | RO | Physical base address of the ring buffer in PS DDR, low 32 bits. Matches deepskopion_top.G_DDR_BASE_ADDR (default 0x10000000). |
 | RING_BASE_HIGH | 0x15C | RO | Physical base address of the ring buffer in PS DDR, high 32 bits. Always 0 on Zynq-7 (32-bit physical address space). |
@@ -211,7 +211,7 @@ The ring is a 256 MiB window (`G_DDR_WIN_WIDTH` = 28) at `G_DDR_BASE_ADDR`.
 
 | Register | Offset | Access | Content |
 |---|---|---|---|
-| RING_WRITE_PTR | 0x150 | RO | 32-bit words written, wraps at 2^32 |
+| RING_WRITE_PTR | 0x150 | RO | 32-bit words accepted by the DDR stream (valid and ready), wraps at 2^32 |
 | RING_READ_PTR | 0x154 | RW | Byte offset, modulo RING_BYTES, consumed by software |
 | RING_BASE_LOW | 0x158 | RO | Ring base, low 32 bits |
 | RING_BASE_HIGH | 0x15C | RO | Ring base, high 32 bits, expected: 0 |

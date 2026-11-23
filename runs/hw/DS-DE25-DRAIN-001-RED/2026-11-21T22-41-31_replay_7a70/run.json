@@ -1,0 +1,1142 @@
+{
+  "schema": "rr.hw.run/v1",
+  "contract_version": 0.2,
+  "run_id": "2026-11-21T22-41-31_replay_7a70",
+  "req_id": "DS-DE25-DRAIN-001-RED",
+  "mode": "replay",
+  "target": {
+    "project": "ds1100-bisect-run",
+    "sof_sha256": "db6d8f04acb27e33ab9fc6db00c8c406bab3646edef2f4603ba460ff46e9fddb",
+    "git_rev": "1afe0561ea17c694cfc66c1dde5d5bbc9055e51e",
+    "config_delta_from_last_run": [
+      "DS-P1.100/DS-P2.267 B3 DS-DE25-DRAIN-001-RED (instrumented, daemon stopped)",
+      "map-access preamble: project_regbank.yml walked at base_address 0x20000000 with address_mode bytes (contract leaves base 0 / words)"
+    ],
+    "board": "de25-standard"
+  },
+  "preconditions": [
+    {
+      "name": "sof_programmed",
+      "applied": true,
+      "via": "de25_datalogger image whose REA G_BUILD_ID is CONFIRMED"
+    },
+    {
+      "name": "hps_bridges_enabled",
+      "applied": true,
+      "via": "generated DE25 boot command ran bridge enable"
+    },
+    {
+      "name": "host_drain_stopped",
+      "applied": true,
+      "via": "capture daemon is stopped; no process writes RING_READ_PTR"
+    },
+    {
+      "name": "instrumented_probe",
+      "applied": true,
+      "via": "RING_READ_PTR peeks go through tools/hw/de25_probe_instr.py; DS_PROBE_TRANSCRIPT names its transcript"
+    }
+  ],
+  "steps": [
+    {
+      "idx": 1,
+      "kind": "poke",
+      "t": 0.0,
+      "addr": "0x20000020",
+      "value": "0x00000800"
+    },
+    {
+      "idx": 2,
+      "kind": "poke",
+      "t": 0.001,
+      "addr": "0x20000020",
+      "value": "0x00000801"
+    },
+    {
+      "idx": 3,
+      "kind": "poke",
+      "t": 0.002,
+      "addr": "0x20000024",
+      "value": "0x00000080"
+    },
+    {
+      "idx": 4,
+      "kind": "poke",
+      "t": 0.003,
+      "addr": "0x20000244",
+      "value": "0x00000191"
+    },
+    {
+      "idx": 5,
+      "kind": "peek",
+      "t": 0.004,
+      "addr": "0x20000154",
+      "comment": "S0",
+      "observed": "0x0F9B50F0",
+      "expected": null
+    },
+    {
+      "idx": 6,
+      "kind": "rate",
+      "t": 0.005,
+      "read": "0x20000168",
+      "observed": "0x00000000",
+      "interval_s": 2.0,
+      "width": 32,
+      "raw_reads": [
+        "0x00000000",
+        "0x00000000"
+      ],
+      "reads": [
+        {
+          "observed": "0x00000000",
+          "t": 0.005
+        },
+        {
+          "observed": "0x00000000",
+          "t": 2.3946205727942287
+        }
+      ],
+      "timestamps": [
+        0.005,
+        2.3946205727942287
+      ],
+      "elapsed_s": 2.389620572794229,
+      "delta": 0,
+      "rate_per_s": 0.0,
+      "satisfied": true,
+      "in_range": true,
+      "t_final": 2.3946205727942287,
+      "min_per_s": 0,
+      "max_per_s": 0,
+      "derivation": "The S0 -> S1 hold of DS-DE25-DRAIN-001."
+    },
+    {
+      "idx": 7,
+      "kind": "peek",
+      "t": 2.3946205727942287,
+      "addr": "0x20000154",
+      "comment": "S1",
+      "observed": "0x0F9B50F0",
+      "expected": null
+    },
+    {
+      "idx": 8,
+      "kind": "rate",
+      "t": 2.3956205727942286,
+      "read": "0x20000168",
+      "observed": "0x488EBA06",
+      "interval_s": 60.0,
+      "width": 32,
+      "raw_reads": [
+        "0x00000000",
+        "0x488EBA06"
+      ],
+      "reads": [
+        {
+          "observed": "0x00000000",
+          "t": 2.3956205727942286
+        },
+        {
+          "observed": "0x488EBA06",
+          "t": 62.85450796079263
+        }
+      ],
+      "timestamps": [
+        2.3956205727942286,
+        62.85450796079263
+      ],
+      "elapsed_s": 60.4588873879984,
+      "delta": 1217313286,
+      "rate_per_s": 20134563.148471814,
+      "satisfied": false,
+      "in_range": false,
+      "t_final": 62.85450796079263,
+      "min_per_s": 0,
+      "max_per_s": 0,
+      "derivation": "The 60 s hold of DS-DE25-DRAIN-001."
+    },
+    {
+      "idx": 9,
+      "kind": "peek",
+      "t": 62.85450796079263,
+      "addr": "0x20000154",
+      "comment": "S2",
+      "observed": "0x0F9B50F0",
+      "expected": null
+    },
+    {
+      "idx": 10,
+      "kind": "oracle",
+      "t": 62.85550796079263,
+      "cmd": [
+        "python3",
+        "tools/hw/de25_fill_growth_oracle.py",
+        "--stim-addr",
+        "0x20000244",
+        "--stim-value",
+        "0x00000191"
+      ],
+      "exit_code": 0,
+      "oracle": {
+        "layers": [
+          {
+            "name": "instrument",
+            "status": "pass",
+            "metrics": {
+              "samples": 3
+            },
+            "suspects": []
+          },
+          {
+            "name": "stimulus",
+            "status": "pass",
+            "metrics": {
+              "w_Bps": 19992280.70175396,
+              "dt_s": 3.42,
+              "band_Bps": [
+                18000000.0,
+                22000000.0
+              ]
+            },
+            "suspects": []
+          },
+          {
+            "name": "window",
+            "status": "pass",
+            "metrics": {
+              "dt_s": 64.98,
+              "min_s": 60.0
+            },
+            "suspects": []
+          },
+          {
+            "name": "fill_growth",
+            "status": "fail",
+            "metrics": {
+              "f0_B": 86889072,
+              "f2_B": 268435440,
+              "F_B": 181546368,
+              "F_per_s": 2793881,
+              "limit_B": 655360,
+              "backpressure_delta": 1296001936,
+              "dt_s": 64.98
+            },
+            "suspects": [
+              "DDR_BACKPRESSURE_CNT moved by 1296001936: the ring was full, so f2 is not a fill reading",
+              "fill grew 181546368 B > 655360 B over 64.98 s"
+            ]
+          }
+        ]
+      },
+      "timeout_s": 30,
+      "t_final": 62.90421601968631
+    },
+    {
+      "idx": 11,
+      "kind": "poke",
+      "t": 62.90421601968631,
+      "addr": "0x20000244",
+      "value": "0x00000000"
+    }
+  ],
+  "evidence": [],
+  "assertions": [
+    {
+      "id": "P1",
+      "expr": "step[10].oracle.layers[instrument].status == pass",
+      "result": "pass"
+    },
+    {
+      "id": "P2",
+      "expr": "step[10].oracle.layers[stimulus].status == pass",
+      "result": "pass"
+    },
+    {
+      "id": "P3",
+      "expr": "step[10].oracle.layers[window].status == pass",
+      "result": "pass"
+    },
+    {
+      "id": "D2",
+      "expr": "step[10].oracle.layers[fill_growth].status == pass",
+      "result": "fail",
+      "reason": "oracle.layers[fill_growth].status=fail, expected pass"
+    }
+  ],
+  "conclusion": {
+    "status": "fail",
+    "req_status": "demonstrated_broken",
+    "summary": "replay run of DS-DE25-DRAIN-001-RED: 11 step(s), 4 assertion(s)",
+    "agent_prose": null
+  },
+  "record_origin": "rr_hw_run",
+  "map_access_preamble": {
+    "status": "pass",
+    "passed": true,
+    "registers": [
+      {
+        "name": "GIT_HASH",
+        "address": "0x20000000",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "build stamp, differs per bitstream (the capture chain confirms the REA build ID)"
+      },
+      {
+        "name": "SYSTEM_VERSION",
+        "address": "0x20000004",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "build stamp, differs per bitstream (the capture chain confirms the REA build ID)"
+      },
+      {
+        "name": "BUILD_DATE",
+        "address": "0x20000008",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "build stamp, differs per bitstream (the capture chain confirms the REA build ID)"
+      },
+      {
+        "name": "REGBANK_VERSION",
+        "address": "0x2000000c",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00030000",
+        "observed": "0x00030000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "REGBANK_NUM_WORDS",
+        "address": "0x20000010",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "read side effect: a read resets or advances a manifest stream pointer"
+      },
+      {
+        "name": "REGBANK_DATA",
+        "address": "0x20000014",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "read side effect: a read resets or advances a manifest stream pointer"
+      },
+      {
+        "name": "CONFIG_NUM_WORDS",
+        "address": "0x20000018",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "read side effect: a read resets or advances a manifest stream pointer"
+      },
+      {
+        "name": "CONFIG_DATA",
+        "address": "0x2000001c",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "read side effect: a read resets or advances a manifest stream pointer"
+      },
+      {
+        "name": "DATALOGGER_CONFIG",
+        "address": "0x20000020",
+        "access": "rw",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "software-owned configuration: reads what the last writer left"
+      },
+      {
+        "name": "EMIO_MUX_SEL",
+        "address": "0x20000024",
+        "access": "rw",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "software-owned configuration: reads what the last writer left"
+      },
+      {
+        "name": "CONTRACT_ABI_VER",
+        "address": "0x20000028",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00020000",
+        "observed": "0x00020000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "EMIO_PROBE",
+        "address": "0x2000002c",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "I2C_INJ_CONTROL",
+        "address": "0x20000030",
+        "access": "rw",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "software-owned configuration: reads what the last writer left"
+      },
+      {
+        "name": "I2C_INJ_DATAIN",
+        "address": "0x20000034",
+        "access": "rw",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "software-owned configuration: reads what the last writer left"
+      },
+      {
+        "name": "I2C_INJ_STATUS",
+        "address": "0x20000038",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "SPI_INJ_CONTROL",
+        "address": "0x20000040",
+        "access": "rw",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "software-owned configuration: reads what the last writer left"
+      },
+      {
+        "name": "SPI_INJ_DATAIN",
+        "address": "0x20000044",
+        "access": "rw",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "software-owned configuration: reads what the last writer left"
+      },
+      {
+        "name": "SPI_INJ_STATUS",
+        "address": "0x20000048",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "STIM_UART_CONTROL",
+        "address": "0x20000220",
+        "access": "rw",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "software-owned configuration: reads what the last writer left"
+      },
+      {
+        "name": "STIM_UART_BAUD_DIV",
+        "address": "0x20000224",
+        "access": "rw",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "software-owned configuration: reads what the last writer left"
+      },
+      {
+        "name": "STIM_UART_DATA",
+        "address": "0x20000228",
+        "access": "rw",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "software-owned configuration: reads what the last writer left"
+      },
+      {
+        "name": "STIM_I2C_CONTROL",
+        "address": "0x2000022c",
+        "access": "rw",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "software-owned configuration: reads what the last writer left"
+      },
+      {
+        "name": "STIM_I2C_CLK_DIV",
+        "address": "0x20000230",
+        "access": "rw",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "software-owned configuration: reads what the last writer left"
+      },
+      {
+        "name": "STIM_I2C_DATA",
+        "address": "0x20000234",
+        "access": "rw",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "software-owned configuration: reads what the last writer left"
+      },
+      {
+        "name": "STIM_SPI_CONTROL",
+        "address": "0x20000238",
+        "access": "rw",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "software-owned configuration: reads what the last writer left"
+      },
+      {
+        "name": "STIM_SPI_CLK_DIV",
+        "address": "0x2000023c",
+        "access": "rw",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "software-owned configuration: reads what the last writer left"
+      },
+      {
+        "name": "STIM_SPI_DATA",
+        "address": "0x20000240",
+        "access": "rw",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "software-owned configuration: reads what the last writer left"
+      },
+      {
+        "name": "STIM_EDGE_CONTROL",
+        "address": "0x20000244",
+        "access": "rw",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "software-owned configuration: reads what the last writer left"
+      },
+      {
+        "name": "CLK_DDR_TICKS",
+        "address": "0x2000004c",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "DDR_RESET_STATUS",
+        "address": "0x20000050",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "HEARTBEAT_CNT",
+        "address": "0x200000c0",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "FIFO_OVERFLOW_CNT",
+        "address": "0x200000c4",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "FIFO_OVERFLOW_CNT_RSVD",
+        "address": "0x200000c8",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "PKT_CNT_I2C",
+        "address": "0x200000d0",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "PKT_CNT_SPI",
+        "address": "0x200000d4",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "PKT_CNT_UART",
+        "address": "0x200000d8",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "PKT_CNT_QSPI",
+        "address": "0x200000dc",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "PKT_CNT_EDGE",
+        "address": "0x200000e0",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "PKT_CNT_I2S",
+        "address": "0x200000e4",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "PKT_CNT_CAN",
+        "address": "0x200000e8",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "PKT_CNT_JTAG",
+        "address": "0x200000ec",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "ERR_CNT_I2C",
+        "address": "0x200000f0",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "ERR_CNT_SPI",
+        "address": "0x200000f4",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "ERR_CNT_UART",
+        "address": "0x200000f8",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "ERR_CNT_QSPI",
+        "address": "0x200000fc",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "ERR_CNT_EDGE",
+        "address": "0x20000100",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "ERR_CNT_CAN",
+        "address": "0x20000104",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "ERR_CNT_JTAG",
+        "address": "0x20000108",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "ARB_GRANT_CNT",
+        "address": "0x20000110",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "ARB_GRANT_CNT_RSVD",
+        "address": "0x20000114",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "DROP_CNT_I2C",
+        "address": "0x20000120",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "DROP_CNT_SPI",
+        "address": "0x20000124",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "DROP_CNT_UART",
+        "address": "0x20000128",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "FIFO_HIGH_WATERMARK",
+        "address": "0x20000130",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "FIFO_HIGH_WATERMARK_RSVD",
+        "address": "0x20000134",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "TELEMETRY_CTRL",
+        "address": "0x20000140",
+        "access": "rw",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "software-owned configuration: reads what the last writer left"
+      },
+      {
+        "name": "TELEMETRY_SNAPSHOT_TRIGGER",
+        "address": "0x20000144",
+        "access": "rw",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "software-owned configuration: reads what the last writer left"
+      },
+      {
+        "name": "RING_WRITE_PTR",
+        "address": "0x20000150",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "RING_READ_PTR",
+        "address": "0x20000154",
+        "access": "rw",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "software-owned configuration: reads what the last writer left"
+      },
+      {
+        "name": "RING_BASE_LOW",
+        "address": "0x20000158",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "per-target generic (G_DDR_BASE_ADDR)"
+      },
+      {
+        "name": "RING_BASE_HIGH",
+        "address": "0x2000015c",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x00000000",
+        "observed": "0x00000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "RING_BYTES",
+        "address": "0x20000160",
+        "access": "ro",
+        "status": "pass",
+        "expected": "0x10000000",
+        "observed": "0x10000000",
+        "read_status": "pass",
+        "write_status": "not_applicable",
+        "reason": null
+      },
+      {
+        "name": "RING_COMMIT_PTR",
+        "address": "0x20000164",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "DDR_BACKPRESSURE_CNT",
+        "address": "0x20000168",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "RING_ALARM_CNT",
+        "address": "0x2000016c",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "EMIT_VALID_CNT",
+        "address": "0x20000170",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "EMIT_DONE_CNT",
+        "address": "0x20000174",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "EYE_CONTROL",
+        "address": "0x20000200",
+        "access": "rw",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "software-owned configuration: reads what the last writer left"
+      },
+      {
+        "name": "EYE_BIT_TARGET",
+        "address": "0x20000204",
+        "access": "rw",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "software-owned configuration: reads what the last writer left"
+      },
+      {
+        "name": "EYE_STATUS",
+        "address": "0x20000208",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "EYE_ERR_COUNT_LO",
+        "address": "0x2000020c",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "EYE_ERR_COUNT_HI",
+        "address": "0x20000210",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "EYE_BIT_COUNT_LO",
+        "address": "0x20000214",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "EYE_BIT_COUNT_HI",
+        "address": "0x20000218",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      },
+      {
+        "name": "EYE_PHASE_STATUS",
+        "address": "0x2000021c",
+        "access": "ro",
+        "status": "exempt",
+        "expected": "0x00000000",
+        "observed": null,
+        "read_status": "exempt",
+        "write_status": "not_applicable",
+        "reason": "live value on a running board (counter, pointer or status)"
+      }
+    ],
+    "unreachable_registers": [],
+    "summary": "map-access pass: 75 register(s) verified"
+  },
+  "capture_chain": {
+    "backend": "rea",
+    "bitstream_identity": {
+      "applicable": true,
+      "expected": "1f9b8848",
+      "method": "rea-jtag-build-id-32",
+      "observed": "1f9b8848",
+      "outcome": "CONFIRMED",
+      "status": "validated"
+    },
+    "instrument_self_check": {
+      "applicable": false,
+      "expected": null,
+      "method": "not-applicable",
+      "observed": null,
+      "status": "not_applicable"
+    },
+    "leased": true,
+    "portable_id": "rea-jtag-build-id",
+    "status": "validated"
+  },
+  "requirement_snapshot": {
+    "local_id": "DS-DE25-DRAIN-001-RED",
+    "recipe_sha256": "69da785a23c783296ff5aa5dbc7d68865a6368576ae7264dd938a21a25da3b7e",
+    "contract_version": 0.2
+  },
+  "execution": {
+    "backend": "hps-devmem",
+    "hardware_access": true
+  },
+  "environment": {
+    "interpreter": "3.10.12",
+    "libraries": {},
+    "binaries": {}
+  },
+  "verified_build": "unverifiable"
+}

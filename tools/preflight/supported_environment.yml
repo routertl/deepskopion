@@ -68,17 +68,26 @@ host:
 
 # ── Toolchain ────────────────────────────────────────────────────────────────
 python:
-  # From the Ubuntu 22.04 system interpreter (3.10) up to the newest release
-  # cocotb>=2.1 ships wheels for (cp310..cp314; RTL-P3.1682, MC ruling
-  # 2026-10-01). Upper bound is exclusive.
-  min: '3.10'
+  # From 3.11 (DS-P2.365: RouteRTL drops 3.10 in a coming minor release,
+  # RTL-P3.2382, and prints a deprecation line on every rr call under 3.10) up to
+  # the newest release cocotb>=2.1 ships wheels for (cp311..cp314; RTL-P3.1682).
+  # Upper bound is exclusive. Ubuntu 22.04's default python3 is 3.10, so the
+  # README's step 1 names a 3.11 interpreter there.
+  min: '3.11'
   max_exclusive: '3.15'
   severity: fail
+  # 3.10 is outside the envelope but still builds: nothing in DeepSkopion needs
+  # 3.11, and the RouteRTL releases it is verified against run on 3.10. Inside
+  # this band the check WARNs (deprecated); below it the check fails.
+  deprecated:
+    min: '3.10'
 
 routertl:
-  # 5.6.0 is the published release DeepSkopion 0.1.0 is verified against
-  # (RTL-D.419: the release and its acceptance runs install the wheel a new
-  # user installs on release day). It contains every earlier floor:
+  # 5.7.0 is the published release DeepSkopion 0.1.0 is verified against
+  # (RTL-P1.321, owner 2026-11-18: DeepSkopion is not easily buildable or usable
+  # with 5.6.0, so the release is built on 5.7.0; RTL-D.419's principle stands:
+  # the release and its acceptance runs install the wheel a new user installs
+  # on release day). It contains every earlier floor: 5.6.0 (RTL-D.419);
   # 5.5.0 is the first published release that reads the per-target locks
   # (targets/<t>.routertl.lock) this tree has kept since DS-P2.287: 5.3.0 and
   # 5.4.0 look for a root routertl.lock, find none and report a stub, so
@@ -88,7 +97,7 @@ routertl:
   # DE25 ip.yml needs (DS-P1.85); 4.9.2 offers Agilex .qips to Vivado
   # (RTL-T2.287); 5.1.0 cannot compile the vendored open-logic packages under
   # rr linting (RTL-P2.2099).
-  min: '5.6.0'
+  min: '5.7.0'
   install: pip install routertl
   severity: fail
 
@@ -235,9 +244,15 @@ traffic_source:
   severity: fail
 
 # ── Targets ──────────────────────────────────────────────────────────────────
-# The product targets in targets/. The rest of this file, and the preflight,
-# declare the Zybo Z7-20 golden path; the other two build with their own vendor
-# tool at the release the README's Requirements table names.
+# The product targets in targets/. The vivado, board and traffic_source sections
+# above declare the Zybo Z7-20 golden path. Each target's `build` block is what
+# `ds_preflight.py --stage build` judges when that target is selected (DS-P2.363):
+# part and platform, the vendor tool release the target pins, and the device-tree
+# nodes its self-test needs. A target with no `build` block is refused by name,
+# never judged against another target's values. `probe: vivado` means the host's
+# Vivado install is checked; Quartus Prime Pro and Libero SoC are resolved by
+# RouteRTL at build time and are not probed here, until rr can report the install
+# a target's build will use (RTL-P2.2492).
 targets:
   zybo_datalogger:
     board: Digilent Zybo Z7-20
@@ -246,13 +261,29 @@ targets:
     evidence: >-
       silicon, 2026-11-16, pre-registered gate: the 43b88faa build booted from
       SD and read REGBANK_NUM_WORDS = 7436, build identity 0x43B88FAA (DS-P1.111)
+    build:
+      platform: zybo-z7-20
+      part: xc7z020clg400-1
+      tool: {name: Vivado, version: '2024.1', probe: vivado}
+      # The PS EMIO traffic source and its opt-in CAN nodes: the traffic_source section above.
+      traffic_source: golden_path
   de25_datalogger:
     board: Terasic DE25
-    tool: Quartus Prime Pro 25.3
+    tool: Quartus Prime Pro 25.3.1 with patch 1.02
     status: supported
     evidence: >-
       silicon, 2026-11-16, pre-registered gate: the 43b88faa build read
       REGBANK_NUM_WORDS = 7436, identity by the regbank stamp (DS-P1.111)
+    build:
+      platform: de25-standard
+      part: A5ED013BB32AE4SCS
+      tool: {name: Quartus Prime Pro, version: 25.3.1}
+      # The self-test stimulus is the fabric stimulus generator, driven through the
+      # regbank, so it needs no DT node. The capture ring must stay reserved, or
+      # Linux allocates over the memory the fabric writes. (The ring-watermark
+      # interrupt node is optional in the daemon, DS-P3.60, so it is not required.)
+      required_dt_nodes:
+        - /reserved-memory/deepskopion-ring@a0000000
   pfsoc_datalogger:
     board: Microchip PolarFire SoC Discovery Kit
     tool: Libero SoC 2025.2
@@ -262,6 +293,13 @@ targets:
       REGBANK_NUM_WORDS = 7436 on 2 cold boots, build identity 0x43B88FAA
       (DS-P1.111); the self-test capture is not yet verified on silicon, so the
       target is a preview
+    build:
+      platform: polarfire-soc-discovery
+      part: MPFS095T-1FCSG325E
+      tool: {name: Libero SoC, version: '2025.2'}
+      # As DE25: fabric stimulus through the regbank; the capture ring stays reserved.
+      required_dt_nodes:
+        - /reserved-memory/deepskopion-ring@a0000000
 
 # ── What is NOT supported ────────────────────────────────────────────────────
 # Recorded here so "unsupported" is a statement in the repo rather than a thing

@@ -59,6 +59,10 @@ SLOT_EMIO_MUX_SEL = 0x24
 # An armer sleep is replayed as a wait of at most this long: one SPI byte at SPI_CLK_DIV 25 takes 18 x 25 clocks
 # (4.5 us at CLK_PERIOD_NS), so the stimulus master is idle again before the next STIM_SPI_DATA write.
 SLEEP_CAP_US = 25.0
+# DS-P2.343: logger 8's bytes per SPI transfer, by value. MOSI is SPI_PAYLOAD; MISO is what arm_spi preloads into
+# the on-chip responder (SPI_MISO_PAYLOAD). Hard-coded, not imported.
+SPI_MOSI_BYTES = [0xDE, 0xAD, 0xBE, 0xEF]
+SPI_MISO_BYTES = [0xA5, 0x5A, 0xC3, 0x3C]
 STIM_CONTROL_SLOTS = (544, 556, 568, 580)          # UART, I2C, SPI, EDGE control
 
 # Every data logger of the default mix, armed as tb_default_mix_core's test arms them.
@@ -94,7 +98,7 @@ EXPECTED = {
     "stim_spi": [8],
     "stim_edge": [1],
     "route_i2c": [1, 2, 4],
-    "route_spi": [8],
+    "route_spi": [1, 2, 3, 8, 20],
     "route_uart": [12],
     "route_uart_mss": [1, 12],
     "route_can_ps": [1],
@@ -223,14 +227,16 @@ def _no_host_devices():
         builtins.open, io.open, os.open = real_open, real_open, real_os_open
 
 
-def _armer_writes(fn_name: str, mss: bool, route: str | None = None) -> list[tuple[int | None, float]]:
+def _armer_writes(fn_name: str, mss: bool, route: str | None = None,
+                  arm_route: str | None = None) -> list[tuple[int | None, float]]:
     """The register writes of a production armer, recorded in order with its sleeps.
 
     A sleep is recorded as ``(None, seconds)`` and replayed as a simulation wait: the stimulus master takes a
     STIM_SPI_DATA write only when idle (ds_stimulus_gen p_spi), so a replay without the waits sends one SPI byte
     where the board sends four, and that byte overlapped the edge route written after the arm, which on the board
-    is applied only after the armer returns. The armer's MMUART1 transmit (PolarFire) is captured, never sent: on
-    this host /dev/ttyS1 is the host's own serial port."""
+    is applied only after the armer returns. ``arm_route`` is an edge route the armer takes itself (op=stim with a
+    route, DS-P2.343), written before its burst. The armer's MMUART1 transmit (PolarFire) is captured, never sent:
+    on this host /dev/ttyS1 is the host's own serial port."""
     os.environ["DS_MSS_FABRIC"] = "1" if mss else "0"
     import time as _time
     from sw.stream import edge_route, stimulus_armer
@@ -241,7 +247,8 @@ def _armer_writes(fn_name: str, mss: bool, route: str | None = None) -> list[tup
     try:
         with _no_host_devices():
             if fn_name:
-                getattr(stimulus_armer, fn_name)(rec)
+                arm = getattr(stimulus_armer, fn_name)
+                arm(rec, route=arm_route) if arm_route else arm(rec)
             if route:
                 edge_route.apply_edge_route(rec, route)
         return rec.writes
@@ -276,24 +283,34 @@ async def _quiesce(axi, dut) -> None:
 
 
 async def _scenario(name: str, axi, dut) -> float:
-    """Apply one board-alone source; return the sim time (ns) its last register
-    write completed, the start of the scenario's settled traffic window."""
+    """Apply one board-alone source; return the sim time (ns) its last source-select or logger-enable write
+    (EMIO_MUX_SEL, DATALOGGER_CONFIG) completed, the start of the scenario's settled traffic window. Those writes make
+    records that are not traffic (a mux switch is a line change, an enable is a lifecycle record); the data writes
+    after them (STIM_*_DATA, SPI_INJ_DATAIN) and the armer's waits are the burst, which counts (DS-P2.343)."""
     mss = name in ("mss_uart", "route_uart_mss", "mss_can")
+    # (armer, edge route applied after the arm, edge route the arm takes itself). route_spi is the board's op=stim
+    # spi with route spi (DS-P2.343): live_capture_client sends no separate edge_route then.
     plan = {
-        "stim_uart": ("arm_uart", None), "mss_uart": ("arm_uart", None),
-        "stim_i2c": ("arm_i2c", None), "stim_spi": ("arm_spi", None),
-        "stim_edge": ("arm_edge", None),
-        "route_i2c": ("arm_i2c", "i2c"), "route_spi": ("arm_spi", "spi"),
-        "route_uart": ("arm_uart", "uart"), "route_uart_mss": ("arm_uart", "uart"),
-        "route_can_ps": ("", "can"), "ps_can": ("", None), "mss_can": ("", None),
+        "stim_uart": ("arm_uart", None, None), "mss_uart": ("arm_uart", None, None),
+        "stim_i2c": ("arm_i2c", None, None), "stim_spi": ("arm_spi", None, None),
+        "stim_edge": ("arm_edge", None, None),
+        "route_i2c": ("arm_i2c", "i2c", None), "route_spi": ("arm_spi", None, "spi"),
+        "route_uart": ("arm_uart", "uart", None), "route_uart_mss": ("arm_uart", "uart", None),
+        "route_can_ps": ("", "can", None), "ps_can": ("", None, None), "mss_can": ("", None, None),
     }[name]
-    for off, val in _armer_writes(plan[0], mss, plan[1]):
+    # The window starts after the last source-select or logger-enable write, not after the armer's last step: the
+    # armer's trailing wait follows its last byte, so a window starting after it never saw the burst it judges
+    # (DS-P2.343: the route-before-burst arm measured edges 1-3 as housekeeping only). The mux switch and the enables
+    # still fall before settled, so their records stay excluded; this is not a loosening.
+    settled = get_sim_time("ns")
+    for off, val in _armer_writes(plan[0], mss, plan[1], plan[2]):
         if off is None:
             await Timer(min(val * 1e6, SLEEP_CAP_US), unit="us")
             continue
         await axi.write(off, _w(val))
         await ClockCycles(dut.CLK, 4)
-    settled = get_sim_time("ns")
+        if off in (SLOT_EMIO_MUX_SEL, SLOT_DATALOGGER_CONFIG):
+            settled = get_sim_time("ns")
     if name in ("mss_uart", "route_uart_mss"):
         payload = MMUART1_SENT.pop() if MMUART1_SENT else b""
         assert payload, "the MSS-mode arm_uart sent no MMUART1 payload"
@@ -346,6 +363,7 @@ async def test_selftest_coverage(dut):
     measured: dict[str, set[int]] = {}
     housekeeping: dict[str, set[int]] = {}
     losses: dict[str, list] = {}
+    spi_bytes: dict[str, tuple[list[int], list[int]]] = {}
     for name in EXPECTED:
         await _quiesce(axi, dut)
         await arm_all()
@@ -356,6 +374,15 @@ async def test_selftest_coverage(dut):
                           if is_traffic(t, p) and counts_after(t, ts, settled)} & set(MIX_IDS)
         housekeeping[name] = {i for i, t, p, *_ in got if not is_traffic(t, p)} & set(MIX_IDS)
         losses[name] = sorted({(i, hex(_zm.event_id_of(t))) for i, t, *_ in got if is_loss(t)})
+        if name == "route_spi":
+            per_id = {i: (sum(1 for j, t, p, ts in got if j == i and is_traffic(t, p) and counts_after(t, ts, settled)),
+                          sum(1 for j, t, p, _ts in got if j == i and not is_traffic(t, p)))
+                      for i in (1, 2, 3, 6, 8, 20)}
+            dut._log.info(f"RECORDS route_spi (id: traffic, housekeeping): {per_id}")
+        spi8 = [(_zm.event_id_of(t), p & 0xFF) for i, t, p, _ts in got
+                if i == 8 and _zm.domain_of(t) == _zm.DOMAIN_SPI]
+        spi_bytes[name] = ([b for e, b in spi8 if e == _pc.SPI_TYPES["payload_a"]],
+                           [b for e, b in spi8 if e == _pc.SPI_TYPES["payload_b"]])
 
     dut._log.info(f"idle baseline (headers high, no source): ids {baseline}")
     for target in TARGETS:
@@ -378,6 +405,11 @@ async def test_selftest_coverage(dut):
     failures = [f"{n}: traffic {sorted(measured[n])}, expected {sorted(EXPECTED[n])}"
                 for n in EXPECTED if measured[n] != set(EXPECTED[n])]
     assert baseline == [], f"records with no source at all: {baseline}"
+    for name in ("stim_spi", "route_spi"):
+        mosi, miso = spi_bytes[name]
+        dut._log.info(f"SPI {name}: logger 8 MOSI {[hex(b) for b in mosi]} MISO {[hex(b) for b in miso]}")
+        assert (mosi, miso) == (SPI_MOSI_BYTES, SPI_MISO_BYTES), \
+            f"{name}: logger 8 MOSI {mosi} MISO {miso}, expected {SPI_MOSI_BYTES} {SPI_MISO_BYTES}"
     assert not failures, "coverage differs from the source reading:\n  " + "\n  ".join(failures)
 
 

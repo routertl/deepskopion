@@ -49,13 +49,13 @@ entity datalogger_gather is
     DOUT_MSG_TYPE   : out std_logic_vector(15 downto 0);
     DOUT_VALID      : out std_logic;
     DOUT_REQ             : in  std_logic;
-    FIFO_CSR        : out t_fifoCsr := C_INIT_FIFO_CSR;
+    FIFO_CSR        : out t_fifo_csr := C_INIT_FIFO_CSR;
     -- Per-protocol telemetry counters (DS-P3.26). One slot per active
     -- protocol, indexed by the sorted-name C_PROTO_IDX_<NAME> constants
     -- from datalogger_config_pkg. Each slot carries:
     --   .pkt_cnt — accepted-handshake count summed across instances
     --   .err_cnt — cycles-with-error count summed across instances
-    PROTO_COUNTERS        : out t_protoCounterArray(0 to C_NUM_PROTO_COUNTERS-1)
+    PROTO_COUNTERS        : out t_proto_counter_array(0 to C_NUM_PROTO_COUNTERS-1)
                               := (others => C_INIT_PROTO_COUNTER);
     -- DS-T3.18: per-EDGE-instance running loss counters — one 32-bit slot per
     -- edge datalogger, channel k in bits [(k+1)*32-1 : k*32]. Fed into the per-
@@ -104,7 +104,7 @@ architecture RTL of datalogger_gather is
   -- Types
   -----------------------------------------------------------------------------
   type t_arrayOfMsgs is array (natural range <>) of std_logic_vector(C_DATALOGGER_MSG_WIDTH-1 downto 0);
-  type t_arrayOfErrors is array (natural range <>) of std_logic_vector(C_ERROR_WIDTH-1 downto 0);
+  type t_array_of_errors is array (natural range <>) of std_logic_vector(C_ERROR_WIDTH-1 downto 0);
 
   -----------------------------------------------------------------------------
   -- Signals
@@ -123,7 +123,7 @@ architecture RTL of datalogger_gather is
   -- file is reverted by the next `rr project run` regen; see DS-T10.)
   constant C_ARB_FIFO_DEPTH : integer := 9;
   constant C_ARB_FIFO_CNT_WIDTH : integer := C_ARB_FIFO_DEPTH + 1;
-  signal arb2nd_fifo_cnt   : uFifoBufferCnt(0 to C_NUM_ARB_INPUTS - 1)(C_ARB_FIFO_CNT_WIDTH - 1 downto 0)
+  signal arb2nd_fifo_cnt   : t_fifo_buffer_cnt(0 to C_NUM_ARB_INPUTS - 1)(C_ARB_FIFO_CNT_WIDTH - 1 downto 0)
                                   := (others => (others => '0'));
   signal arb2nd_dout_empty : std_logic := '1';
   -- Overflow detection: a write attempt to a full per-input FIFO is
@@ -179,7 +179,7 @@ begin
     signal {{ proto_name | lower }}Messages       : t_arrayOfMsgs(0 to C_{{ proto_name }}_DATALOGGERS-1);
     signal {{ proto_name | lower }}Req            : std_logic_vector(0 to C_{{ proto_name }}_DATALOGGERS-1);
     signal {{ proto_name | lower }}Ack            : std_logic_vector(0 to C_{{ proto_name }}_DATALOGGERS-1);
-    signal {{ proto_name | lower }}Errors         : t_arrayOfErrors(0 to C_{{ proto_name }}_DATALOGGERS-1);
+    signal {{ proto_name | lower }}Errors         : t_array_of_errors(0 to C_{{ proto_name }}_DATALOGGERS-1);
     -- Per-instance tagged tuple (payload + datalogger_id + msg_type),
     -- packed into the C_TAGGED_WIDTH bus the arbiter carries (DS-P3.29).
     signal {{ proto_name | lower }}Arb_data_flat  : std_logic_vector(C_{{ proto_name }}_DATALOGGERS*C_TAGGED_WIDTH - 1 downto 0);

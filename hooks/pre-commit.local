@@ -677,6 +677,48 @@ if [ "$ds_rom_info_rc" -ne 0 ]; then
 fi
 printf '%s\n' "$ds_rom_info_out"
 
+# ── DS-P2.352 — the strict lint count can only go down ──
+#
+# The DS-P3.220 epic pays down the routertl-vhdl-strict-provisional findings (3076 at f6562acd) one block at a time.
+# tools/lint/strict_lint_ratchet.py runs that profile explicitly over hw/rtl and compares the findings, per file and
+# rule, with tools/lint/strict_provisional_baseline.json: a rise is refused, and so is a fall the baseline does not
+# record (lower it in the same commit with `strict_lint_ratchet.py update`). Plain `rr linting` keeps its default
+# profile until DS-P2.295 declares linting.profile. Runs only when the commit stages something under hw/rtl or the
+# ratchet's own files (~35 s); rr lints the working tree, so unstaged or untracked hw/rtl changes are refused first.
+# Fails CLOSED like every other leg here.
+ds_sl_staged=$(git diff --cached --name-only -- hw/rtl tools/lint)
+if [ -n "$ds_sl_staged" ]; then
+    ds_sl_dirty=$( { git diff --name-only -- hw/rtl tools/lint; git ls-files --others --exclude-standard -- hw/rtl tools/lint; } )
+    if [ -n "$ds_sl_dirty" ]; then
+        printf '%s\n' "$ds_sl_dirty"
+        echo "❌ these hw/rtl or tools/lint paths are unstaged or untracked, so the tree the strict lint ratchet"
+        echo "   (DS-P2.352) would judge is not the one being committed. Stage or restore them. Commit aborted."
+        exit 1
+    fi
+    echo "🚧 Checking the strict lint ratchet (DS-P2.352)..."
+    ds_sl_rc=0
+    ds_sl_out=$("$DS_GUARD_PY" tools/lint/strict_lint_ratchet.py check 2>&1) || ds_sl_rc=$?
+    if [ "$ds_sl_rc" -ne 0 ]; then
+        printf '%s\n' "$ds_sl_out"
+        echo ""
+        case "$ds_sl_rc" in
+            1)
+                echo "❌ strict lint (routertl-vhdl-strict-provisional) went up, or fell without the baseline (DS-P2.352)."
+                echo "   Commit aborted."
+                ;;
+            *)
+                echo "❌ GATE COULD NOT RUN: strict lint ratchet (exit $ds_sl_rc). It never compared the findings."
+                echo "   Interpreter: $DS_GUARD_PY"
+                echo "   Commit aborted — a gate that cannot run is not a green gate."
+                ;;
+        esac
+        exit 1
+    fi
+    printf '%s\n' "$ds_sl_out"
+else
+    echo "⏭️  Strict lint ratchet (DS-P2.352): nothing under hw/rtl or tools/lint staged."
+fi
+
 # ── DS-P3.187 — routertl.lock stays in step with the tree ──
 #
 # The lock went 12 days stale (written on 5.1.0, ten differences) because no leg

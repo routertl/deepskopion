@@ -1,4 +1,6 @@
 -------------------------------------------------------------------------------
+-- Standard   : VHDL-2008
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
 -- File       : zs_msg_pkg.vhd
 -- Description: Constants + helpers for the zs_msg_header_t framing emitted
 --              by the PL into the rr-ddr-stream DDR ring. Handwritten,

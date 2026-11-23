@@ -1,4 +1,5 @@
 -------------------------------------------------------------------------------
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
 -- Title      : uart_pkg.vhd
 -- Project    : deepskopion
 -------------------------------------------------------------------------------
@@ -8,7 +9,7 @@
 -- Created    : 2025-11-05
 -- Last update: 2025-11-05
 -- Platform   :
--- Standard   : VHDL'08
+-- Standard   : VHDL-2008
 -------------------------------------------------------------------------------
 -- Description: UART Datalogger. Creates a datalogger message when UART data is
 --              received. The message contains the timestamp, the data and
@@ -21,10 +22,10 @@
 -- 2025-11-05  1.0      dmazure Created
 -------------------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.all;
-use IEEE.NUMERIC_STD.all;
-use IEEE.MATH_REAL.all;
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use ieee.math_real.all;
 
 package uart_pkg is
 
@@ -52,8 +53,10 @@ package uart_pkg is
   -- constant C_MIN_BITWIDTH_UART_WIDTH      : integer := integer(ceil(log2(real(C_TICK_PRESCALER)))) + 1;
   constant C_MAX_BITWIDTH_UART_CYCLES     : integer := C_SYSTEM_CLK_FREQ / C_UART_MIN_BAUDRATE;
   constant C_MAX_BITWIDTH_UART_WIDTH      : integer := integer(ceil(log2(real(C_MAX_BITWIDTH_UART_CYCLES)))) + 1;
-  constant C_MAX_RELATIVE_DISTANCE_CYCLES : integer := C_MAX_BITWIDTH_UART_CYCLES * C_MAX_UART_BITS; -- Max distance in clock cycles (used as reference)
-  constant C_BUFFER_TIMEOUT_LIMIT         : integer := C_UART_MIN_BAUDRATE*16; -- Number of timestamp ticks since last edge before considering triggering calibration
+  -- Max distance in clock cycles (used as reference)
+  constant C_MAX_RELATIVE_DISTANCE_CYCLES : integer := C_MAX_BITWIDTH_UART_CYCLES * C_MAX_UART_BITS;
+  -- Number of timestamp ticks since last edge before considering triggering calibration
+  constant C_BUFFER_TIMEOUT_LIMIT         : integer := C_UART_MIN_BAUDRATE*16;
   constant C_POSSIBLE_UART_CONFS          : integer := 5; -- 5-9 bits + parity when not 9 bits
 
   constant C_FIFO_DEPTH     : integer := 10; -- Number of edges we store

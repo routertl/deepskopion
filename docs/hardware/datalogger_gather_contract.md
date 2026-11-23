@@ -74,8 +74,8 @@ entity datalogger_gather is
     REQ_STREAM       : in  std_logic;
 
     -- Per-path telemetry to PS (read via regbank)
-    FIFO_BURST_CSR   : out t_fifoCsr := C_INIT_FIFO_CSR;
-    FIFO_STREAM_CSR  : out t_fifoCsr := C_INIT_FIFO_CSR
+    FIFO_BURST_CSR   : out t_fifo_csr := C_INIT_FIFO_CSR;
+    FIFO_STREAM_CSR  : out t_fifo_csr := C_INIT_FIFO_CSR
   );
 end entity datalogger_gather;
 ```
@@ -138,13 +138,13 @@ package datalogger_records_pkg is
   -- Per-FIFO status — only the signals that actually drive something.
   -- Anything else is diagnostic noise and lives outside this record.
   --------------------------------------------------------------------------
-  type t_fifoStatus is record
+  type t_fifo_status is record
     full     : std_logic;  -- arbiter cannot accept more this cycle
     empty    : std_logic;  -- nothing to drain
     overflow : std_logic;  -- one-shot pulse on lost word
-  end record t_fifoStatus;
+  end record t_fifo_status;
 
-  constant C_INIT_FIFO_STATUS : t_fifoStatus := (
+  constant C_INIT_FIFO_STATUS : t_fifo_status := (
     full     => '0',
     empty    => '1',
     overflow => '0'
@@ -156,13 +156,13 @@ package datalogger_records_pkg is
   --   - level        : current fill (PS reads via regbank)
   --   - overflowCnt  : saturating count of overflow events since reset
   --------------------------------------------------------------------------
-  type t_fifoCsr is record
-    fifoStatus  : t_fifoStatus;
+  type t_fifo_csr is record
+    fifoStatus  : t_fifo_status;
     level       : std_logic_vector(C_FIFO_LEVEL_WIDTH-1 downto 0);
     overflowCnt : std_logic_vector(C_FIFO_OVERFLOW_WIDTH-1 downto 0);
-  end record t_fifoCsr;
+  end record t_fifo_csr;
 
-  constant C_INIT_FIFO_CSR : t_fifoCsr := (
+  constant C_INIT_FIFO_CSR : t_fifo_csr := (
     fifoStatus  => C_INIT_FIFO_STATUS,
     level       => (others => '0'),
     overflowCnt => (others => '0')
@@ -381,8 +381,8 @@ Once `datalogger_records_pkg.vhd` lands and the generator re-runs:
   `enable` is the baseline and ceiling, a trigger enable-mask is a transient
   AND-gate; implemented in `sw/stream/enable_arbiter.py`.
 - v0.2 (2026-05-15) — slim refactor: drop `t_data_valid_record` (flat
-  ports instead), trim `t_fifoStatus` to 3 flags (was 10), trim
-  `t_fifoCsr` to 3 fields (was 6). Anchored on what
+  ports instead), trim `t_fifo_status` to 3 flags (was 10), trim
+  `t_fifo_csr` to 3 fields (was 6). Anchored on what
   `telemetry_counters_spec.yml` and the datalogger_gather body actually
   consume today. Anything we cut comes back individually when a real
   consumer arrives.

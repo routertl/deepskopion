@@ -76,6 +76,12 @@ jobs:
         run: bash tools/ci/materialize_lint_packages.sh
       - name: Lint
         run: rr linting
+      - name: Strict lint can only go down
+        # routertl-vhdl-strict-provisional, named explicitly, against tools/lint/strict_provisional_baseline.json
+        # (per file and rule). Floor leg only: the baseline is measured under the floor release's profile, and a
+        # newer wheel's profile is re-baselined in its own commit (strict_lint_ratchet.py update --rebaseline).
+        if: matrix.routertl == 'floor'
+        run: python tools/lint/strict_lint_ratchet.py check
       - name: Desk tests
         run: tools/ci/run_desk_tests.sh
 

@@ -155,6 +155,12 @@ architecture rtl of edge_datalogger is
   signal deferredTs_r     : std_logic_vector(23 downto 0) := (others => '0');
 
   signal edgeDetected : std_logic;
+  -- The detector's state is defined (DS-P1.113 run9/run10 L-3): RST clears it to its init value (D_r = 0, Q_r = 0),
+  -- and a detection it held from before an enable is never written. edgeQ is the raw detector output; edgeDetected
+  -- is edgeQ in a cycle whose detection was made while the logger was enabled (configEnable_r).
+  signal edgeQ          : std_logic;
+  signal edgeD          : std_logic;
+  signal configEnable_r : std_logic := '0';
   signal f_bit        : std_logic;
   signal e_bit        : std_logic;
   signal s_bit        : std_logic;
@@ -261,7 +267,15 @@ begin
   -- the production batcher reconstructs the rollover-safe 64-bit value.
   timeStamp_i <= TIMESTAMP(C_TIMESTAMP_PART_WIDTH - 1 downto 0);
 
-  -- Detect the edge on the input signal
+  -- Detect the edge on the input signal.
+  -- edge_detector updates D_r/Q_r only while CE = 1, so without a reset they hold whatever they had (power-up state,
+  -- or a rise sampled in the last enabled cycle before a disable). Held Q_r = 1 / D_r = 1 at an enable with the line
+  -- idle low wrote two level-0 records one tick apart. R => RST with D forced to 0 during RST clears both to 0 (R loads
+  -- D_r <= D, Q_r <= 0); the line-high first enable after RST still writes its rise. The detection in the first enabled
+  -- cycle was made before the enable, so it is masked by configEnable_r; a re-enable then writes at most the net level
+  -- change since the last enabled sample, and a re-enable on a line held high writes nothing, as before.
+  edgeD <= EDGE_IN and not RST;
+
   i_edge_event : entity tich.edge_detector
     generic map(
       G_EDGE_TYPE => C_EDGE_TYPE_BOTH
@@ -269,10 +283,23 @@ begin
     port map
     (
       CLK => CLK,
+      R   => RST,
       CE  => configEnable,
-      D   => EDGE_IN,
-      Q   => edgeDetected
+      D   => edgeD,
+      Q   => edgeQ
     );
+
+  pr_enable_r : process (CLK)
+  begin
+    if rising_edge(CLK) then
+      configEnable_r <= configEnable;
+      if RST = '1' then
+        configEnable_r <= '0';
+      end if;
+    end if;
+  end process pr_enable_r;
+
+  edgeDetected <= edgeQ and configEnable_r;
 
 
   -- Detect the Read command

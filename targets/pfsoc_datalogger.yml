@@ -28,7 +28,7 @@ declared_clocks:
 hardware:
   vendor: microchip
   part: MPFS095T-1FCSG325E        # verified: chip marking, registry, manual all agree — PF-P0 §5.2
-  mss: hw/libero/pfsoc/mss/disco_mss.cxz   # frozen MSS Configurator .cxz (PF-P0 §3.1)
+  mss_config: hw/libero/pfsoc/mss/disco_mss.cfg   # MSS configuration; rr generates the .cxz component from it
   language: vhdl
   platform: polarfire-soc-discovery
   platform_strict: true
@@ -334,9 +334,9 @@ linux:
   #   The parts differ (MPFS095T/FCSG325/DDR4 x16 here vs MPFS250T/LPDDR4 x32 on
   #   Icicle), so an Icicle HSS cannot train this board's DDR. Name the real board.
   hss_board: mpfs-disco-kit
-  # The MSS handoff is hardware.mss (above): rr's resolve_mss_handoff() reads
-  # that key since RTL-P2.1220 (in every release from 5.1.0), so no linux.*
-  # alias is needed.
+  # The MSS handoff is the component rr generates from hardware.mss_config
+  # (above, RTL-P1.322); rr linux finds it through rr's MSS stamp (RTL-P2.2496),
+  # so no linux.* alias is needed.
   # PF-L0 boot session 2026-09-06 — GAP F, PRE-STAGED, INERT TODAY. rr's PolarFire
   # profile clones the kernel from github.com/polarfire-soc/linux and pins branch
   # `linux-6.6-mchp+fpga` (_pfsoc.PfsocArch.kernel_branch). That repo now carries
@@ -448,10 +448,10 @@ linux:
   sdcard:
     rootfs: partition
     # 0 = autosize to overlay + daemon + headroom at sdcard *assembly*.
-    # `rr linux rootfs --mode partition` still defaults to 32 MiB (SDK
-    # _DEFAULT_EXT4_SIZE_MB) which is TOO SMALL for the 50 MiB+ riscv64
-    # overlay+daemon tree — pass --size-mb 128 (or larger) on that step,
-    # then `rr linux sdcard --refresh --no-deps`. DS-P2.146.
+    # The card's ext4 is built at assembly from this value (rr's PolarFire
+    # sdcard step), so `rr linux build` / `rr linux sdcard` need no size flag;
+    # the 32 MiB `rr linux rootfs --mode partition` default never reaches the
+    # card (DS-P2.146, DS-P1.118).
     # DS-P2.157: an explicit size. MEASURED on the kit: autosize (0 = du + 8 MiB)
     # produced a 51 MiB ext4 at 100% use with 0 bytes free (ext4 journal and
     # metadata ate the headroom), so the daemon's log write hit ENOSPC and S99's

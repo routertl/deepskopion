@@ -2,12 +2,23 @@
 
 from pathlib import Path
 import re
+import sys
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
 CORE = ROOT / "hw" / "rtl" / "deepskopion_core.vhd"
 DDR_AXI = ROOT / "libs" / "routertl" / "rr_ddr_stream" / "rtl" / "ddr_stream_axi.vhd"
 DDR_AVMM = ROOT / "libs" / "routertl" / "rr_ddr_stream" / "rtl" / "ddr_stream_avmm.vhd"
+sys.path.insert(0, str(ROOT / "tools" / "tests"))
+from fetched_packages import ensure_fetched  # noqa: E402
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _rr_ddr_stream_fetched():
+    """DS-P2.360: rr_ddr_stream is fetched at the ip.lock pin, not tracked; fail (never skip) without it."""
+    ensure_fetched("routertl/rr_ddr_stream")
 
 
 def test_core_passes_full_ddr_base_without_integer_conversion():

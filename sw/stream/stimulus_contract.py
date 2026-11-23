@@ -57,6 +57,10 @@ DATALOGGER_CONFIG = 0x20
 STIM_UART_CONTROL, STIM_UART_BAUD_DIV, STIM_UART_DATA = 0x220, 0x224, 0x228
 STIM_UART_CTRL_BREAK = 0x2     # STIM_UART_CONTROL[1]: break pattern; [15:8] = low bit-times
 STIM_SPI_CONTROL, STIM_SPI_CLK_DIV, STIM_SPI_DATA = 0x238, 0x23C, 0x240
+# The on-chip SPI responder (hw/rtl/responder/spi_injector.vhd, project_regbank.yml SPI_INJ_*): CONTROL bit 0
+# enables it, bit 9 resets its TX FIFO (self-clearing); each DATAIN write pushes one MISO byte.
+SPI_INJ_CONTROL, SPI_INJ_DATAIN = 0x40, 0x44
+SPI_INJ_ENABLE, SPI_INJ_FIFO_RESET = 0x1, 1 << 9
 
 # Datalogger device_ids — tools/datalogger-builder/config/datalogger_config.yml.
 DATALOGGER_ID_I2C, DATALOGGER_ID_SPI, DATALOGGER_ID_UART, DATALOGGER_ID_EDGE1 = 4, 8, 12, 1
@@ -181,5 +185,8 @@ def transmit_mmuart1(payload) -> bytes:
 # (see capture_correctness.py, which binds these to test_datalogger_to_ddr.py).
 UART_PAYLOAD = [0xA3, 0x5C, 0x71, 0x0E, 0xFF, 0x42, 0x00, 0xFF, 0x00, 0xFF]
 SPI_PAYLOAD = [0xDE, 0xAD, 0xBE, 0xEF]
+# DS-P2.343: the MISO byte the responder returns for each SPI_PAYLOAD byte. Each has edges on MISO (0x00
+# would leave the line low), so the SPI edge route's MISO channel (Edge 3) sees traffic.
+SPI_MISO_PAYLOAD = [0xA5, 0x5A, 0xC3, 0x3C]
 UART_BAUD_DIV = 434   # 50e6 / 434 ~= 115200 baud on clk_sys (DS-T2.73, 50 MHz)
 SPI_CLK_DIV = 25      # 50e6 / (2*25) = 1 MHz SCLK

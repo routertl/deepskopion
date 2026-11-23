@@ -36,6 +36,7 @@ from typing import List, Optional, Tuple
 import msgpack
 
 from sw.stream import protocol as proto
+from sw.stream.stimulus_armer import ROUTED_ARMERS
 
 WireFrame = Tuple[int, dict]
 
@@ -116,9 +117,14 @@ def capture(host: str, port: int, duration_s: float,
             break
         captured.append((tag, payload))
         if stim and tag == proto.TAG_SYNC:
+            # DS-P2.343: a routed arm (spi) takes the edge route in the same frame, so the route is in place
+            # before the burst; no separate edge_route frame follows it.
+            routed = edge_route if edge_route and stim in ROUTED_ARMERS else None
             sock.sendall(proto.pack_frame(proto.TAG_CONTROL,
-                                          proto.make_stim_control(stim)))
+                                          proto.make_stim_control(stim, route=routed)))
             stim = None
+            if routed:
+                edge_route = None   # routed by the arm itself; a later edge_route would only re-reset its loggers
         if edge_route and tag == proto.TAG_SYNC:
             # After any stim: a stim arm rewrites the whole EMIO_MUX_SEL, the
             # edge route rewrites only bits [7:3] (DS-P3.123).

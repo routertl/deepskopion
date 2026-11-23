@@ -145,7 +145,17 @@ begin
             msgVld_r    <= pinChange_r;
           end if;
           if levelPins_r /= LEVEL_PINS then
-            pinChange_r <= '1';
+            -- DS-T3.42: in the cycle a pending change is delivered (RDY=1,
+            -- pinChange_r=1) the RDY branch above has just cleared pinChange_r
+            -- and taken LEVEL_PINS as the new baseline, but levelPins_r still
+            -- holds the OLD value here, so this test sees the very change that
+            -- is being delivered and re-armed it: a second identical frame.
+            -- A change that is the pending one (LEVEL_PINS = pinsCaptured_r)
+            -- is not a new change; anything else is, and is flagged as before.
+            if not (LEVEL_MSG_RDY = '1' and pinChange_r = '1'
+                    and LEVEL_PINS = pinsCaptured_r) then
+              pinChange_r <= '1';
+            end if;
             -- DS-T3.11: freeze (timestamp, pins) on the FIRST pending change
             -- (pinChange_r still '0'); hold them through any backpressure stall
             -- until delivered, so the frame carries the change-instant values.

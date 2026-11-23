@@ -1826,7 +1826,7 @@ def test_build_leaves_uboot_env_absent_from_output_and_card(
     assert not (out / "env.txt").exists()
 
 
-def test_lock_cli_rejects_any_uboot_env_on_card(tmp_path):
+def test_lock_cli_rejects_any_uboot_env_on_card(tmp_path, monkeypatch):
     """@requires DE-L0-NEG-005
 
     Assert the prohibition at the CLI/raw-card boundary using the formerly
@@ -1838,6 +1838,7 @@ def test_lock_cli_rejects_any_uboot_env_on_card(tmp_path):
     deleting the explicit FAT presence probe also makes the lock command
     return zero, so this guard goes red.
     """
+    monkeypatch.setenv("RR_TARGET", str(TARGET))  # DS-P2.342: DE25 whatever `rr target set` chose here
     out = tmp_path / "out"
     sources = tmp_path / "src"
     fat_items = _stage_lock_fixture(out, sources)
@@ -1864,8 +1865,9 @@ def test_lock_cli_rejects_any_uboot_env_on_card(tmp_path):
     assert not frozen.exists()
 
 
-def test_lock_cli_rejects_artifact_drift(tmp_path):
+def test_lock_cli_rejects_artifact_drift(tmp_path, monkeypatch):
     """@requires DE-L0-BUILD-001 DE-L0-NEG-002 DE-L0-NEG-003"""
+    monkeypatch.setenv("RR_TARGET", str(TARGET))  # DS-P2.342: DE25 whatever `rr target set` chose here
     out = tmp_path / "out"
     sources = tmp_path / "src"
     fat_items = _stage_lock_fixture(out, sources)
@@ -1923,7 +1925,7 @@ def test_lock_cli_rejects_artifact_drift(tmp_path):
 
 
 @requires("DE-L0-BUILD-002", "DE-L0-NEG-004")
-def test_lock_cli_fails_closed_when_sof_hps_artifact_is_missing_ds_p1_50(tmp_path):
+def test_lock_cli_fails_closed_when_sof_hps_artifact_is_missing_ds_p1_50(tmp_path, monkeypatch):
     """@requires DE-L0-BUILD-002 DE-L0-NEG-004
 
     Regression guard for the measured DS-P1.50 defect: an ``out/`` that never
@@ -1953,6 +1955,7 @@ def test_lock_cli_fails_closed_when_sof_hps_artifact_is_missing_ds_p1_50(tmp_pat
     below exercises the missing-sof path specifically, not something
     unconditional.
     """
+    monkeypatch.setenv("RR_TARGET", str(TARGET))  # DS-P2.342: DE25 whatever `rr target set` chose here
     out = tmp_path / "out"
     sources = tmp_path / "src"
     fat_items = _stage_lock_fixture(out, sources)
@@ -1974,7 +1977,7 @@ def test_lock_cli_fails_closed_when_sof_hps_artifact_is_missing_ds_p1_50(tmp_pat
 
 @requires("DE-L0-BUILD-002", "DE-L0-NEG-004")
 def test_lock_cli_passes_when_sof_hps_artifact_is_absent_from_the_card_ds_p3_147(
-    tmp_path,
+    tmp_path, monkeypatch,
 ):
     """@requires DE-L0-BUILD-002 DE-L0-NEG-004
 
@@ -2002,6 +2005,7 @@ def test_lock_cli_passes_when_sof_hps_artifact_is_absent_from_the_card_ds_p3_147
     the assertion below exercises exactly the FAT-membership expectation
     DS-P3.147 corrected, not something unconditional.
     """
+    monkeypatch.setenv("RR_TARGET", str(TARGET))  # DS-P2.342: DE25 whatever `rr target set` chose here
     out = tmp_path / "out"
     sources = tmp_path / "src"
     fat_items = _stage_lock_fixture(out, sources)
@@ -2024,7 +2028,7 @@ def test_lock_cli_passes_when_sof_hps_artifact_is_absent_from_the_card_ds_p3_147
     )
 
 
-def test_lock_cli_fails_closed_on_a_fat_only_image_ds_p1_49(tmp_path):
+def test_lock_cli_fails_closed_on_a_fat_only_image_ds_p1_49(tmp_path, monkeypatch):
     """@requires DE-L0-BUILD-001 DE-L0-NEG-003
 
     Regression guard for the measured DS-P1.49 defect: a single-FAT32,
@@ -2045,6 +2049,7 @@ def test_lock_cli_fails_closed_on_a_fat_only_image_ds_p1_49(tmp_path):
     below is actually exercising the missing-partition path, not something
     unconditional.
     """
+    monkeypatch.setenv("RR_TARGET", str(TARGET))  # DS-P2.342: DE25 whatever `rr target set` chose here
     out = tmp_path / "out"
     sources = tmp_path / "src"
     fat_items = _stage_lock_fixture(out, sources)
@@ -2062,8 +2067,9 @@ def test_lock_cli_fails_closed_on_a_fat_only_image_ds_p1_49(tmp_path):
     assert not frozen.exists()
 
 
-def test_normalize_provenance_removes_wall_clock_and_worktree_identity(tmp_path):
+def test_normalize_provenance_removes_wall_clock_and_worktree_identity(tmp_path, monkeypatch):
     """@requires DE-L0-BUILD-001 DE-L0-NEG-001"""
+    monkeypatch.setenv("RR_TARGET", str(TARGET))  # DS-P2.342: DE25 whatever `rr target set` chose here
     rootfs = tmp_path / "rootfs"
     (rootfs / "etc").mkdir(parents=True)
     (rootfs / "usr/bin").mkdir(parents=True)

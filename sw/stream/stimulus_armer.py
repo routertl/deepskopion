@@ -25,12 +25,12 @@ The per-protocol sequences are the DS-P1.58 production register contract
 from __future__ import annotations
 
 import time
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Optional
 
 from .stimulus_contract import (
     EDGE_FINITE_CONTROL, EMIO_MUX_SEL, I2C_REGISTER_SEQUENCE, DATALOGGER_CONFIG,
     DATALOGGER_ID_EDGE1, DATALOGGER_ID_I2C, DATALOGGER_ID_SPI, DATALOGGER_ID_UART,
-    SPI_CLK_DIV, SPI_PAYLOAD,
+    SPI_CLK_DIV, SPI_INJ_CONTROL, SPI_INJ_DATAIN, SPI_INJ_ENABLE, SPI_INJ_FIFO_RESET, SPI_MISO_PAYLOAD, SPI_PAYLOAD,
     STIM_EDGE_CONTROL, STIM_SPI_CONTROL, STIM_SPI_CLK_DIV, STIM_SPI_DATA,
     STIM_UART_BAUD_DIV, STIM_UART_CONTROL, STIM_UART_CTRL_BREAK, STIM_UART_DATA, UART_BAUD_DIV,
     UART_PAYLOAD, emio_mux_word, mss_fabric_requested, transmit_mmuart1,
@@ -114,25 +114,62 @@ def arm_uart_breaks(rb, low_bits: int = 13, count: int = 80,
     rb.write_u32(STIM_UART_DATA, count)
 
 
-def arm_i2c(rb) -> None:
+def arm_i2c(rb, route: Optional[str] = None) -> None:
+    """Arm the I2C stimulus master and its on-chip responder; the register sequence starts one transaction.
+
+    ``route`` (DS-P2.359): an edge route (``edge_route.ROUTES``) written into the same EMIO_MUX_SEL word, with its
+    edge data loggers enabled, before the register sequence starts the transaction. The transaction is one burst of
+    about 0.2 ms, so an edge route sent after the arm enabled the edge loggers 23-29 ms after its STOP (PolarFire SoC
+    and Zybo captures, 2026-11-18) and they saw none of its edges. ``None`` writes the I2C stimulus bit alone, as
+    before."""
+    mux, edge_ids = emio_mux_word("i2c"), ()
+    if route is not None:
+        from .edge_route import ROUTES, route_word
+        # Only the I2C route shows this burst: another route would put a quiet signal set on the edge inputs.
+        if route != "i2c":
+            raise ValueError(f"the i2c stimulus takes only the 'i2c' edge route, not {route!r}")
+        mux, edge_ids = route_word(mux, route), ROUTES[route][1]
     # The mux first: enabled on a header pin held low, the logger recorded a stop_error at the switch to the
     # stimulus bus (DE25 silicon 2026-11-15; test_arm_order_uart_i2c_spi_ds_p2_315).
-    rb.write_u32(EMIO_MUX_SEL, emio_mux_word("i2c"))
+    rb.write_u32(EMIO_MUX_SEL, mux)
     _enable_datalogger(rb, DATALOGGER_ID_I2C)
+    for device_id in edge_ids:
+        _enable_datalogger(rb, device_id)
     # Responder-first: without I2C_INJ_CONTROL the ACK slots are necessarily
     # NACKs (DS-P2.101 gap; DS-P1.58 fix).
     for offset, value in I2C_REGISTER_SEQUENCE:
         rb.write_u32(offset, value)
 
 
-def arm_spi(rb) -> None:
+def arm_spi(rb, route: Optional[str] = None) -> None:
+    """Arm the SPI stimulus master and the on-chip responder, then send SPI_PAYLOAD.
+
+    ``route`` (DS-P2.343): an edge route (``edge_route.ROUTES``) written into the same EMIO_MUX_SEL word before the
+    first byte, with its edge data loggers enabled, so the edge inputs see the burst. Routed after the arm instead,
+    the edge inputs switch only after the last byte (the daemon handles CONTROL frames in order, and this arm waits
+    _INTER_BYTE_S after each byte). ``None`` writes the SPI stimulus bit alone, as before."""
+    mux, edge_ids = emio_mux_word("spi"), ()
+    if route is not None:
+        from .edge_route import ROUTES, route_word
+        if route not in ROUTES:
+            raise ValueError(f"unknown edge route {route!r}; expected one of {sorted(ROUTES)}")
+        mux, edge_ids = route_word(mux, route), ROUTES[route][1]
     # The mux first, as the other armers (no artifact measured for SPI in test_arm_order_uart_i2c_spi_ds_p2_315).
-    rb.write_u32(EMIO_MUX_SEL, emio_mux_word("spi"))
+    rb.write_u32(EMIO_MUX_SEL, mux)
     _enable_datalogger(rb, DATALOGGER_ID_SPI)
+    for device_id in edge_ids:
+        _enable_datalogger(rb, device_id)
+    # DS-P2.343: the on-chip responder answers the stimulus master on the EMIO bus MISO. FIFO reset, enable, then
+    # per transfer the MISO byte (popped at CS fall) and 0x00 (popped at the 8th SCLK fall, so MISO returns low;
+    # spi_slave.vhd DS-T2.8). The sequence of sw/stream/testbench/edge4_live_stimulus.py, DE25 silicon 2026-10-02.
+    rb.write_u32(SPI_INJ_CONTROL, SPI_INJ_FIFO_RESET)
+    rb.write_u32(SPI_INJ_CONTROL, SPI_INJ_ENABLE)
     rb.write_u32(STIM_SPI_CLK_DIV, SPI_CLK_DIV)
     rb.write_u32(STIM_SPI_CONTROL, 0x1)
-    for b in SPI_PAYLOAD:
-        rb.write_u32(STIM_SPI_DATA, b)
+    for mosi, miso in zip(SPI_PAYLOAD, SPI_MISO_PAYLOAD):
+        rb.write_u32(SPI_INJ_DATAIN, miso)
+        rb.write_u32(SPI_INJ_DATAIN, 0x00)
+        rb.write_u32(STIM_SPI_DATA, mosi)
         time.sleep(_INTER_BYTE_S)
 
 
@@ -156,6 +193,9 @@ ARMERS: Dict[str, Callable[[object], None]] = {
 }
 
 PROTOCOLS: List[str] = list(ARMERS)
+
+#: DS-P2.343 (spi), DS-P2.359 (i2c): the armers that take an edge route in the same arm (``op=stim`` with ``route``).
+ROUTED_ARMERS = frozenset({"spi", "i2c"})
 
 
 def arm(rb, protocol: str) -> None:

@@ -128,6 +128,11 @@ def test_gate_is_at_zero_findings_on_the_index(exported, tmp_path):
     assert findings == []
 
 
+# DS-P2.360: an RFC 1918 address that is no bench address, built at run time so this file carries no address
+# literal (the fixture used to hold a bench board address as two adjacent bytes literals).
+_SYNTH_PRIVATE = ".".join(str(n) for n in (10, 255, 254, 253)).encode()
+
+
 @pytest.mark.parametrize("rel,body,kind", [
     ("sw/a.py", b"model = 'cl" b"aude'\n", "agent identity reference"),
     ("sw/b.py", b"see ti" b"ch-super\n", "internal " "ti" "ch reference"),
@@ -136,8 +141,8 @@ def test_gate_is_at_zero_findings_on_the_index(exported, tmp_path):
     ("sw/e.py", b"git_" b"repo/project\n", "internal bench workspace path"),
     ("docs/f.md", b"Fixed in DS-" b"P2.9.\n", "ticket narrative in docs"),
     ("sw/g.py", b"/ho" b"me/someone/x\n", "developer home"),
-    ("sw/h.py", b"192.168" b".7.3\n", "private-subnet assumption"),
-    ("sw/i.py", b"21ABC" b"DEFGHIJ\n", "bench cable serial"),
+    ("sw/h.py", _SYNTH_PRIVATE + b"\n", "private-subnet assumption"),
+    ("sw/i.py", "".join(("21", "ABC", "DEFGHIJ")).encode() + b"\n", "bench cable serial"),
     ("sw/j.py", FAKE_CLIENT.encode() + b"\n", "restricted client name"),
     ("sw/k.py", b"-----BEGIN " b"PRIVATE KEY-----\n", "private key"),
 ])

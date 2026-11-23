@@ -31,13 +31,90 @@ HYGIENE_TOOL = ROOT / "tools" / "public_artifact_hygiene.py"
 
 # One drop list. A failed import stops the export; a second copy here went stale.
 sys.path.insert(0, str(ROOT / "tools"))
-from public_artifact_hygiene import _matches_drop_list  # noqa: E402
+from public_artifact_hygiene import PRIVATE_TERMS_REL, _matches_drop_list  # noqa: E402
+
+
+def managed_package_roots(treeish: str, root: Path) -> list[str]:
+    """DS-P2.360: the local_path of every ip.lock package fetched from a remote (url not ``sdk://``) at ``treeish``.
+
+    Those directories are filled by `rr workspace sync` / `rr pkg add` from the package's own repository, so a
+    tracked copy under one is vendored registry IP, which the public export must not carry (owner ruling
+    2026-11-18). ``sdk://`` units come from the RouteRTL SDK and are not fetched packages. No ip.lock: no roots."""
+    import yaml
+
+    shown = subprocess.run(["git", "-C", str(root), "show", f"{treeish}:ip.lock"],
+                           capture_output=True, text=True, errors="replace", check=False)
+    if shown.returncode != 0:
+        return []
+    lock = yaml.safe_load(shown.stdout) or {}
+    roots = []
+    for name, entry in lock.items():
+        if name in ("version", "_meta") or not isinstance(entry, dict):
+            continue
+        url, local = str(entry.get("url") or ""), str(entry.get("local_path") or "").strip("/")
+        if local and not url.startswith("sdk://"):
+            roots.append(local)
+    return sorted(roots)
+
+
+def managed_package_refusals(treeish: str, root: Path) -> list[str]:
+    """Tracked paths at ``treeish`` that lie under a managed package root, one line each."""
+    roots = managed_package_roots(treeish, root)
+    if not roots:
+        return []
+    listed = subprocess.run(["git", "-C", str(root), "ls-tree", "-r", "-z", "--name-only", treeish, "--", *roots],
+                            capture_output=True, check=True).stdout
+    paths = [p.decode("utf-8", "surrogateescape") for p in listed.split(b"\0") if p]
+    return [f"{p}: tracked file under managed package dir "
+            f"{next(r for r in roots if p == r or p.startswith(r + '/'))} (fetched by rr workspace sync)"
+            for p in sorted(paths)]
 
 
 _HOST_PATH_SUB_RES = (
     re.compile(rb"/(?:home|Users)/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*?/(ip/agilex_hps/)"),
     re.compile(rb"(?:\.\./)+(?:\.agent-wt/[^/]+/deepskopion/)?(ip/agilex_hps/)"),
 )
+
+
+def target_input_refusals(treeish: str, root: Path) -> list[str]:
+    """DS-P1.113: tracked files that a SHIPPED target yml names, but the export drops, one line each.
+
+    A target under targets/ that the export ships is built from the public tree, so every repository file its yml
+    names (hardware.mss, system_config, constraint and hook paths, ...) has to ship with it. pfsoc_datalogger named
+    hw/libero/pfsoc/mss/disco_mss.cxz while the drop list removed it, so a public clone could not build that target.
+    A string value counts as a named file when it is exactly the path of a tracked file at ``treeish``."""
+    import yaml
+
+    listed = subprocess.run(["git", "-C", str(root), "ls-tree", "-r", "-z", "--name-only", treeish],
+                            capture_output=True, check=True).stdout
+    tracked = {q.decode("utf-8", "surrogateescape") for q in listed.split(b"\0") if q}
+
+    def leaves(node):
+        if isinstance(node, dict):
+            for value in node.values():
+                yield from leaves(value)
+        elif isinstance(node, list):
+            for value in node:
+                yield from leaves(value)
+        elif isinstance(node, str):
+            yield node.strip()
+
+    out = []
+    for target in sorted(t for t in tracked if re.fullmatch(r"targets/[^/]+\.yml", t)):
+        if _matches_drop_list(target):
+            continue
+        shown = subprocess.run(["git", "-C", str(root), "show", f"{treeish}:{target}"],
+                               capture_output=True, text=True, errors="replace", check=True).stdout
+        try:
+            data = yaml.safe_load(shown)
+        except yaml.YAMLError as exc:
+            out.append(f"{target}: unreadable yml, its inputs cannot be checked ({exc})")
+            continue
+        for named in sorted({v for v in leaves(data) if v in tracked}):
+            rule = _matches_drop_list(named)
+            if rule:
+                out.append(f"{named}: named by shipped {target} but dropped by the export ({rule})")
+    return out
 
 
 def _resolve_source_commit(sha_or_ref: str, root: Path) -> tuple[str, str, str]:
@@ -233,10 +310,52 @@ def regenerate_host_paths(dest_dir: Path, full_sha: str, root: Path) -> list[str
     return modified
 
 
+class PrivateTermsMissing(Exception):
+    """The private repository lost its private term list: the export is refused."""
+
+
+def private_terms_for_tree(treeish: str, root: Path, scratch: Path) -> Path | None:
+    """DS-P1.123: the private term list for an export of ``treeish``.
+
+    The union of the list the exported tree tracks, the list committed at HEAD of the
+    checkout this exporter runs from, and that checkout's working copy. A union only adds
+    terms: a staged or unstaged edit of one copy cannot drop a term the others carry.
+    A checkout that tracks the dropped internal docs is the private repository, so no list
+    anywhere raises PrivateTermsMissing (the gate fails closed). With no list and no
+    internal docs (a public clone) None, and the gate has no private terms.
+    """
+    copies: list[bytes] = []
+    for repo, rev in ((root, treeish), (ROOT, "HEAD")):
+        blob = subprocess.run(
+            ["git", "-C", str(repo), "show", f"{rev}:{PRIVATE_TERMS_REL}"],
+            capture_output=True, check=False,
+        )
+        if blob.returncode == 0:
+            copies.append(blob.stdout)
+    own = ROOT / PRIVATE_TERMS_REL
+    if own.is_file():
+        copies.append(own.read_bytes())
+    if copies:
+        path = scratch / "private_export_terms.txt"
+        path.write_bytes(b"\n".join(copies) + b"\n")
+        return path
+    internal = PRIVATE_TERMS_REL.rsplit("/", 1)[0]
+    tracked = subprocess.run(
+        ["git", "-C", str(ROOT), "ls-files", "--", internal],
+        capture_output=True, text=True, check=False,
+    )
+    if tracked.stdout.strip():
+        raise PrivateTermsMissing(
+            f"{ROOT} tracks {internal}/ but neither it nor the exported tree has {PRIVATE_TERMS_REL} "
+            "(DS-P1.123): the private term check cannot run")
+    return None
+
+
 def run_hygiene_gate(
     dest_dir: Path,
     restricted_names_file: Path | None = None,
     root: Path = ROOT,
+    private_terms_file: Path | None = None,
 ) -> tuple[int, str]:
     """Execute tools/public_artifact_hygiene.py with --export-gate."""
     cmd = [
@@ -248,6 +367,8 @@ def run_hygiene_gate(
     ]
     if restricted_names_file:
         cmd.extend(["--restricted-names", str(restricted_names_file)])
+    if private_terms_file:
+        cmd.extend(["--private-terms", str(private_terms_file)])
 
     proc = subprocess.run(cmd, capture_output=True, text=True, check=False, cwd=root)
     output = (proc.stdout + proc.stderr).strip()
@@ -329,6 +450,22 @@ def export_github(
     except ValueError as exc:
         return 1, str(exc)
 
+    refused = managed_package_refusals(full_sha, repo_root)
+    if refused:
+        return 1, ("PUBLIC EXPORT GATE REFUSAL: managed package content is tracked (DS-P2.360):\n"
+                   + "\n".join(refused) + "\nExport aborted before any file was written.")
+    missing = target_input_refusals(full_sha, repo_root)
+    if missing:
+        return 1, ("PUBLIC EXPORT GATE REFUSAL: a shipped target names a file the export drops (DS-P1.113):\n"
+                   + "\n".join(missing) + "\nExport aborted before any file was written.")
+
+    terms_scratch = tempfile.TemporaryDirectory(prefix="ds-export-terms-")
+    try:
+        terms_file = private_terms_for_tree(full_sha, repo_root, Path(terms_scratch.name))
+    except PrivateTermsMissing as exc:
+        terms_scratch.cleanup()
+        return 1, f"PUBLIC EXPORT GATE REFUSAL: {exc}\nExport aborted before any file was written."
+
     target_dest.mkdir(parents=True, exist_ok=True)
 
     # Clear prior working tree (keep .git for re-runnable sync)
@@ -351,7 +488,9 @@ def export_github(
         target_dest,
         restricted_names_file=restricted_names_file,
         root=repo_root,
+        private_terms_file=terms_file,
     )
+    terms_scratch.cleanup()
     if rc != 0:
         return rc, f"PUBLIC EXPORT GATE REFUSAL:\n{hygiene_out}\nExport aborted before any commit was made."
 
@@ -392,13 +531,26 @@ def gate_staged_tree(
     )
     if tree.returncode != 0:
         return 2, f"cannot read the index: {tree.stderr.strip()}"
+    refused = managed_package_refusals(tree.stdout.strip(), repo_root)
+    if refused:
+        return 1, ("PUBLIC EXPORT GATE REFUSAL: managed package content is tracked (DS-P2.360):\n"
+                   + "\n".join(refused))
+    missing = target_input_refusals(tree.stdout.strip(), repo_root)
+    if missing:
+        return 1, ("PUBLIC EXPORT GATE REFUSAL: a shipped target names a file the export drops (DS-P1.113):\n"
+                   + "\n".join(missing))
     with tempfile.TemporaryDirectory(prefix="ds-export-gate-") as scratch:
+        try:
+            terms_file = private_terms_for_tree(tree.stdout.strip(), repo_root, Path(scratch))
+        except PrivateTermsMissing as exc:
+            return 1, f"PUBLIC EXPORT GATE REFUSAL: {exc}"
         dest = Path(scratch).resolve() / "tree"
         dest.mkdir()
         _export_tree_from_sha(dest, tree.stdout.strip(), repo_root)
         regenerate_host_paths(dest, tree.stdout.strip(), repo_root)
         rc, output = run_hygiene_gate(
             dest, restricted_names_file=restricted_names_file, root=repo_root,
+            private_terms_file=terms_file,
         )
     return rc, output.replace(f"{dest}/", "")
 

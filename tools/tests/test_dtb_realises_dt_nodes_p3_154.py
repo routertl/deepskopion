@@ -120,7 +120,7 @@ def test_stale_disabled_status_in_the_dtb_is_refused(tmp_path):
     assert "vacuous" in out
 
 
-def test_a_stale_disabled_status_on_a_declared_node_is_refused(tmp_path):
+def test_a_stale_disabled_status_on_a_declared_node_is_refused(tmp_path, monkeypatch):
     """Not a hand-made fixture: reconstruct the merge shape against a node this
     repo currently SHIPS enabled.
 
@@ -133,6 +133,7 @@ def test_a_stale_disabled_status_on_a_declared_node_is_refused(tmp_path):
     stale ``status: disabled``, then grade it against the REPO's own current
     target; a guard that passes here would ship a card whose node is dark.
     """
+    monkeypatch.setenv("RR_TARGET", str(ROOT / "targets/de25_datalogger.yml"))  # DS-P2.342: DE25 whatever `rr target set` chose here
     prior = yaml.safe_load(
         (ROOT / "targets/de25_datalogger.yml").read_text(encoding="utf-8"))
     victim = next(

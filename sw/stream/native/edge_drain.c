@@ -77,6 +77,29 @@ static inline uint32_t edge_word(uint32_t instance, uint64_t ts_ns, uint64_t ts_
          | ((e & 1u) << 24) | (ts_us << 8) | ext;
 }
 
+int ds_edge_drain_abi(void) { return DS_EDGE_DRAIN_ABI; }
+
+/* data_source.py DdrRingDataSource._pad_run (DS-P2.280) for a cursor right after a frame: the bytes of PL
+ * zero pad at span[cursor..], 0 when there is none, -1 when the bytes are zero up to the span end and the
+ * DDR-word boundary lies beyond it. A pad runs from a position that is not on a word boundary up to the
+ * next boundary, all zero; zeros that start on a boundary, or that stop before it, are not pad. */
+static inline long pad_run(const uint8_t *span, size_t len, size_t cursor, const struct ds_drain_cfg *cfg)
+{
+    const size_t w = cfg->ring_word_bytes;
+    size_t pos = cfg->span_ofs + cursor;
+    if (cfg->ring_bytes)
+        pos %= cfg->ring_bytes;
+    const size_t rem = pos % w;
+    if (rem == 0)
+        return 0;
+    const size_t n = w - rem;
+    const size_t avail = len - cursor < n ? len - cursor : n;
+    for (size_t i = 0; i < avail; ++i)
+        if (span[cursor + i])
+            return 0;
+    return avail == n ? (long)n : -1;
+}
+
 struct ds_frames;
 static inline void frames_push(struct ds_frames *f, uint32_t word, uint64_t ts_ns,
                                uint64_t ts_us);
@@ -96,12 +119,29 @@ static inline void walk(const uint8_t *span, size_t len, const struct ds_drain_c
 
     int after_frame = 0;   /* data_source.py after_frame: the cursor sits right after a walked frame */
 
-    while (cursor + ZS_HEADER_SIZE <= len && res->frames < cfg->max_frames) {
+    while (res->frames < cfg->max_frames) {
+        /* DS-P1.117: the pad rule before the header-size guard, as data_source.py's loop applies it, so
+         * a frame followed by its pad to the DDR-word boundary is walked in this one call. */
+        if (after_frame && cfg->ring_word_bytes && cursor < len) {
+            const long pad = pad_run(span, len, cursor, cfg);
+            if (pad > 0) {
+                cursor += (size_t)pad;
+                res->pad_bytes += (size_t)pad;
+                after_frame = 0;
+                continue;
+            }
+            if (pad < 0) {
+                res->stop = DS_DRAIN_STOP_PARTIAL;   /* data_source.py: next tick decides */
+                break;
+            }
+        }
+        if (cursor + ZS_HEADER_SIZE > len)
+            break;
         const uint8_t *h = span + cursor;
         if (rd16(h) != ZS_MAGIC) {
-            /* DS-P2.281: a zero word right after a frame may be PL zero pad (DS-P2.280). The pad rule needs
-             * the ring word width, which this walk does not have: stop here and let Python's _pad_run take
-             * it or resync it, as its own walk does. Any other bad word is resynced here, 4 bytes. */
+            /* DS-P2.281: a zero word right after a frame that the pad rule above did not take (it starts
+             * on a word boundary, stops short of it, or ring_word_bytes is 0) goes back to Python, whose
+             * walk resyncs it (DS-P1.117 keeps this stop). Any other bad word is resynced here, 4 bytes. */
             if (after_frame && (h[0] | h[1] | h[2] | h[3]) == 0) {
                 res->stop = DS_DRAIN_STOP_OTHER_FRAME;
                 break;
@@ -189,6 +229,7 @@ static inline void walk(const uint8_t *span, size_t len, const struct ds_drain_c
         res->stop = DS_DRAIN_STOP_MAX_FRAMES;
     res->consumed = cursor;
     res->edges = n_out;
+    res->after_frame = after_frame;
 }
 
 int ds_edge_drain(const uint8_t *span, size_t len, const struct ds_drain_cfg *cfg,

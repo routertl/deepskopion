@@ -95,7 +95,7 @@ def test_the_doc_exists_and_points_at_the_source_of_truth():
 
 
 @pytest.mark.parametrize("value", [
-    "22.04", "x86_64", "3.10", "5.6.0", "2024.1",
+    "22.04", "x86_64", "3.11", "5.7.0", "2024.1",
     "xc7z020clg400-1", "zybo-z7-20", "dhcp-or-user-static",
 ])
 def test_the_doc_states_the_declared_value(value):

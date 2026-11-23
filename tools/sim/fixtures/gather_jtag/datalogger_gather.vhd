@@ -48,13 +48,13 @@ entity datalogger_gather is
     DOUT_MSG_TYPE   : out std_logic_vector(15 downto 0);
     DOUT_VALID      : out std_logic;
     DOUT_REQ             : in  std_logic;
-    FIFO_CSR        : out t_fifoCsr := C_INIT_FIFO_CSR;
+    FIFO_CSR        : out t_fifo_csr := C_INIT_FIFO_CSR;
     -- Per-protocol telemetry counters (DS-P3.26). One slot per active
     -- protocol, indexed by the sorted-name C_PROTO_IDX_<NAME> constants
     -- from datalogger_config_pkg. Each slot carries:
     --   .pkt_cnt — accepted-handshake count summed across instances
     --   .err_cnt — cycles-with-error count summed across instances
-    PROTO_COUNTERS        : out t_protoCounterArray(0 to C_NUM_PROTO_COUNTERS-1)
+    PROTO_COUNTERS        : out t_proto_counter_array(0 to C_NUM_PROTO_COUNTERS-1)
                               := (others => C_INIT_PROTO_COUNTER);
     -- DS-T3.18: per-EDGE-instance running loss counters — one 32-bit slot per
     -- edge datalogger, channel k in bits [(k+1)*32-1 : k*32]. Fed into the per-
@@ -101,7 +101,7 @@ architecture RTL of datalogger_gather is
   -- Types
   -----------------------------------------------------------------------------
   type t_arrayOfMsgs is array (natural range <>) of std_logic_vector(C_DATALOGGER_MSG_WIDTH-1 downto 0);
-  type t_arrayOfErrors is array (natural range <>) of std_logic_vector(C_ERROR_WIDTH-1 downto 0);
+  type t_array_of_errors is array (natural range <>) of std_logic_vector(C_ERROR_WIDTH-1 downto 0);
 
   -----------------------------------------------------------------------------
   -- Signals
@@ -120,7 +120,7 @@ architecture RTL of datalogger_gather is
   -- file is reverted by the next `rr project run` regen; see DS-T10.)
   constant C_ARB_FIFO_DEPTH : integer := 9;
   constant C_ARB_FIFO_CNT_WIDTH : integer := C_ARB_FIFO_DEPTH + 1;
-  signal arb2nd_fifo_cnt   : uFifoBufferCnt(0 to C_NUM_ARB_INPUTS - 1)(C_ARB_FIFO_CNT_WIDTH - 1 downto 0)
+  signal arb2nd_fifo_cnt   : t_fifo_buffer_cnt(0 to C_NUM_ARB_INPUTS - 1)(C_ARB_FIFO_CNT_WIDTH - 1 downto 0)
                                   := (others => (others => '0'));
   signal arb2nd_dout_empty : std_logic := '1';
   -- Overflow detection: a write attempt to a full per-input FIFO is
@@ -184,7 +184,7 @@ begin
     signal i2cMessages       : t_arrayOfMsgs(0 to C_I2C_DATALOGGERS-1);
     signal i2cReq            : std_logic_vector(0 to C_I2C_DATALOGGERS-1);
     signal i2cAck            : std_logic_vector(0 to C_I2C_DATALOGGERS-1);
-    signal i2cErrors         : t_arrayOfErrors(0 to C_I2C_DATALOGGERS-1);
+    signal i2cErrors         : t_array_of_errors(0 to C_I2C_DATALOGGERS-1);
     -- Per-instance tagged tuple (payload + datalogger_id + msg_type),
     -- packed into the C_TAGGED_WIDTH bus the arbiter carries (DS-P3.29).
     signal i2cArb_data_flat  : std_logic_vector(C_I2C_DATALOGGERS*C_TAGGED_WIDTH - 1 downto 0);
@@ -347,7 +347,7 @@ begin
     signal uartMessages       : t_arrayOfMsgs(0 to C_UART_DATALOGGERS-1);
     signal uartReq            : std_logic_vector(0 to C_UART_DATALOGGERS-1);
     signal uartAck            : std_logic_vector(0 to C_UART_DATALOGGERS-1);
-    signal uartErrors         : t_arrayOfErrors(0 to C_UART_DATALOGGERS-1);
+    signal uartErrors         : t_array_of_errors(0 to C_UART_DATALOGGERS-1);
     -- Per-instance tagged tuple (payload + datalogger_id + msg_type),
     -- packed into the C_TAGGED_WIDTH bus the arbiter carries (DS-P3.29).
     signal uartArb_data_flat  : std_logic_vector(C_UART_DATALOGGERS*C_TAGGED_WIDTH - 1 downto 0);
@@ -511,7 +511,7 @@ begin
     signal spiMessages       : t_arrayOfMsgs(0 to C_SPI_DATALOGGERS-1);
     signal spiReq            : std_logic_vector(0 to C_SPI_DATALOGGERS-1);
     signal spiAck            : std_logic_vector(0 to C_SPI_DATALOGGERS-1);
-    signal spiErrors         : t_arrayOfErrors(0 to C_SPI_DATALOGGERS-1);
+    signal spiErrors         : t_array_of_errors(0 to C_SPI_DATALOGGERS-1);
     -- Per-instance tagged tuple (payload + datalogger_id + msg_type),
     -- packed into the C_TAGGED_WIDTH bus the arbiter carries (DS-P3.29).
     signal spiArb_data_flat  : std_logic_vector(C_SPI_DATALOGGERS*C_TAGGED_WIDTH - 1 downto 0);
@@ -675,7 +675,7 @@ begin
     signal jtagMessages       : t_arrayOfMsgs(0 to C_JTAG_DATALOGGERS-1);
     signal jtagReq            : std_logic_vector(0 to C_JTAG_DATALOGGERS-1);
     signal jtagAck            : std_logic_vector(0 to C_JTAG_DATALOGGERS-1);
-    signal jtagErrors         : t_arrayOfErrors(0 to C_JTAG_DATALOGGERS-1);
+    signal jtagErrors         : t_array_of_errors(0 to C_JTAG_DATALOGGERS-1);
     -- Per-instance tagged tuple (payload + datalogger_id + msg_type),
     -- packed into the C_TAGGED_WIDTH bus the arbiter carries (DS-P3.29).
     signal jtagArb_data_flat  : std_logic_vector(C_JTAG_DATALOGGERS*C_TAGGED_WIDTH - 1 downto 0);
@@ -839,7 +839,7 @@ begin
     signal edgeMessages       : t_arrayOfMsgs(0 to C_EDGE_DATALOGGERS-1);
     signal edgeReq            : std_logic_vector(0 to C_EDGE_DATALOGGERS-1);
     signal edgeAck            : std_logic_vector(0 to C_EDGE_DATALOGGERS-1);
-    signal edgeErrors         : t_arrayOfErrors(0 to C_EDGE_DATALOGGERS-1);
+    signal edgeErrors         : t_array_of_errors(0 to C_EDGE_DATALOGGERS-1);
     -- Per-instance tagged tuple (payload + datalogger_id + msg_type),
     -- packed into the C_TAGGED_WIDTH bus the arbiter carries (DS-P3.29).
     signal edgeArb_data_flat  : std_logic_vector(C_EDGE_DATALOGGERS*C_TAGGED_WIDTH - 1 downto 0);
@@ -1025,7 +1025,7 @@ begin
     signal canMessages       : t_arrayOfMsgs(0 to C_CAN_DATALOGGERS-1);
     signal canReq            : std_logic_vector(0 to C_CAN_DATALOGGERS-1);
     signal canAck            : std_logic_vector(0 to C_CAN_DATALOGGERS-1);
-    signal canErrors         : t_arrayOfErrors(0 to C_CAN_DATALOGGERS-1);
+    signal canErrors         : t_array_of_errors(0 to C_CAN_DATALOGGERS-1);
     -- Per-instance tagged tuple (payload + datalogger_id + msg_type),
     -- packed into the C_TAGGED_WIDTH bus the arbiter carries (DS-P3.29).
     signal canArb_data_flat  : std_logic_vector(C_CAN_DATALOGGERS*C_TAGGED_WIDTH - 1 downto 0);

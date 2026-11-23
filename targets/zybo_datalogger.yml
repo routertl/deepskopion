@@ -573,3 +573,8 @@ packages:
   routertl/rea: "==1.12.4"
   routertl/rr_ddr_stream: {version: ^0.3.6, library: rr}
 memory_map: sw/linux/system_memory_map.yml
+# DS-P2.294: memory inference ratchet. Each entity must map to block RAM; verified against the DS-P1.114 build
+# (80abd18d, Vivado 2024.1, hierarchical_utilization.rpt) with rr's evaluate_memory_ratchets.
+memories:
+  - {entity: ram_dual_port, expect: block_ram}
+  - {entity: rr_rea_dpram, expect: block_ram}

@@ -30,7 +30,7 @@ use ieee.numeric_std.all;
 library tich;
 use tich.datalogger_config_pkg.all;     -- C_NUM_DATALOGGER_PINS
 use tich.datalogger_pkg.all;            -- C_DATALOGGER_MSG_WIDTH, C_TIMESTAMP_WIDTH
-use tich.datalogger_records_pkg.all;    -- t_fifoCsr, t_protoCounterArray, C_DATALOGGER_CONFIG_WIDTH
+use tich.datalogger_records_pkg.all;    -- t_fifo_csr, t_proto_counter_array, C_DATALOGGER_CONFIG_WIDTH
 use tich.zs_msg_pkg.all;             -- C_ZS_CLASS_DATA
 use tich.axi_pkg.C_ZYNQ7_S_AXI_HP_MAX_BURST;  -- DS-T2.65: single-sourced AXI3 write-burst cap (same as deepskopion_top)
 
@@ -190,8 +190,8 @@ architecture str of tb_datalogger_to_ddr is
   signal g_msg_type   : std_logic_vector(15 downto 0);
   signal g_valid      : std_logic;
   signal g_dout_req  : std_logic;        -- framer.IN_READY → gather back-pressure
-  signal g_fifo_csr   : t_fifoCsr;
-  signal g_proto_cnt  : t_protoCounterArray(0 to C_NUM_PROTO_COUNTERS - 1);
+  signal g_fifo_csr   : t_fifo_csr;
+  signal g_proto_cnt  : t_proto_counter_array(0 to C_NUM_PROTO_COUNTERS - 1);
 
   -- ── framer → ddr_stream_axi (32-bit AXI-Stream) ───────────────────────
   signal fr_out_data  : std_logic_vector(31 downto 0);

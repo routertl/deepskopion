@@ -21,7 +21,8 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 BUILD_SH = ROOT / "sw" / "linux" / "pfsoc" / "build_python_overlay.sh"
 DEFCONFIG = ROOT / "sw" / "linux" / "pfsoc" / "buildroot_pfsoc_defconfig"
-CONTRACT = ROOT / "sw" / "linux" / "pfsoc" / "deployment_contract.yml"
+# DS-P1.118: the PolarFire declaration moved from the sidecar into the public contract.
+CONTRACT = ROOT / "sw" / "linux" / "deployment_contract.yml"
 SHARED_DROPBEAR_STAGE = ROOT / "sw" / "linux" / "stage_dropbear_overlay.sh"
 
 
@@ -82,6 +83,12 @@ def test_deployment_contract_dropbear_note_is_arch_aware():
     assert "per-arch" in starts and "riscv64" in starts, (
         "S49dropbear declaration must state the binary is per-arch (armhf for "
         f"Zynq, riscv64 for PolarFire); got: {starts!r}"
+    )
+    # DS-P1.118 review: each board paired with its own architecture (a swapped
+    # mapping fails), now that this text is in the public contract.
+    assert "armhf for the Zynq targets from sw/linux/stage_dropbear_overlay.sh," in starts and \
+        "riscv64 for the PolarFire kit from its own python_overlay)" in starts, (
+        f"S49dropbear must pair armhf with the Zynq targets and riscv64 with the PolarFire kit; got: {starts!r}"
     )
     assert "its ARM binary is a staged artefact" not in starts, (
         "the declaration still calls dropbear unconditionally ARM (DS-P2.125 "

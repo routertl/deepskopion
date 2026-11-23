@@ -14,6 +14,11 @@ allowed when the same function (or the module, for a module-level read) also cal
 `.is_file()` or `.is_dir()` on that path: the test then skips or branches when a fresh clone lacks the
 file. Anything else must be listed in ALLOWED with its reason.
 
+DS-P2.360: a path under a fetched package (an ip.lock package with a url other than sdk:// and pinned file
+hashes; its directory is gitignored and filled by `rr workspace sync`) is allowed in tools/tests, because
+tools/tests/conftest.py fetches every such package before any test there runs and fails the session otherwise.
+test_the_tools_tests_conftest_fetches_the_packages holds that conftest to it.
+
 Not covered: paths built at run time (f-strings, joins of variables) and reads inside helpers the test
 calls. The nightly fresh-clone run (TIC-P3.512) is the runtime complement.
 """
@@ -141,12 +146,25 @@ def _test_files() -> list[str]:
     return [f for f in tracked if re.search(r"(^|/)test_[^/]*\.py$", f)]
 
 
+def _fetched_roots() -> list[str]:
+    import yaml
+    lock = yaml.safe_load((ROOT / "ip.lock").read_text(encoding="utf-8")) or {}
+    return sorted(str(e["local_path"]).strip("/") for e in lock.values()
+                  if isinstance(e, dict) and e.get("local_path") and e.get("file_hashes")
+                  and not str(e.get("url", "")).startswith("sdk://"))
+
+
+def _fetched(rel: str, path: str, roots: list[str]) -> bool:
+    return rel.startswith("tools/tests/") and any(path == r or path.startswith(r + "/") for r in roots)
+
+
 def scan() -> dict[str, list[str]]:
     hits: dict[str, list[str]] = {}
+    roots = _fetched_roots()
     for rel in _test_files():
         src = (ROOT / rel).read_text(encoding="utf-8", errors="replace")
         for p in sorted(ignored(ungated_reads(src))):
-            if (rel, p) not in ALLOWED:
+            if (rel, p) not in ALLOWED and not _fetched(rel, p, roots):
                 hits.setdefault(rel, []).append(p)
     return hits
 
@@ -177,3 +195,22 @@ def test_lock():
 def test_no_test_reads_an_ignored_path_without_checking_it_exists():
     hits = scan()
     assert not hits, f"tests reading gitignored checkout paths (build outputs a fresh clone lacks): {hits}"
+
+
+def test_the_tools_tests_conftest_fetches_the_packages():
+    """DS-P2.360: the allowance for fetched-package paths holds only while tools/tests/conftest.py has a session-scoped
+    autouse fixture that calls ensure_all_fetched."""
+    tree = ast.parse((ROOT / "tools" / "tests" / "conftest.py").read_text(encoding="utf-8"))
+    found = False
+    for fn in ast.walk(tree):
+        if not isinstance(fn, ast.FunctionDef):
+            continue
+        deco = " ".join(ast.unparse(d) for d in fn.decorator_list)
+        calls = {c.func.id for c in ast.walk(fn) if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)}
+        if "fixture" in deco and "scope='session'" in deco and "autouse=True" in deco and "ensure_all_fetched" in calls:
+            found = True
+    assert found, "tools/tests/conftest.py no longer fetches the packages before the session"
+    assert _fetched_roots(), "ip.lock lists no fetched package with pinned file hashes"
+    assert _fetched("tools/tests/test_x.py", "libs/routertl/rea/ip.yml", _fetched_roots())
+    assert not _fetched("sw/stream/tests/test_x.py", "libs/routertl/rea/ip.yml", _fetched_roots())
+    assert not _fetched("tools/tests/test_x.py", "build/zybo_datalogger/x.json", _fetched_roots())

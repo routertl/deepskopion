@@ -183,7 +183,7 @@ addresses in `project_regbank.yml` (the `Regs` mirror is `sw/stream/regbank.py:4
 
 | Slot              | AXI offset | Width | Access | Meaning |
 | :---------------- | :--------- | :---- | :----- | :------ |
-| `RING_WRITE_PTR`  | `0x0150`   | 32b   | RO     | Total 32-bit words written to the ring since reset (free-running, wraps at 2^32). |
+| `RING_WRITE_PTR`  | `0x0150`   | 32b   | RO     | Total 32-bit words accepted by the DDR stream since reset (free-running, wraps at 2^32). |
 | `RING_READ_PTR`   | `0x0154`   | 32b   | RW     | Ring drain pointer: the byte offset up to which software has consumed the ring (same units as `RING_COMMIT_PTR`). The PL frees ring space against it. |
 | `RING_BASE_LOW`   | `0x0158`   | 32b   | RO     | Physical base address of the ring in PS DDR, low 32 bits. Default `0x10000000`. |
 | `RING_BASE_HIGH`  | `0x015C`   | 32b   | RO     | High 32 bits of the physical base. Always `0` on Zynq-7. |
@@ -209,7 +209,7 @@ bytes_unread = (commit - read_ofs) mod RING_BYTES    # read_ofs: the consumer's 
 `RING_COMMIT_PTR mod RING_BYTES` equals the offset `RING_COMMIT_PTR - RING_BASE_LOW` when the base
 is a multiple of `RING_BYTES`, as the default base `0x10000000` is for the default size `0x10000000`.
 
-`RING_WRITE_PTR` is not a walk input. It counts enqueued 32-bit messages; four times that count
+`RING_WRITE_PTR` is not a walk input. It counts 32-bit words accepted by the DDR stream; four times that count
 differs from the committed byte offset because frames have variable length and the DMA commits
 whole DDR words, so a cursor seeded from it lands mid-frame (`sw/stream/data_source.py:1343-1349`).
 The daemon reads it for telemetry only (`sw/stream/data_source.py:1526`).

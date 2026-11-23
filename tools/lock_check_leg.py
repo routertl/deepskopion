@@ -7,7 +7,12 @@ targets/<t>.routertl.lock, and no root routertl.lock (DS-P2.287). `rr lock --che
 the leg checks a target only when the commit stages a path that target's lock covers, and only when those paths
 have no unstaged changes. It checks EVERY tracked target when the commit touches ip.lock, project.yml, a path two
 or more targets share, or a target file it cannot map, or an added HDL/constraint file no lock lists yet
-(DS-P2.306), or when run with --all.
+(DS-P2.306), or the routertl floor declaration (requirements.txt, tools/preflight/supported_environment.yml;
+DS-P2.347), or when run with --all.
+
+On every commit, without calling rr, every tracked lock's sdk.version must equal the declared floor
+(supported_environment.yml routertl.min, as staged): a lock written by an rr newer than the floor fails
+`rr lock --check` for a user on the floor, and a floor raised without re-locking fails it for everyone (DS-P2.347).
 
 Fails closed: no tracked target lock, a tracked root routertl.lock, a lock that does not parse, or an rr that
 cannot judge a target each stop the commit. Targets that rr itself refuses to lock are listed in
@@ -46,6 +51,10 @@ def _target_inputs(target: str) -> set[str]:
 LOCK_SUFFIX = ".routertl.lock"
 #: Files that choose what every target's lock resolves.
 SHARED_INPUTS = ("project.yml", "ip.lock")
+#: DS-P2.347: where the routertl floor is declared (tools/ci/routertl_floor.py keeps the two in agreement). A change
+#: to either selects every target, and every tracked lock must record FLOOR_FILE's routertl.min as its sdk.version.
+FLOOR_FILE = "tools/preflight/supported_environment.yml"
+FLOOR_INPUTS = ("requirements.txt", FLOOR_FILE)
 EXEMPTIONS = Path("tools/lock_exemptions.yml")
 MISMATCH = "Lockfile mismatch"
 UNRESOLVED = ("PackageResolutionError", "Failed to resolve project state")
@@ -138,6 +147,8 @@ def select_targets(staged: list[str], covered: dict[str, set[str]], check_all: b
     for p in staged:
         if p in SHARED_INPUTS:
             return names, f"{p} is shared by every target"
+        if p in FLOOR_INPUTS:
+            return names, f"{p} declares the routertl floor every lock records"
         hit = owners.get(p)
         if hit and len(hit) > 1:
             return names, f"{p} is shared by {len(hit)} targets"
@@ -213,6 +224,36 @@ def _check(rr: str, target: str) -> tuple[int, str]:
     return 2, out + f"\nrr lock --check exited {proc.returncode} for {target} without naming a mismatch"
 
 
+class FloorError(Exception):
+    """The floor declaration is tracked but names no usable routertl.min."""
+
+
+def staged_floor() -> str | None:
+    """routertl.min from the staged FLOOR_FILE; None when that file is not tracked (nothing declares a floor)."""
+    shown = _git("show", f":{FLOOR_FILE}")
+    if shown.returncode != 0:
+        return None
+    try:
+        doc = yaml.safe_load(shown.stdout) or {}
+    except yaml.YAMLError as exc:
+        raise FloorError(f"the staged {FLOOR_FILE} does not parse: {exc}") from exc
+    value = (doc.get("routertl") or {}).get("min") if isinstance(doc, dict) else None
+    if value is None or not str(value).strip():
+        raise FloorError(f"the staged {FLOOR_FILE} sets no routertl.min")
+    return str(value).strip()
+
+
+def floor_mismatches(floor: str, parsed: dict[str, dict]) -> list[tuple[str, str]]:
+    """(target, recorded sdk.version) for every staged lock whose sdk.version is not *floor*. Parse only."""
+    off = []
+    for target in sorted(parsed):
+        sdk = parsed[target].get("sdk") if isinstance(parsed[target], dict) else None
+        recorded = str(sdk.get("version") or "").strip() if isinstance(sdk, dict) else ""
+        if recorded != floor:
+            off.append((target, recorded or "(none)"))
+    return off
+
+
 def main(argv: list[str] | None = None) -> int:
     check_all = "--all" in (argv if argv is not None else sys.argv[1:])
     root_tracked = _git("ls-files", "--error-unmatch", "--", ROOT_LOCK).returncode == 0
@@ -237,6 +278,21 @@ def main(argv: list[str] | None = None) -> int:
         except yaml.YAMLError as exc:
             print(f"the staged {path} does not parse: {exc}")
             return 2
+    try:
+        floor = staged_floor()
+    except FloorError as exc:
+        print(exc)
+        return 2
+    if floor is not None:
+        off = floor_mismatches(floor, parsed)
+        if off:
+            print(f"The routertl floor is {floor} ({FLOOR_FILE} routertl.min), but {len(off)} target lock(s) "
+                  "record another sdk.version, so `rr lock --check` fails for a user on the floor:")
+            for target, recorded in off:
+                print(f"  {locks[target]}: sdk.version {recorded}, floor {floor}")
+            print(f"Re-lock each with `RR_TARGET=<target yml> rr lock` under routertl {floor} and stage the locks "
+                  "in the same commit as the floor.")
+            return 1
     staged = _staged()
     added = _staged_added()
     if staged is None or added is None:

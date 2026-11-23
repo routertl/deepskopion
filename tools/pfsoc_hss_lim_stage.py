@@ -228,7 +228,7 @@ def generate_payload(
         )
 
 
-def apply_prebuild(hss_dir: Path) -> dict:
+def apply_prebuild(hss_dir: Path, mss_stamp: Path | None = None) -> dict:
     """Apply the overlays that MUST land BEFORE `rr linux hss` compiles the clone.
 
     Two of the firmware-leg fixes have to be in place before the build, because
@@ -258,7 +258,7 @@ def apply_prebuild(hss_dir: Path) -> dict:
         _HSS_TOOLS / "disco_console_register_overlay.py", "ds_p2_145_factory_iomux"
     )
     console_changed = uart_mod.apply(hss_dir)
-    iomux_changed = iomux_mod.apply(hss_dir)
+    iomux_changed = iomux_mod.apply(hss_dir, stamp=mss_stamp)
     factory_reverted = factory_mod.revert(hss_dir)
     return {
         "console_overlay_changed": console_changed,
@@ -348,9 +348,16 @@ def main(argv: list[str] | None = None) -> int:
         "This is NOT the HSS firmware — HSS is the E51 first stage and is not "
         "wrapped in payload.bin.",
     )
+    ap.add_argument(
+        "--mss-stamp",
+        type=Path,
+        default=None,
+        help="RouteRTL's rr_mss_stamp.json naming the generated MSS component "
+        "(default: build/pfsoc_datalogger/mss/rr_mss_stamp.json in this repository).",
+    )
     args = ap.parse_args(argv)
     if args.prebuild:
-        summary = apply_prebuild(args.hss_dir)
+        summary = apply_prebuild(args.hss_dir, mss_stamp=args.mss_stamp)
         for k, v in summary.items():
             print(f"{k}: {v}")
         return 0

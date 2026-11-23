@@ -116,6 +116,22 @@ def pytest_configure(config: pytest.Config) -> None:
         config.option.loadgroup = True
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _fetched_packages():
+    """DS-P2.360: registry IP is fetched at the ip.lock pin, not tracked. Before any test of this directory runs,
+    every fetched package is present and equal to its ip.lock hashes (one `rr workspace sync` when absent), or the
+    session FAILS; no test depends on another having fetched first, and none skips for want of the IP.
+    A copy of this conftest outside the repository (test_sim_xdist_group_ds_p2_223 runs one in a scratch dir) has no
+    ip.lock above it and nothing pinned to fetch."""
+    root = HERE.parents[1]
+    if not (root / "ip.lock").is_file():
+        return
+    import sys
+    sys.path.insert(0, str(HERE))
+    from fetched_packages import ensure_all_fetched
+    ensure_all_fetched(root)
+
+
 @pytest.hookimpl(optionalhook=True)
 def pytest_configure_node(node) -> None:
     node.workerinput[_WORKER_KEY] = node.config.option.dist == "loadgroup"

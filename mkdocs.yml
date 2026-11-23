@@ -89,7 +89,6 @@ nav:
           - Architecture: software/processes_components/overview.md
           - User Space Daemon: software/processes_components/user_space_daemon/README.md
   - Design:
-      - Monetization: design/monetization_architecture.md
       - PDL Architecture: design/pdl_architecture.md
   - Standards:
       - Compliance Checklist: standards/datalogger_compliance_checklist.md

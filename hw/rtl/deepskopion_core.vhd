@@ -238,7 +238,7 @@ architecture rtl of deepskopion_core is
   signal dout_datalogger_id : std_logic_vector(7 downto 0);
   signal dout_msg_type   : std_logic_vector(15 downto 0);
   signal dout_valid      : std_logic;
-  signal fifo_csr        : t_fifoCsr;
+  signal fifo_csr        : t_fifo_csr;
   signal dout_req             : std_logic;
   signal ddr_busy              : std_logic;
   -- DDR-P3.10: input-side back-pressure from rr-ddr-stream's skid.
@@ -267,7 +267,7 @@ architecture rtl of deepskopion_core is
 
   -- Per-protocol PKT_CNT_*/ERR_CNT_* bundle driven by datalogger_gather
   -- (DS-P3.26). Indexed by datalogger_config_pkg.C_PROTO_IDX_<NAME>.
-  signal proto_counters : t_protoCounterArray(0 to C_NUM_PROTO_COUNTERS-1)
+  signal proto_counters : t_proto_counter_array(0 to C_NUM_PROTO_COUNTERS-1)
                         := (others => C_INIT_PROTO_COUNTER);
 
   ---------------------------------------------------------------------------
@@ -1835,15 +1835,19 @@ begin
     end if;
   end process;
 
-  -- Ring write counter — increments on every 32-bit word the framer
-  -- pushes into rr-ddr-stream. With G_PAYLOAD_WORDS=1 this is +6 per
-  -- source message (5 header + 1 payload). DS-P3.27/3.28.
+  -- Ring write counter — increments on every 32-bit word the DDR stream
+  -- ACCEPTS from the framer (valid and ready). With G_PAYLOAD_WORDS=1 this is
+  -- +6 per source message (5 header + 1 payload). DS-P3.27/3.28.
+  -- DS-T2.101: counting framer_out_valid alone also counted every cycle the
+  -- framer held a word while the stream was full, so the register ran ahead of
+  -- the words handed over (simulated: 93129 read against 4100 accepted). Those
+  -- stalled cycles are counted in DDR_BACKPRESSURE_CNT below, not here.
   p_ring_write_cnt : process(clk_sys)
   begin
     if rising_edge(clk_sys) then
       if rst_sys = '1' then
         ring_write_cnt_r <= (others => '0');
-      elsif framer_out_valid = '1' then
+      elsif framer_out_valid = '1' and ddr_s_axis_ready = '1' then
         ring_write_cnt_r <= ring_write_cnt_r + 1;
       end if;
     end if;

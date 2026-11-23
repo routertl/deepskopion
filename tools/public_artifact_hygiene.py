@@ -154,6 +154,22 @@ _REMOVABLE_HOME_RE = re.compile(
     re.IGNORECASE,
 )
 _IPV4_RE = re.compile(rb"(?<![0-9])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9])")
+# DS-P2.360: one string literal (Python/JS/shell quoting, optional b/r/u/f prefix), and a run of two or more of them
+# joined only by whitespace, `+` (Python, JS) or `&` (VHDL). An address split into two adjacent literals is the same
+# leak as the whole literal; the public export of 2026-11-18 carried one in a test fixture.
+_STR_LIT = rb"""[bBrRuUfF]{0,2}(?:"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*')"""
+_LIT_RUN_RE = re.compile(_STR_LIT + rb"(?:\s*[+&]?\s*" + _STR_LIT + rb")+")
+_LIT_RE = re.compile(_STR_LIT)
+
+
+def _joined_literal_runs(data: bytes):
+    """(offset of the run, the run's literal contents joined) for every run of adjacent string literals."""
+    for run in _LIT_RUN_RE.finditer(data):
+        pieces = []
+        for lit in _LIT_RE.finditer(run.group(0)):
+            body = lit.group(0).lstrip(b"bBrRuUfF")
+            pieces.append(body[1:-1])
+        yield run.start(), b"".join(pieces)
 _CABLE_RE = re.compile(rb"(?<![A-Z0-9])21[A-Z0-9]{10}(?![A-Z0-9])")
 _PUBLIC_KEY_RE = re.compile(
     rb"(?m)^[ \t]*(?:ssh-(?:ed25519|rsa)|ecdsa-sha2-nistp(?:256|384|521))[ \t]+"
@@ -174,7 +190,6 @@ DROP_LIST = (
     "docs/" + "in" + "ternal/",
     "." + "ag" + "ent/",
     "demo/config1/screencast.md",
-    "docs/design/monetization_architecture.md",
     "sw/linux/stage_tftp_deploy.sh",
     "sw/linux/tests/test_stage_tftp_deploy.py",
     "docs/hardware/DE25_BOARD_FACTS.md",
@@ -190,7 +205,14 @@ DROP_LIST = (
     "tools/tests/test_de_c0_capture_correctness_doc.py",
     "tools/tests/test_de25_boot_precondition_p1_43.py",
     "tools/tests/test_launch_disclosure_ds_p2_160.py",
+    "tools/tests/test_export_private_terms_ds_p1_123.py",
 )
+
+# DS-P1.123: words no exported file or path may contain. The list itself is
+# private: it lives under the dropped internal tree, so the public tool reads it
+# but never names its contents. Each non-comment line is one term, matched
+# case-insensitively as a substring (a stem catches every inflection).
+PRIVATE_TERMS_REL = "docs/" + "in" + "ternal/" + "export_private_terms.txt"
 
 # Root-anchored export exclusions: the DROP verdicts of docs/REDISTRIBUTION.md
 # plus files with no public meaning. Unlike DROP_LIST these only match a path
@@ -203,6 +225,7 @@ DROP_PATTERNS = (
     "targets/canfd_demo.ip.lock",
     "targets/de25_canfd.ip.lock",
     "tools/tests/test_de25_shell_contract_bench.py",
+    "tools/tests/test_public_artifact_hygiene_de25_address_bench.py",
     "targets/canfd_demo.routertl.lock",
     "targets/classic_eye.routertl.lock",
     "targets/de25_canfd.routertl.lock",
@@ -475,12 +498,17 @@ _DOC_PATH_ALLOWLIST: dict[str, set[bytes]] = {
         b"hw/sim/waves/test_i2c_datalogger/tb_i2c_datalogger.test_i2c_datalogger.test_write_transaction.fst",
         b"tools/datalogger-builder/config/my_mix.yml",
         b"targets/my_mix.yml",
+        # DS-P1.119: the DE25 image tool's output, programmed over JTAG by the README's step 9.
+        b"sw/linux/de25/out/de25_datalogger/de25_datalogger_hps.sof",
     },
     "docs/DEPLOYMENT_CONTRACT.md": {
         b"sw/linux/rootfs_overlay/usr/local/share/deepskopion/sw/stream/",
         b"sw/linux/rootfs_overlay/usr/sbin/dropbear",
         b"sw/linux/rootfs_overlay/usr/bin/",
         b"sw/linux/rootfs_overlay/usr/bin/scp",
+        # DS-P1.118: the PolarFire target's staged dropbear (built by
+        # sw/linux/pfsoc/build_python_overlay.sh; gitignored, never exported).
+        b"sw/linux/pfsoc/python_overlay/usr/sbin/dropbear",
     },
     "docs/README.md": {b"SCREAMING_SNAKE.md", b"lower_snake.md"},
     "docs/SDK_USER_GUIDE.md": {
@@ -604,6 +632,51 @@ def _export_rel_name(name: str, rel_path: str | None) -> str:
     while rel.startswith("./"):
         rel = rel[2:]
     return PurePosixPath(rel).name if PurePosixPath(rel).is_absolute() else rel
+
+
+def load_private_terms(custom_path: Path | None = None, root: Path = ROOT) -> list[str]:
+    """The private export terms (DS-P1.123).
+
+    An explicit path must exist and list a term. Without one, the list is read from
+    ``root``, else from the checkout this tool runs from. That checkout carrying the
+    dropped internal docs is the private repository, so a missing list there is an error
+    (the gate fails closed); without them (a public clone) there are no private terms. The exporter passes the list read from the exported git
+    tree (export_github.py). In the private repository a guard test keeps the list present
+    and naming its term, so deleting it fails that commit's gate.
+    """
+    if custom_path:
+        path = custom_path
+    else:
+        found = [c for c in dict.fromkeys([root / PRIVATE_TERMS_REL, ROOT / PRIVATE_TERMS_REL]) if c.is_file()]
+        if not found and not (ROOT / PRIVATE_TERMS_REL).parent.is_dir():
+            return []
+        path = found[0] if found else ROOT / PRIVATE_TERMS_REL
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        raise InspectionError(f"private export terms file not found: {path}") from None
+    terms: list[str] = []
+    for line in text.splitlines():
+        s = line.strip().lower()
+        if s and not s.startswith("#") and s not in terms:
+            terms.append(s)
+    if not terms:
+        raise InspectionError(f"private export terms file {path} lists no term")
+    return terms
+
+
+def _private_term_findings(name: str, data: bytes, terms: list[str]) -> list[str]:
+    """One finding per occurrence of a private term; the term is masked."""
+    findings: list[str] = []
+    lowered = data.lower()
+    for term in terms:
+        needle = term.encode("utf-8")
+        start = 0
+        while (offset := lowered.find(needle, start)) >= 0:
+            findings.append(f"{name}:{_line_number(data, offset)}: private term: "
+                            f"{term[:1]}{'*' * (len(term) - 1)}")
+            start = offset + len(needle)
+    return findings
 
 
 def load_restricted_names(custom_path: Path | None = None) -> list[str]:
@@ -824,10 +897,11 @@ def _private_ipv4(value: bytes) -> bool:
     # ranges in some Python releases.  DS-C1 is specifically about an RFC1918
     # topology assumption, so spell that set out and keep listener addresses
     # and RFC 5737 examples legal.
+    # (base as an integer, prefix length): no address literal, whole or split (DS-P2.360).
     private_nets = (
-        ipaddress.ip_network("10" + ".0.0.0/8"),
-        ipaddress.ip_network("172" + ".16.0.0/12"),
-        ipaddress.ip_network("192" + ".168.0.0/16"),
+        ipaddress.ip_network((10 << 24, 8)),
+        ipaddress.ip_network(((172 << 24) | (16 << 16), 12)),
+        ipaddress.ip_network(((192 << 24) | (168 << 16), 16)),
     )
     return any(address in network for network in private_nets)
 
@@ -852,6 +926,7 @@ def _is_allowed_doc_path(rel_doc: str, value: bytes) -> bool:
 
 def inspect_bytes(name: str, data: bytes, *, export_gate: bool = False,
                   restricted_names: list[str] | None = None,
+                  private_terms: list[str] | None = None,
                   rel_path: str | None = None,
                   exported_paths: set[str] | None = None,
                   generated_outputs: frozenset[str] = frozenset()) -> list[str]:
@@ -894,6 +969,16 @@ def inspect_bytes(name: str, data: bytes, *, export_gate: bool = False,
     for match in _IPV4_RE.finditer(data):
         if _private_ipv4(match.group(0)):
             add("private-subnet assumption", match, match.group(0))
+    # Split literals matter for what ships: the export gate checks them (dropped bench-only files keep theirs).
+    for offset, joined in (_joined_literal_runs(data) if export_gate else ()):
+        for match in _IPV4_RE.finditer(joined):
+            value = match.group(0)
+            if _private_ipv4(value) and value not in data:      # whole literals are reported above
+                add("private-subnet assumption (split literal)", offset, value)
+        for match in _CABLE_RE.finditer(joined):
+            value = match.group(0)
+            if value not in data:
+                add("bench cable serial (split literal)", offset, value)
     for kind, regex in _TOKEN_RES:
         for match in regex.finditer(data):
             add(kind, match, match.group(0))
@@ -918,6 +1003,8 @@ def inspect_bytes(name: str, data: bytes, *, export_gate: bool = False,
         for kind, regex in _INTERNAL_PATH_RES:
             for match in regex.finditer(data):
                 add(kind, match, match.group(0))
+        if private_terms:
+            findings.extend(_private_term_findings(name, data, private_terms))
         if _is_doc_path(name):
             for match in _TICKET_ID_RE.finditer(data):
                 add("ticket narrative in docs", match, match.group(0))
@@ -1462,6 +1549,7 @@ def _archive_members(data: bytes, name: str) -> list[tuple[str, bytes]]:
 def inspect_artifact(name: str, data: bytes, depth: int = 0, *,
                      export_gate: bool = False,
                      restricted_names: list[str] | None = None,
+                     private_terms: list[str] | None = None,
                      rel_path: str | None = None,
                      exported_paths: set[str] | None = None,
                      generated_outputs: frozenset[str] = frozenset()) -> list[str]:
@@ -1479,18 +1567,25 @@ def inspect_artifact(name: str, data: bytes, depth: int = 0, *,
     if not members:
         return inspect_bytes(name, data, export_gate=export_gate,
                              restricted_names=restricted_names,
+                             private_terms=private_terms,
                              rel_path=rel_path,
                              exported_paths=exported_paths,
                              generated_outputs=generated_outputs)
     findings: list[str] = []
+    # DS-P1.123: container bytes outside the members (a ZIP comment, an uncompressed
+    # header field) are exported too, so they are searched for private terms.
+    if export_gate and private_terms:
+        findings.extend(_private_term_findings(name, data, private_terms))
     for member_name, body in members:
         leaf_name = member_name.rsplit("!", 1)[-1]
         findings.extend(inspect_bytes(member_name + "!name", leaf_name.encode(),
                                       export_gate=export_gate,
-                                      restricted_names=restricted_names))
+                                      restricted_names=restricted_names,
+                                      private_terms=private_terms))
         findings.extend(inspect_artifact(member_name, body, depth + 1,
                                          export_gate=export_gate,
-                                         restricted_names=restricted_names))
+                                         restricted_names=restricted_names,
+                                         private_terms=private_terms))
     return findings
 
 
@@ -1713,14 +1808,17 @@ def _check_export_target_pins(
 
 def scan(paths: list[Path], *, include_index: bool = True,
          root: Path = ROOT, export_gate: bool = False,
-         restricted_names_file: Path | None = None) -> tuple[list[str], list[str]]:
+         restricted_names_file: Path | None = None,
+         private_terms_file: Path | None = None) -> tuple[list[str], list[str]]:
     findings: list[str] = []
     errors: list[str] = []
     sources: list[tuple[str, bytes]] = []
     rnames = []
+    terms: list[str] = []
     if export_gate:
         try:
             rnames = load_restricted_names(restricted_names_file)
+            terms = load_private_terms(private_terms_file, root=root)
         except InspectionError as exc:
             errors.append(str(exc))
             return findings, errors
@@ -1779,9 +1877,14 @@ def scan(paths: list[Path], *, include_index: bool = True,
                     rel_path = name[6:]
                 elif name.startswith(root_prefix):
                     rel_path = name[len(root_prefix):]
+        if terms and rel_path is not None:
+            lowered_path = rel_path.lower()
+            findings.extend(f"{name}: private term in path: {term[:1]}{'*' * (len(term) - 1)}"
+                            for term in terms if term in lowered_path)
         try:
             findings.extend(inspect_artifact(
                 name, data, export_gate=export_gate, restricted_names=rnames,
+                private_terms=terms,
                 rel_path=rel_path, exported_paths=exported_paths,
                 generated_outputs=generated_outputs,
             ))
@@ -1792,11 +1895,13 @@ def scan(paths: list[Path], *, include_index: bool = True,
 
 def export_tree(dest_dir: Path, root: Path = ROOT,
                 paths: list[Path] | None = None,
-                restricted_names_file: Path | None = None) -> tuple[list[str], list[str]]:
+                restricted_names_file: Path | None = None,
+                private_terms_file: Path | None = None) -> tuple[list[str], list[str]]:
     """Export the tree to dest_dir, dropping items in DROP_LIST, then gate the exported tree."""
-    # Fail closed before touching dest_dir if restricted names cannot be loaded
+    # Fail closed before touching dest_dir if restricted names or private terms cannot be loaded
     try:
         load_restricted_names(restricted_names_file)
+        load_private_terms(private_terms_file, root=root)
     except InspectionError as exc:
         return [], [str(exc)]
 
@@ -1882,7 +1987,8 @@ def export_tree(dest_dir: Path, root: Path = ROOT,
                     shutil.copy2(child, target)
 
     return scan([dest_dir], include_index=False, export_gate=True,
-                root=root, restricted_names_file=restricted_names_file)
+                root=root, restricted_names_file=restricted_names_file,
+                private_terms_file=private_terms_file)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1898,6 +2004,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--restricted-names", type=Path, default=None,
         help="path to admin/" + "restricted_" + "names.yml (default: auto-discover)",
+    )
+    parser.add_argument(
+        "--private-terms", type=Path, default=None,
+        help="private export terms file (default: the one under the dropped internal docs of --root)",
     )
     parser.add_argument(
         "--root", type=Path, default=ROOT,
@@ -1919,6 +2029,7 @@ def main(argv: list[str] | None = None) -> int:
         findings, errors = export_tree(
             args.export_to, root=args.root, paths=args.paths,
             restricted_names_file=args.restricted_names,
+            private_terms_file=args.private_terms,
         )
         mode_label = "PUBLIC EXPORT GATE"
     else:
@@ -1928,6 +2039,7 @@ def main(argv: list[str] | None = None) -> int:
             root=args.root,
             export_gate=args.export_gate,
             restricted_names_file=args.restricted_names,
+            private_terms_file=args.private_terms,
         )
         mode_label = "PUBLIC EXPORT GATE" if args.export_gate else "PUBLIC ARTIFACT HYGIENE"
 

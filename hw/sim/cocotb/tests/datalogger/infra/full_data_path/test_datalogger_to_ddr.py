@@ -289,7 +289,7 @@ def extract_wire_frames(axi_ram, n_bytes: int) -> list[bytes]:
 
 def _gather_overflow_cnt(dut) -> int:
     """Read the gather's saturating per-input burst-FIFO overflow counter
-    (t_fifoCsr.overflowCnt, exposed via the TB signal g_fifo_csr). A non-zero
+    (t_fifo_csr.overflowCnt, exposed via the TB signal g_fifo_csr). A non-zero
     value means a datalogger out-ran its arbiter input FIFO and frames were dropped
     at the datalogger→arbiter boundary, before the burst output. Fails LOUDLY if the
     field cannot be read — the overflow guard must never silently no-op."""

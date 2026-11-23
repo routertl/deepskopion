@@ -1,0 +1,563 @@
+{
+ "schema": "deepskopion.strict-lint-baseline/v1",
+ "profile": "routertl-vhdl-strict-provisional",
+ "profile_sha256": "87156ffdc2fbc9b140c46b2270d23fa0b5beb6cad61ad388e10618938a847fae",
+ "src": "hw/rtl",
+ "total": 2936,
+ "counts": {
+  "hw/rtl/datalogger/can/can_bit_timing.vhd": {
+   "ESA-V-003": 17,
+   "RTV-V-008": 9,
+   "RTV-V-009": 1,
+   "RTV-V-010": 1,
+   "RTV-V-018": 4
+  },
+  "hw/rtl/datalogger/can/can_crc15.vhd": {
+   "RTV-V-009": 1,
+   "RTV-V-010": 1,
+   "RTV-V-018": 4
+  },
+  "hw/rtl/datalogger/can/can_crc17.vhd": {
+   "RTV-V-009": 1,
+   "RTV-V-010": 1,
+   "RTV-V-018": 4
+  },
+  "hw/rtl/datalogger/can/can_crc21.vhd": {
+   "RTV-V-009": 1,
+   "RTV-V-010": 1,
+   "RTV-V-018": 4
+  },
+  "hw/rtl/datalogger/can/can_datalogger.vhd": {
+   "ESA-V-003": 11,
+   "RR-ARITH-002": 1,
+   "RTV-V-008": 32,
+   "RTV-V-009": 1,
+   "RTV-V-010": 3,
+   "RTV-V-012": 1,
+   "RTV-V-015": 8,
+   "RTV-V-018": 2,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/datalogger/can/can_destuff.vhd": {
+   "ESA-V-003": 42,
+   "RTV-V-009": 1,
+   "RTV-V-010": 1,
+   "RTV-V-018": 4
+  },
+  "hw/rtl/datalogger/can/can_frame_fsm.vhd": {
+   "ESA-V-003": 2,
+   "ESA-V-005": 1,
+   "ESA-V-013": 1,
+   "RTV-V-005": 19,
+   "RTV-V-006": 4,
+   "RTV-V-008": 8,
+   "RTV-V-009": 2,
+   "RTV-V-010": 4,
+   "RTV-V-012": 1,
+   "RTV-V-018": 4,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/datalogger/i2c/i2c_datalogger.vhd": {
+   "ESA-V-005": 1,
+   "RTV-V-006": 1,
+   "RTV-V-009": 4,
+   "RTV-V-010": 6,
+   "RTV-V-011": 1,
+   "RTV-V-016": 3,
+   "RTV-V-018": 2,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/datalogger/i2c/i2c_slave.vhd": {
+   "ESA-V-005": 1,
+   "RR-UNUSED-001": 7,
+   "RTV-V-002": 6,
+   "RTV-V-006": 1,
+   "RTV-V-009": 5,
+   "RTV-V-010": 7,
+   "RTV-V-011": 1,
+   "RTV-V-018": 2,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/datalogger/infra/arbiter/arbiter.vhd": {
+   "ESA-V-013": 1,
+   "RTV-V-008": 21,
+   "RTV-V-009": 2,
+   "RTV-V-010": 2,
+   "RTV-V-011": 4,
+   "RTV-V-012": 1,
+   "RTV-V-018": 2,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/datalogger/infra/config_control/config_control.vhd": {
+   "RTV-V-009": 1,
+   "RTV-V-010": 3,
+   "RTV-V-011": 1,
+   "RTV-V-016": 1,
+   "RTV-V-018": 2
+  },
+  "hw/rtl/datalogger/infra/datalogger_gather.vhd": {
+   "ESA-V-013": 1,
+   "RTV-V-006": 3,
+   "RTV-V-008": 47,
+   "RTV-V-009": 7,
+   "RTV-V-010": 5,
+   "RTV-V-012": 1,
+   "RTV-V-016": 10,
+   "RTV-V-018": 2,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/datalogger/infra/datalogger_gather/datalogger_gather.vhd": {
+   "ESA-V-013": 1,
+   "RTV-V-006": 3,
+   "RTV-V-008": 48,
+   "RTV-V-009": 7,
+   "RTV-V-010": 5,
+   "RTV-V-012": 1,
+   "RTV-V-016": 10,
+   "RTV-V-018": 2,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/datalogger/infra/datalogger_lifecycle/datalogger_lifecycle.vhd": {
+   "RTV-V-009": 1,
+   "RTV-V-010": 3,
+   "RTV-V-018": 2
+  },
+  "hw/rtl/datalogger/infra/edge_batcher/edge_batcher.vhd": {
+   "ESA-V-005": 1,
+   "RTV-V-008": 12,
+   "RTV-V-009": 1,
+   "RTV-V-018": 2,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/datalogger/infra/edge_batcher_aggregator/edge_batcher_aggregator.vhd": {
+   "ESA-V-013": 3,
+   "RR-ARITH-003": 1,
+   "RTV-V-008": 28,
+   "RTV-V-009": 6,
+   "RTV-V-015": 1,
+   "RTV-V-018": 2,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/datalogger/infra/error_event_bank/error_event_bank.vhd": {
+   "RTV-V-005": 1,
+   "RTV-V-008": 9,
+   "RTV-V-009": 1,
+   "RTV-V-015": 1,
+   "RTV-V-018": 4,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/datalogger/infra/error_event_emitter/error_event_emitter.vhd": {
+   "RTV-V-008": 2,
+   "RTV-V-009": 1,
+   "RTV-V-010": 1,
+   "RTV-V-018": 4,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/datalogger/infra/maxfreq_event_bank/maxfreq_event_bank.vhd": {
+   "RTV-V-005": 1,
+   "RTV-V-008": 11,
+   "RTV-V-009": 2,
+   "RTV-V-015": 1,
+   "RTV-V-018": 4,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/datalogger/infra/maxfreq_event_emitter/maxfreq_event_emitter.vhd": {
+   "RTV-V-009": 1,
+   "RTV-V-010": 1,
+   "RTV-V-018": 4,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/datalogger/infra/timestamp_sync/timestamp_sync.vhd": {
+   "RTV-V-009": 1,
+   "RTV-V-010": 3,
+   "RTV-V-011": 1,
+   "RTV-V-012": 1,
+   "RTV-V-016": 3,
+   "RTV-V-018": 2,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/datalogger/infra/zs_msg_framer/zs_msg_framer.vhd": {
+   "ESA-V-005": 1,
+   "ESA-V-013": 1,
+   "RTV-V-008": 17,
+   "RTV-V-009": 3,
+   "RTV-V-010": 3,
+   "RTV-V-018": 2,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/datalogger/jtag/jtag_datalogger.vhd": {
+   "ESA-V-003": 2,
+   "ESA-V-013": 1,
+   "RTV-V-005": 13,
+   "RTV-V-006": 4,
+   "RTV-V-008": 11,
+   "RTV-V-009": 2,
+   "RTV-V-010": 4,
+   "RTV-V-012": 1,
+   "RTV-V-015": 1,
+   "RTV-V-018": 2,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/datalogger/nonstd/edge_datalogger/edge_datalogger.vhd": {
+   "RR-UNUSED-001": 1,
+   "RTV-V-008": 9,
+   "RTV-V-009": 5,
+   "RTV-V-010": 6,
+   "RTV-V-011": 1,
+   "RTV-V-016": 2,
+   "RTV-V-018": 2,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/datalogger/nonstd/level_datalogger/level_datalogger.vhd": {
+   "RTV-V-010": 3,
+   "RTV-V-011": 1,
+   "RTV-V-016": 3,
+   "RTV-V-018": 2,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/datalogger/qspi/qspi_datalogger.vhd": {
+   "ESA-V-003": 27,
+   "RR-UNUSED-001": 1,
+   "RTV-V-002": 2,
+   "RTV-V-006": 3,
+   "RTV-V-008": 18,
+   "RTV-V-009": 4,
+   "RTV-V-010": 9,
+   "RTV-V-011": 1,
+   "RTV-V-016": 1,
+   "RTV-V-018": 2,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/datalogger/uart/uart_baudrate_gen.vhd": {
+   "RTV-V-010": 2,
+   "RTV-V-011": 4,
+   "RTV-V-016": 1,
+   "RTV-V-018": 2
+  },
+  "hw/rtl/datalogger/uart/uart_datalogger.vhd": {
+   "RR-UNUSED-001": 8,
+   "RTV-V-002": 2,
+   "RTV-V-008": 4,
+   "RTV-V-009": 1,
+   "RTV-V-010": 12,
+   "RTV-V-011": 4,
+   "RTV-V-016": 7,
+   "RTV-V-018": 2,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/datalogger/uart/uart_frame_gen.vhd": {
+   "RR-UNUSED-001": 1,
+   "RTV-V-010": 4,
+   "RTV-V-011": 4,
+   "RTV-V-016": 6,
+   "RTV-V-018": 2
+  },
+  "hw/rtl/datalogger/uart/uart_playback.vhd": {
+   "RR-UNUSED-001": 1,
+   "RTV-V-010": 3,
+   "RTV-V-011": 4,
+   "RTV-V-018": 2
+  },
+  "hw/rtl/datalogger/uart/uart_stop_finder.vhd": {
+   "ESA-V-005": 1,
+   "RR-UNUSED-001": 1,
+   "RTV-V-009": 1,
+   "RTV-V-010": 3,
+   "RTV-V-011": 4,
+   "RTV-V-016": 2,
+   "RTV-V-018": 2
+  },
+  "hw/rtl/de25/axil_apb_shim.vhd": {
+   "ESA-V-005": 1,
+   "RTV-V-004": 27,
+   "RTV-V-006": 1,
+   "RTV-V-008": 2,
+   "RTV-V-009": 1,
+   "RTV-V-010": 3,
+   "RTV-V-013": 1,
+   "RTV-V-017": 8,
+   "RTV-V-018": 4,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/de25/axil_demux3.vhd": {
+   "BSG-V-016": 1,
+   "ESA-V-005": 2,
+   "RTV-V-004": 40,
+   "RTV-V-006": 2,
+   "RTV-V-008": 10,
+   "RTV-V-009": 2,
+   "RTV-V-010": 4,
+   "RTV-V-013": 1,
+   "RTV-V-017": 6,
+   "RTV-V-018": 4,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/de25/de25_reset_ctrl.vhd": {
+   "RTV-V-004": 4,
+   "RTV-V-008": 2,
+   "RTV-V-009": 1,
+   "RTV-V-010": 1,
+   "RTV-V-018": 4
+  },
+  "hw/rtl/de25/deepskopion_de25_top.vhd": {
+   "RTV-V-004": 9,
+   "RTV-V-008": 112,
+   "RTV-V-009": 1,
+   "RTV-V-010": 1,
+   "RTV-V-013": 1,
+   "RTV-V-015": 7,
+   "RTV-V-016": 12,
+   "RTV-V-018": 4,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/de25/lwh2f_axilite_bridge.vhd": {
+   "BSG-V-016": 3,
+   "RTV-V-004": 45,
+   "RTV-V-009": 1,
+   "RTV-V-010": 1,
+   "RTV-V-013": 1,
+   "RTV-V-018": 4,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/deepskopion_core.vhd": {
+   "ESA-V-003": 42,
+   "RR-UNUSED-001": 12,
+   "RTV-V-004": 100,
+   "RTV-V-006": 1,
+   "RTV-V-008": 292,
+   "RTV-V-009": 23,
+   "RTV-V-010": 23,
+   "RTV-V-013": 2,
+   "RTV-V-015": 15,
+   "RTV-V-016": 6,
+   "RTV-V-017": 31,
+   "RTV-V-018": 4,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/deepskopion_top.vhd": {
+   "RR-UNUSED-001": 115,
+   "RTV-V-004": 24,
+   "RTV-V-008": 193,
+   "RTV-V-013": 1,
+   "RTV-V-015": 2,
+   "RTV-V-018": 2,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/emio/ds_emio_mux.vhd": {
+   "RTV-V-008": 7,
+   "RTV-V-018": 2
+  },
+  "hw/rtl/emio/glitch_filter.vhd": {
+   "RTV-V-009": 1,
+   "RTV-V-010": 1,
+   "RTV-V-018": 4
+  },
+  "hw/rtl/eye/clk_drp.vhd": {
+   "ESA-V-003": 1,
+   "ESA-V-005": 1,
+   "RTV-V-006": 4,
+   "RTV-V-008": 2,
+   "RTV-V-009": 1,
+   "RTV-V-018": 3,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/eye/clk_mmcm_xilinx.vhd": {
+   "RTV-V-008": 9,
+   "RTV-V-012": 1,
+   "RTV-V-015": 1,
+   "RTV-V-018": 3,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/eye/eye_engine.vhd": {
+   "ESA-V-003": 11,
+   "ESA-V-005": 1,
+   "RTV-V-006": 1,
+   "RTV-V-008": 14,
+   "RTV-V-009": 2,
+   "RTV-V-015": 3,
+   "RTV-V-018": 3,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/eye/idelay_scan.vhd": {
+   "RTV-V-009": 1,
+   "RTV-V-012": 2,
+   "RTV-V-018": 3
+  },
+  "hw/rtl/eye/prbs_check.vhd": {
+   "RTV-V-009": 1,
+   "RTV-V-018": 3
+  },
+  "hw/rtl/eye/prbs_gen.vhd": {
+   "RTV-V-008": 1,
+   "RTV-V-009": 1,
+   "RTV-V-018": 3
+  },
+  "hw/rtl/fifo_sync.vhd": {
+   "ESA-V-003": 2,
+   "RR-CDC-003": 1,
+   "RTV-V-008": 12,
+   "RTV-V-009": 2,
+   "RTV-V-014": 1,
+   "RTV-V-018": 4,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/pfsoc/axil_demux4.vhd": {
+   "BSG-V-016": 1,
+   "ESA-V-005": 2,
+   "RTV-V-004": 40,
+   "RTV-V-006": 2,
+   "RTV-V-008": 10,
+   "RTV-V-009": 2,
+   "RTV-V-010": 4,
+   "RTV-V-013": 1,
+   "RTV-V-017": 6,
+   "RTV-V-018": 4,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/pfsoc/deepskopion_pfsoc_fabric.vhd": {
+   "RTV-V-004": 22,
+   "RTV-V-008": 135,
+   "RTV-V-009": 2,
+   "RTV-V-010": 2,
+   "RTV-V-015": 6,
+   "RTV-V-016": 14,
+   "RTV-V-018": 4,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/pfsoc/deepskopion_pfsoc_top.vhd": {
+   "RTV-V-004": 19,
+   "RTV-V-015": 1,
+   "RTV-V-018": 4,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/pfsoc/deepskopion_pfsoc_top_fic0_rea.vhd": {
+   "RTV-V-004": 24,
+   "RTV-V-008": 2,
+   "RTV-V-015": 3,
+   "RTV-V-018": 4,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/pfsoc/fic0_rea_sampler.vhd": {
+   "ESA-V-003": 1,
+   "RTV-V-004": 7,
+   "RTV-V-008": 2,
+   "RTV-V-009": 1,
+   "RTV-V-010": 1,
+   "RTV-V-018": 4
+  },
+  "hw/rtl/pfsoc/fic0_stall_trigger.vhd": {
+   "RTV-V-004": 10,
+   "RTV-V-009": 1,
+   "RTV-V-010": 1,
+   "RTV-V-013": 1,
+   "RTV-V-018": 4
+  },
+  "hw/rtl/pfsoc/pf_known_answer_core.vhd": {
+   "ESA-V-003": 2,
+   "RTV-V-004": 3,
+   "RTV-V-009": 1,
+   "RTV-V-010": 1,
+   "RTV-V-018": 4
+  },
+  "hw/rtl/pfsoc/pf_known_answer_top_a.vhd": {
+   "RTV-V-004": 2,
+   "RTV-V-015": 1,
+   "RTV-V-018": 4
+  },
+  "hw/rtl/pfsoc/pf_known_answer_top_b.vhd": {
+   "RTV-V-004": 2,
+   "RTV-V-015": 1,
+   "RTV-V-018": 4
+  },
+  "hw/rtl/pfsoc/pf_known_answer_top_rea.vhd": {
+   "RTV-V-004": 7,
+   "RTV-V-015": 1,
+   "RTV-V-018": 4,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/pfsoc/rr_rea_ujtag_local.vhd": {
+   "RTV-V-004": 10,
+   "RTV-V-008": 1,
+   "RTV-V-013": 1,
+   "RTV-V-015": 1,
+   "RTV-V-018": 4,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/pkg/datalogger_config_pkg.vhd": {
+   "RTV-V-006": 10,
+   "RTV-V-016": 1,
+   "RTV-V-018": 5
+  },
+  "hw/rtl/pkg/system_regbank_pkg.vhd": {
+   "RTV-V-006": 3
+  },
+  "hw/rtl/regbank/regbank_rom.vhd": {
+   "ESA-V-003": 1,
+   "ESA-V-007": 4,
+   "RTV-V-008": 1,
+   "RTV-V-009": 1,
+   "RTV-V-010": 1,
+   "RTV-V-011": 5,
+   "RTV-V-018": 2
+  },
+  "hw/rtl/regbank/system_regbank.vhd": {
+   "ESA-V-003": 3,
+   "RTV-V-008": 11,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/regbank/system_regbank_wrapper.vhd": {
+   "ESA-V-003": 7,
+   "ESA-V-007": 3,
+   "RTV-V-008": 9,
+   "RTV-V-009": 3,
+   "RTV-V-010": 3,
+   "RTV-V-011": 5,
+   "RTV-V-015": 3,
+   "RTV-V-018": 2,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/responder/i2c_injector.vhd": {
+   "ESA-V-003": 4,
+   "RTV-V-008": 20,
+   "RTV-V-009": 4,
+   "RTV-V-010": 4,
+   "RTV-V-015": 2,
+   "RTV-V-018": 2,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/responder/spi_injector.vhd": {
+   "ESA-V-003": 4,
+   "RTV-V-008": 15,
+   "RTV-V-009": 3,
+   "RTV-V-010": 3,
+   "RTV-V-015": 2,
+   "RTV-V-018": 2,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/responder/spi_slave.vhd": {
+   "RR-UNUSED-001": 3,
+   "RTV-V-008": 17,
+   "RTV-V-009": 2,
+   "RTV-V-010": 2,
+   "RTV-V-018": 2,
+   "RTV-V-019": 1
+  },
+  "hw/rtl/ring_watermark.vhd": {
+   "RTV-V-004": 7,
+   "RTV-V-009": 1,
+   "RTV-V-010": 1,
+   "RTV-V-013": 1,
+   "RTV-V-018": 4
+  },
+  "hw/rtl/stimulus/ds_stimulus_gen.vhd": {
+   "ESA-V-003": 86,
+   "ESA-V-005": 9,
+   "RTV-V-008": 33,
+   "RTV-V-009": 5,
+   "RTV-V-010": 5,
+   "RTV-V-016": 1,
+   "RTV-V-018": 2,
+   "RTV-V-019": 1
+  }
+ }
+}

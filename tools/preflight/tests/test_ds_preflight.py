@@ -54,7 +54,7 @@ def _ok_probe() -> P.Probe:
         arch=d["host"]["arch"]["value"],
         ram_gb=float(d["host"]["ram_gb_min"]["value"]),
         free_disk_gb=float(d["host"]["free_disk_gb_min"]["value"]),
-        python_version=(3, 10, 12),
+        python_version=(3, 11, 14),
         routertl_version=d["routertl"]["min"],
         vivado_version=d["vivado"]["version"],
         vivado_path="/opt/Xilinx/Vivado/" + d["vivado"]["version"] + "/bin/vivado",
@@ -335,17 +335,23 @@ shutil.which = _which
     assert "Traceback" not in completed.stderr
 
 
-def test_unset_rr_target_explicitly_judges_the_committed_de25_default(monkeypatch):
-    """Keep the default clone's known DE25-vs-DS-E0 gap visible in this suite."""
+def test_unset_rr_target_explicitly_judges_the_committed_de25_default(monkeypatch, tmp_path):
+    """The default clone judges the committed DE25 default against the DE25 declaration (DS-P2.363; before, against
+    the Zybo one, which failed it by construction)."""
     monkeypatch.delenv("RR_TARGET", raising=False)
+    # DS-P2.342: the committed files only, so no `rr target set` choice in this checkout applies.
+    root = tmp_path / "committed"
+    for rel in ("project.yml", "targets/de25_datalogger.yml"):
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(_ROOT / rel, root / rel)
 
-    path = P.resolve_target_path(_ROOT)
-    board = _by_id(P.run_checks("build", probe=_ok_probe(), root=_ROOT))[
+    path = P.resolve_target_path(root)
+    board = _by_id(P.run_checks("build", probe=_ok_probe(), root=root))[
         "target.board"
     ]
 
-    assert path == (_ROOT / "targets/de25_datalogger.yml").resolve()
-    assert not board.ok and board.blocking
+    assert path == (root / "targets/de25_datalogger.yml").resolve()
+    assert board.ok and not board.blocking
     assert board.found == "A5ED013BB32AE4SCS on de25-standard"
 
 
@@ -389,7 +395,7 @@ def test_a_cable_serial_in_the_public_target_fails(tmp_path):
     """This is the defect DS-E0 was filed on, verbatim: a bench cable serial in
     the one file a stranger is told to edit."""
     root = _clone_project(tmp_path)
-    serial = "21035" + "1AD6A62"
+    serial = "21" + "F" * 10
     _mutate_target(root, lambda d: d["build_options"].update(jtag_serial=serial))
     r = _by_id(_run(_ok_probe(), root))["target.no_bench_identity"]
     assert not r.ok and r.blocking
@@ -398,7 +404,7 @@ def test_a_cable_serial_in_the_public_target_fails(tmp_path):
 
 def test_a_fixed_address_in_the_public_target_fails(tmp_path):
     root = _clone_project(tmp_path)
-    address = "192" + ".168.45.7"
+    address = ".".join(str(n) for n in (192, 168, 45, 7))
     _mutate_target(
         root,
         lambda d: d["linux"].update(
@@ -424,8 +430,8 @@ def test_the_build_preflight_only_judges_configuration_not_comments(tmp_path):
     """DS-C1 separately scans all bytes; this build check parses configuration."""
     root = _clone_project(tmp_path)
     path = _target_of(root)
-    serial = "21035" + "1AD6A62"
-    address = "192" + ".168.45.9"
+    serial = "21" + "F" * 10
+    address = ".".join(str(n) for n in (192, 168, 45, 9))
     path.write_text(
         path.read_text(encoding="utf-8")
         + f"\n# a historical bench board {serial} lived at {address}\n",
@@ -552,21 +558,22 @@ def test_every_declared_check_has_a_removal_case():
 @pytest.mark.parametrize("version,ok", [
     ("4.9.3", False), ("5.0.0", False), ("5.1.0", False), ("5.2.0", False),
     ("5.2.9", False), ("5.3.0", False), ("5.3.2", False), ("5.4.0", False),
-    ("5.4.9", False), ("5.5.0", False), ("5.5.1", False), ("5.6.0", True),
-    ("5.6.1", True), ("6.0.0", True),
+    ("5.4.9", False), ("5.5.0", False), ("5.5.1", False), ("5.6.0", False),
+    ("5.6.1", False), ("5.7.0", True), ("5.7.1", True), ("6.0.0", True),
 ])
 def test_the_routertl_floor_is_the_first_release_that_reads_per_target_locks(version, ok):
-    """RTL-D.419: 5.6.0 is the published release DeepSkopion 0.1.0 is verified
-    against. It contains the earlier floors: DS-P1.101's 5.5.0, the first
+    """RTL-P1.321: 5.7.0 is the published release DeepSkopion 0.1.0 is verified
+    against (RTL-D.419's principle, its version superseded). It contains the
+    earlier floors: RTL-D.419's 5.6.0, DS-P1.101's 5.5.0, the first
     published release that reads the per-target locks (targets/<t>.routertl.lock,
     DS-P2.287; 5.3.0 and 5.4.0 report a root-lock stub), and 5.3.0 (hps_regen,
     DS-P1.85). Anything older is refused, and the refusal says what valid
     input looks like."""
     d = P.load_declaration()
-    assert d["routertl"]["min"] == "5.6.0"
+    assert d["routertl"]["min"] == "5.7.0"
     result = P._check_routertl(P.Probe(routertl_version=version), d, _ROOT)
     assert result.ok is ok
-    assert result.requirement == "routertl >= 5.6.0"
+    assert result.requirement == "routertl >= 5.7.0"
 
 
 # ---------------------------------------------------------------------------

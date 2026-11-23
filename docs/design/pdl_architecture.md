@@ -329,7 +329,6 @@ research input only; it does not claim an Ethernet ingest path or EtherCAT RTL.
 | **2** | PDL Compiler → VHDL generation | Deepskopion |
 | **3** | Schema ROM + SW auto-discovery | Deepskopion + logic-trace |
 | **4** | EtherCAT PDL definition + dual-PHY tap | Deepskopion HW |
-| **5** | Customer-facing tooling + packaging | Monetization |
 
 ---
 

@@ -63,8 +63,8 @@ end entity tb_datalogger_gather;
 
 architecture str of tb_datalogger_gather is
 
-  signal fifo_csr : t_fifoCsr;
-  signal proto_counters : t_protoCounterArray(0 to C_NUM_PROTO_COUNTERS - 1);
+  signal fifo_csr : t_fifo_csr;
+  signal proto_counters : t_proto_counter_array(0 to C_NUM_PROTO_COUNTERS - 1);
 
 begin
 

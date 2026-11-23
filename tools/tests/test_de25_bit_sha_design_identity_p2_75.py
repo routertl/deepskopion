@@ -44,9 +44,13 @@ from pathlib import Path
 import pytest
 import yaml
 
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fetched_packages import ensure_fetched  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[2]
 TARGET_YML = ROOT / "targets/de25_datalogger.yml"
-IP_YML = ROOT / "libs/routertl/rea/ip.yml"
+IP_YML = ROOT / "libs/routertl/rea/ip.yml"   # fetched at the ip.lock pin (DS-P2.360), see ensure_fetched
 
 # project.name — the value `rr hw bit-sha` resolves `name` to and therefore the
 # value the hook MUST stamp (NOT the target stem "de25_datalogger").
@@ -137,6 +141,7 @@ def test_baked_build_id_is_the_identity_bit_sha_expects_and_confirms():
     head = _repo_head()
     if head is None:
         pytest.skip("no git HEAD available (design identity needs a commit hash)")
+    ensure_fetched("routertl/rea")   # DS-P2.360: IP_YML is fetched at the ip.lock pin; fail, never skip, without it
 
     args = _rea_build_id_hook_args()
     dn = _flag_value(args, "--design-identity")
@@ -252,7 +257,7 @@ def test_hook_generates_on_a_fresh_worktree_without_git_head_flag():
         shutil.rmtree(fresh_parent, ignore_errors=True)
 
 
-def test_debug_core_yml_loads_and_declares_the_rea_node():
+def test_debug_core_yml_loads_and_declares_the_rea_node(monkeypatch):
     """The other half `rr hw bit-sha` needs: a resolvable REA debug core.
 
     `rr hw bit-sha` (Altera leg) resolves the on-chip node through
@@ -269,6 +274,7 @@ def test_debug_core_yml_loads_and_declares_the_rea_node():
     MUTATION: `rm debug/de25_datalogger.yml` → RED (KeyError on the missing core);
     corrupting sample_width/depth/jtag_chain → RED on the pinned-value asserts;
     an invalid type/HW-key → RED via DebugCoreError out of the loader itself."""
+    monkeypatch.setenv("RR_TARGET", str(ROOT / "targets/de25_datalogger.yml"))  # DS-P2.342: DE25 whatever `rr target set` chose here
     from sdk.cli.debug_core_yml import resolve_debug_cores
 
     # The same resolution surface `rr hw bit-sha`/`rr ila` walk — project.yml

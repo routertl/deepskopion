@@ -79,7 +79,9 @@ class SpiInjectorTb:
             msb_first=True,
             cs_active_low=True,
         )
-        self.spi = SpiMaster(self.bus, self.cfg)
+        # DS-P2.224: the strict SPI protocol monitor (on by default) samples
+        # SCLK on a free-running testbench clock; the DUT samples it on CLK.
+        self.spi = SpiMaster(self.bus, self.cfg, sample_clk=dut.CLK)
 
     async def setup(self):
         await self.env.start_clock()
@@ -197,16 +199,28 @@ async def test_single_byte_read_returns_first_fifo_byte(dut):
     await tb.setup()
     await tb.enable_slave()
 
-    expected = 0xA5
-    await tb.push_byte(expected)
-    await ClockCycles(tb.env.clk, 4)
+    # DS-P3.331: 0xA5 is a bit-palindrome, so on its own it passes whether the
+    # slave shifts MSB-first or LSB-first. 0x91 (0b10010001) reverses to 0x89,
+    # which no byte this file pushes equals, so it fails an LSB-first slave on
+    # its own. Both are kept, each in its own one-byte transaction: 0xA5 keeps
+    # the end-bit checks it always had (a bit 5 cleared in the CS-falling
+    # preload reads 0x85), 0x91 adds the bit-order check.
+    for index, expected in enumerate((0xA5, 0x91)):
+        if index:
+            # TODO(DS-T2.102): the injector pops the next queued byte at the end of
+            # every transaction, so each value is read from a freshly reset injector
+            # until that is fixed; remove this reset with the fix.
+            await tb.env.reset(cycles=5)
+            await tb.enable_slave()
+        await tb.push_byte(expected)
+        await ClockCycles(tb.env.clk, 4)
 
-    # Master writes a 0x00 dummy byte (full-duplex); we don't care what
-    # the slave receives — only what it sends back on MISO.
-    rx = await tb.spi.write([0x00])
-    assert rx[0] == expected, \
-        f"master read 0x{rx[0]:02X} on MISO, expected 0x{expected:02X}"
-    tb.env.log.info(f"✓ single-byte read returned 0x{rx[0]:02X}")
+        # Master writes a 0x00 dummy byte (full-duplex); we don't care what
+        # the slave receives — only what it sends back on MISO.
+        rx = await tb.spi.write([0x00])
+        assert rx[0] == expected, \
+            f"master read 0x{rx[0]:02X} on MISO, expected 0x{expected:02X}"
+        tb.env.log.info(f"✓ single-byte read returned 0x{rx[0]:02X}")
 
 
 @cocotb.test()

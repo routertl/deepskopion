@@ -1,5 +1,13 @@
 # Release Notes
 
+## Unreleased
+
+### Board-alone self-test
+
+The SPI stimulus also arms the on-chip SPI responder, which answers each SPI byte on MISO. Requested together with the SPI stimulus, the SPI edge route is written before the first byte, so Edge 1, Edge 2 and Edge 3 see the transfer.
+
+The default targets generate bus traffic for six of the nine data loggers: Edge 1, Edge 2, Edge 3, I2C 4, SPI 8 and UART 12. I2C 5, UART 13 and CAN 20 need external traffic on their header pins. The reach is the same on all three boards and is measured in simulation by `test_selftest_coverage.py`.
+
 ## 0.1.0
 
 Facts verified against `c574f0d5` on 2026-11-17.
@@ -50,7 +58,7 @@ The reach is the same on all three boards and is measured in simulation by `test
 | Item | Version |
 |---|---|
 | RouteRTL | `routertl 5.6.0`, installed from PyPI |
-| Python | `>= 3.10, < 3.15` |
+| Python | `>= 3.11, < 3.15` |
 | RouteWave | `2.4.0` |
 | Vivado (Zybo Z7-20) | `2024.1`, ML Standard or ML Enterprise |
 | Quartus Prime Pro (DE25) | `25.3` |

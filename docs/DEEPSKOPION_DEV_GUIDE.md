@@ -128,8 +128,8 @@ to the gather. (Why a wire format at all? See §3.)
 
 ### 2.6 `ddr_stream_axi` — the DDR ring DMA
 
-`rr-ddr-stream`'s `ddr_stream_axi` (vendored at
-`libs/local/ddr_stream_axi/`) is the DMA engine. It takes the 32-bit framer
+`rr-ddr-stream`'s `ddr_stream_axi` (fetched by `rr pkg install` into
+`libs/routertl/rr_ddr_stream/` at the commit `ip.lock` pins) is the DMA engine. It takes the 32-bit framer
 word stream on `S_AXIS`, packs it into 128-bit AXI4 bursts, and writes them to
 a **circular buffer in DDR** over an HP port. The ring is `2^buffer_width_g`
 bytes (256 MB on this board). Two facts to burn in:

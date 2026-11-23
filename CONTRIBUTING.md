@@ -76,12 +76,12 @@ To propose a new protocol, open an issue using the [new protocol proposal templa
 ## 4. Development Workflow
 
 ### Tooling Prerequisites
-* **RouteRTL SDK**: `pip install routertl` (minimum version floor: `5.6.0`)
+* **RouteRTL SDK**: `pip install routertl` (minimum version floor: `5.7.0`)
 * **Vendor EDA Toolchains**:
   * AMD Vivado 2024.1 (Standard or Enterprise) for Xilinx targets
   * Intel Quartus Prime Pro 25.3 for Agilex-5 targets
 * **VHDL Simulator**: NVC (minimum version floor: `1.19.3`)
-* **Python**: Python 3.10 or 3.11
+* **Python**: Python 3.11 to 3.14
 
 ### Working with Targets
 Targets define the hardware platform, datalogger instance mix, pin mapping, and tool options:

@@ -111,8 +111,9 @@ def _boot78_tree(tmp_path: Path) -> Path:
 # ── the shipped configuration ────────────────────────────────────────────
 
 
-def test_shipped_configuration_passes_the_crosscheck() -> None:
+def test_shipped_configuration_passes_the_crosscheck(monkeypatch) -> None:
     """Positive control: the tree as committed must build."""
+    monkeypatch.setenv("RR_TARGET", str(ROOT / TARGET_REL))  # DS-P2.342: DE25 whatever `rr target set` chose here
     done = _run(ROOT, "check-dt-decode")
     assert done.returncode == 0, done.stdout + done.stderr
     assert "crosscheck passed" in done.stdout

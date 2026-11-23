@@ -18,6 +18,9 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools"))
+
+from public_artifact_hygiene import _matches_drop_list  # noqa: E402  (the export's own drop list)
 HOOK = ROOT / "hooks" / "pre-commit.local"
 LEG_START = "# ── DS-P2.205 — deployment contract ──"
 LEG_END = "# ── DS-P2.189"
@@ -127,8 +130,7 @@ def test_public_ci_runs_the_contract_tests():
     assert "sw/linux/tests" in (ROOT / "tools" / "ci" / "run_desk_tests.sh").read_text(encoding="utf-8")
 
 
-def test_staging_works_in_a_tree_without_a_board_sidecar(tmp_path):
-    """stage_daemon.sh once aborted on a link into the directory the export drops."""
+def _staged_scratch_tree(tmp_path, skip):
     listing = subprocess.run(
         ["git", "-C", str(ROOT), "ls-files", "-z", "sw/linux", "sw/stream", "contracts",
          "targets", "docs/DEPLOYMENT_CONTRACT.md", "docs/software/telemetry_exporter.md",
@@ -138,19 +140,65 @@ def test_staging_works_in_a_tree_without_a_board_sidecar(tmp_path):
     work = tmp_path / "work"
     for rel in filter(None, listing.split("\0")):
         src = ROOT / rel
-        if rel.startswith(("sw/linux/pfsoc/", "targets/pfsoc_")) or not src.is_file():
+        if skip(rel) or not src.is_file():
             continue
         dst = work / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(src, dst)
+    return work
+
+
+def _stage(work):
     subprocess.run(["git", "init", "-q", str(work)], check=True)
     subprocess.run(["git", "-C", str(work), "add", "-A"], check=True)
-    proc = subprocess.run(
+    return subprocess.run(
         ["bash", str(work / "sw/linux/stage_daemon.sh")],
         cwd=work, text=True, capture_output=True, check=False,
     )
+
+
+def test_staging_works_in_a_tree_without_a_board_sidecar(tmp_path):
+    """stage_daemon.sh once aborted on a link into the directory the export drops
+    (8bcb9830: the link's parent directory was absent). A tree with no board
+    directory at all is still the case this guards. DS-P1.118: PolarFire is now
+    declared in the public contract, so the scratch declaration drops it to match
+    the tree, and the generated document is regenerated from that declaration."""
+    work = _staged_scratch_tree(
+        tmp_path, lambda rel: rel.startswith(("sw/linux/pfsoc/", "targets/pfsoc_")))
+    yml = work / YML_REL
+    text = yml.read_text(encoding="utf-8")
+    assert "    - pfsoc_datalogger\n" in text
+    yml.write_text(text.replace("    - pfsoc_datalogger\n", ""), encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(work)], check=True)
+    subprocess.run(["git", "-C", str(work), "add", "-A"], check=True)
+    regen = subprocess.run([sys.executable, str(work / "sw/linux/deployment_contract.py"), "--write"],
+                           cwd=work, capture_output=True, text=True)
+    assert regen.returncode == 0, regen.stdout + regen.stderr
+    assert "pfsoc_datalogger" not in (work / DOC_REL).read_text(encoding="utf-8")
+    assert not (work / "sw/linux/pfsoc").exists()
+    proc = _stage(work)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert (work / "sw/linux/rootfs_overlay/usr/local/share/deepskopion/sw/stream").is_dir()
+
+
+def test_staging_works_in_the_public_export_tree(tmp_path):
+    """DS-P1.118: the scratch tree is what the export carries, by the export's own
+    drop list. PolarFire ships, so its target and sw/linux/pfsoc/ stay in (only the
+    LFS archive is dropped), and no board sidecar exists."""
+    work = _staged_scratch_tree(tmp_path, _matches_drop_list)
+    # DS-P3.314: the fixture is the export's tree: the PolarFire hook ships, its LFS archive does not.
+    assert (work / "sw/linux/pfsoc/stage_hook.sh").is_file()
+    assert not (work / "sw/linux/pfsoc/python_overlay.tar.gz").exists()
+    proc = _stage(work)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert (work / "sw/linux/rootfs_overlay/usr/local/share/deepskopion/sw/stream").is_dir()
+    # Staging linked the overlay `rr linux rootfs` reads for PolarFire.
+    link = work / "sw/linux/pfsoc/rootfs_overlay"
+    assert link.is_symlink(), "staging did not create sw/linux/pfsoc/rootfs_overlay"
+    assert link.readlink().as_posix() == "../rootfs_overlay"
+    s99 = link / "etc/init.d/S99deepskopion-stream"
+    assert s99.is_file(), "S99deepskopion-stream does not resolve through the PolarFire overlay link"
+    assert s99.resolve() == (work / "sw/linux/rootfs_overlay/etc/init.d/S99deepskopion-stream").resolve()
 
 
 def test_the_shared_staging_files_name_no_dropped_board():

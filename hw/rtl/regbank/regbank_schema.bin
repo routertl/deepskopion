@@ -403,7 +403,7 @@ registers:
     address: 0x0150
     access: RO
     exempt: *live
-    description: Number of 32-bit messages written into the ring since reset (free-running, wraps at 2^32). PS computes byte offset = (RING_WRITE_PTR * 4) mod RING_BYTES.
+    description: Number of 32-bit words the DDR stream has accepted from the framer since reset (free-running, wraps at 2^32). A word is counted on the cycle the stream takes it (valid and ready); cycles where the framer holds a word the stream cannot take are counted in DDR_BACKPRESSURE_CNT, not here. The value is an enqueue count, not a DRAM byte offset, because variable-length frames and beat alignment make RING_WRITE_PTR * 4 diverge from the DMA's committed offset, which is RING_COMMIT_PTR.
 
   - name: RING_READ_PTR
     address: 0x0154
@@ -524,4 +524,4 @@ registers:
     access: RO
     exempt: *live
     description: Eye-scan sample-clock phase-shift status. Bits[15:0]=ps_count — the net number of MMCM fine phase steps applied to the CLKOUT1 sample_clk since the last ps_rst / freq reconfig (a signed-magnitude walk, +1 per advance step and −1 per retard, two's-complement in 16 bits). Multiply by ~17.86 ps (VCO_period/56 at the 1000 MHz VCO) for the absolute sample-phase offset; one full UI = (1000/D)·... ≈ 56·D/10 steps. Bit[16]=ps_busy — a phase step (EYE_CONTROL.ps_step) is in flight; poll until 0 before issuing the next step or trusting ps_count. ADD-only slot — shared system_regbank, canfd_demo unaffected.
-   
+  

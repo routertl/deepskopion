@@ -1,28 +1,29 @@
 -------------------------------------------------------------------------------
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
 -- Title      : axi package
--- Project    : 
+-- Project    :
 -------------------------------------------------------------------------------
 -- File       : axi_pkg.vhd
 -- Author     : Daniel  <djmazure@routertl.com>
--- Company    : 
+-- Company    :
 -- Created    : 2024-07-06
 -- Last update: 2024-07-18
--- Platform   : 
--- Standard   : VHDL'93/02
+-- Platform   :
+-- Standard   : VHDL-2008
 -------------------------------------------------------------------------------
 -- Description: Contains AXI definitions, including subtypes
 -------------------------------------------------------------------------------
--- Copyright (c) 2024 
+-- Copyright (c) 2024
 -------------------------------------------------------------------------------
 -- Revisions  :
 -- Date        Version  Author  Description
 -- 2024-07-06  1.0      dmazure Created
 -------------------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.all;
-use IEEE.NUMERIC_STD.all;
-use IEEE.MATH_REAL.all;
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use ieee.math_real.all;
 library tich;
 use tich.system_config_pkg.all;
 
@@ -63,7 +64,7 @@ package axi_pkg is
     AWCACHE : std_logic_vector(C_AXI_CACHE_WIDTH-1 downto 0);
     AWPROT  : std_logic_vector(C_AXI_PROT_WIDTH-1 downto 0);
     AWQOS   : std_logic_vector(C_AXI_QOS_WIDTH-1 downto 0);  -- if QOS is used
-    AWVALID : std_logic;    
+    AWVALID : std_logic;
     -- Write data channel signals
     WDATA   : std_logic_vector(C_AXI_DATA_WIDTH-1 downto 0);
     WSTRB   : std_logic_vector(C_AXI_STRB_WIDTH-1 downto 0);
@@ -85,8 +86,8 @@ package axi_pkg is
     -- Read data channel signal
     RREADY  : std_logic;
   end record t_axi4_h2c_bus;
-  
-  type t_axi4_c2h_bus is record 
+
+  type t_axi4_c2h_bus is record
     -- Write address channel signal
     AWREADY : std_logic;
     -- Write data channel signal
@@ -96,7 +97,7 @@ package axi_pkg is
     BRESP   : std_logic_vector(C_AXI_RESP_WIDTH-1 downto 0);
     BVALID  : std_logic;
     -- Read address channel signal
-    ARREADY : std_logic;  
+    ARREADY : std_logic;
     -- Read data channel signals
     RID     : std_logic_vector(C_AXI_ID_WIDTH-1 downto 0);
     RDATA   : std_logic_vector(C_AXI_DATA_WIDTH-1 downto 0);

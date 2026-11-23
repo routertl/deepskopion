@@ -24,11 +24,11 @@ DROPBEAR = IMG + "!usr/sbin/dropbear"
 RSA_HDR = ("-----BEGIN RSA " + "PRIVATE KEY-----").encode()
 PKCS8_HDR = ("-----BEGIN " + "PRIVATE KEY-----").encode()
 IPADDR = IMG + "!usr/lib/python3.12/ipaddress.pyc"
-NET_A = ("10.0" + ".0.0").encode()
-NET_OTHER = ("10.1" + ".2.3").encode()
+NET_A = ".".join(str(n) for n in (10, 0, 0, 0)).encode()
+NET_OTHER = ".".join(str(n) for n in (10, 1, 2, 3)).encode()
 WHEEL = IMG + "!usr/lib/python3.12/ensurepip/_bundled/pip-25.0.1-py3-none-any.whl"
 IDNA = WHEEL + "!pip/_vendor/idna/idnadata.py"
-IDNA_CONST = ("21" + "2600002127").encode()
+IDNA_CONST = "".join(("21", "2600002127")).encode()
 
 
 def _scan(name: str, literal: bytes) -> list[str]:

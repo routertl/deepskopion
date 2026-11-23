@@ -1,0 +1,14 @@
+$ rr hw bit-sha ... --json   (rc=0)
+--- stdout
+ℹ  Agilex-class part — REA via Quartus System Console SLD (SDM-mediated JTAG; openocd can't reach the SLD here, and quartus_stp DR writes 
+are capture-only).
+{
+  "outcome": "CONFIRMED",
+  "confirmed": true,
+  "vendor": "altera",
+  "mechanism": "rea-jtag-build-id-32",
+  "expected": "1f9b8848",
+  "observed": "1f9b8848",
+  "reason": "the device reports rea-jtag-build-id-32=1f9b8848, matching the built artifact"
+}
+--- stderr

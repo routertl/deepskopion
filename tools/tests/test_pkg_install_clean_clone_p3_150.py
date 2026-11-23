@@ -478,7 +478,10 @@ def test_every_target_file_is_in_the_install_matrix() -> None:
 
 
 def test_de25_xpm_body_stubs_are_tracked_hash_pinned_synth_inputs() -> None:
-    """Done-when (c): DE25 binder support exists here and in the lock."""
+    """Done-when (c): DE25 binder support is fetched with the package and hash-pinned in the lock.
+
+    DS-P2.360 (owner ruling 2026-11-18): the package tree is fetched by rr pkg install / rr workspace sync and never
+    tracked, so the stubs are on disk after the fetch and absent from the index."""
     entry = _lock()["routertl/rr_ddr_stream"]
     target = yaml.safe_load(
         (ROOT / "targets/de25_datalogger.yml").read_text(encoding="utf-8")
@@ -490,7 +493,9 @@ def test_de25_xpm_body_stubs_are_tracked_hash_pinned_synth_inputs() -> None:
     assert set(entry["synth_only_files_by_vendor"]["xilinx"]).isdisjoint(DDR_STUBS)
     tracked = _run("git", "ls-files", *sorted(DDR_STUBS))
     assert tracked.returncode == 0, tracked.stdout
-    assert set(tracked.stdout.splitlines()) == DDR_STUBS
+    assert tracked.stdout.splitlines() == []
+    for relpath in DDR_STUBS:
+        assert (ROOT / relpath).is_file(), f"{relpath} is not fetched; run rr workspace sync"
     for relpath in DDR_STUBS:
         digest = hashlib.sha256((ROOT / relpath).read_bytes()).hexdigest()
         assert entry["file_hashes"].get(relpath) == digest, (

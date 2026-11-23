@@ -40,4 +40,4 @@ rich-click
 colorama
 msgpack>=1.0.0
 # The RouteRTL release DeepSkopion launches on; tools/preflight checks the same floor.
-routertl>=5.6.0
+routertl>=5.7.0

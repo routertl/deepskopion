@@ -1,5 +1,7 @@
 # Level Datalogger — Features
 
+**Build status:** the level datalogger is not instantiated in any current board build (`C_LEVEL_DRIVERS = 0` in `pkg/datalogger_config_pkg.vhd`); it is verified by simulation only.
+
 ## Implemented
 
 | Feature | Description |
@@ -10,6 +12,7 @@
 | Device-id filter | `CONFIG[15:11]` addresses one instance; non-matching `CONFIG` is ignored |
 | Per-datalogger reset | Disable drives `CAPTURE_RST` — flushes `levelPins_r` so a re-enable re-emits the current level |
 | Backpressure-safe | `LEVEL_MSG_RDY` holds delivery; the captured tuple is frozen until accepted |
+| One frame per change | A change that is delivered is not re-flagged in its delivery cycle, so one `LEVEL_PINS` change gives one delivered frame under steady, pulsed or random `LEVEL_MSG_RDY` (`test_level_frames_per_change`) |
 
 ## Design notes
 

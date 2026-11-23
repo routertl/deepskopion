@@ -1,4 +1,5 @@
 -------------------------------------------------------------------------------
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
 -- Title      : deepskopion_legacy_functions_pkg
 -- Project    : deepskopion
 -------------------------------------------------------------------------------
@@ -17,14 +18,15 @@
 -- on-disk per user request while neutralising the collision.
 -------------------------------------------------------------------------------
 -- File       : functions_pkg.vhd  (filename unchanged for git history)
+-- Description: Legacy helper functions (package deepskopion_legacy_functions_pkg).
 -- Author     :   <djmazure@routertl.com>
--- Standard   : VHDL'08
+-- Standard   : VHDL-2008
 -------------------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.all;
-use IEEE.NUMERIC_STD.all;
-use IEEE.MATH_REAL.all;
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use ieee.math_real.all;
 use ieee.std_logic_textio.all;
 use std.textio.all;
 
@@ -44,8 +46,6 @@ package deepskopion_legacy_functions_pkg is
     function bigger(a: unsigned; b: unsigned) return unsigned;
     function bigger(a: std_logic_vector; b: std_logic_vector) return unsigned;
 
-    function calculate_tw_offset(offset_hz : integer; sys_freq : integer; phase_accumulator_width : integer) return unsigned;
-    function calculate_scaled_adc_value(adc_value : signed; scale : unsigned; fixed_point_precidataloggeron : integer) return signed;
 
 end package deepskopion_legacy_functions_pkg;
 
@@ -89,7 +89,8 @@ package body deepskopion_legacy_functions_pkg is
         constant C_MAX_AXI_BURST       : integer := 256;
         constant C_AXI_4K_BOUNDARY     : integer := 4096;
         constant C_MAX_AXI_BURST_WIDTH : integer := integer(ceil(log2(real(C_MAX_AXI_BURST)))); -- 8
-        constant C_MAX_DESIGN_BURST    : integer := C_AXI_4K_BOUNDARY/bytes_per_beat; -- with 16 bytes per beat, 256 bursts
+        -- with 16 bytes per beat, 256 bursts
+        constant C_MAX_DESIGN_BURST    : integer := C_AXI_4K_BOUNDARY/bytes_per_beat;
         --
         variable result : unsigned(C_MAX_AXI_BURST_WIDTH-1 downto 0) := (others => '0');
     begin
@@ -162,62 +163,5 @@ package body deepskopion_legacy_functions_pkg is
         end if;
     return result;
     end function bigger;
-
-    function calculate_tw_offset(offset_hz : integer; sys_freq : integer; phase_accumulator_width : integer) return unsigned is
-        constant C_PHASE_ACC_MIN_WIDTH : integer := 8;
-        constant C_MAX_INTEGER_BITS    : integer := 32;
-        variable result                : unsigned(phase_accumulator_width-1 downto 0);
-        variable offset                : real    := real(offset_hz) / real(sys_freq);
-        variable partial_exp           : integer := 0;
-        variable partial_tw_offset     : real    := 0.0;
-        variable real_tw_offset        : real    := 0.0;
-
-    begin
-        result := (others => '0');
-        assert phase_accumulator_width >= C_PHASE_ACC_MIN_WIDTH report "Phase accumulator width is below "  & integer'image(C_PHASE_ACC_MIN_WIDTH) & " bits" severity failure;
-        if C_MAX_INTEGER_BITS <= 32 then            
-            partial_exp       := phase_accumulator_width-C_PHASE_ACC_MIN_WIDTH;
-            partial_tw_offset := offset * real(2**partial_exp);
-            real_tw_offset    := partial_tw_offset * real(2**C_PHASE_ACC_MIN_WIDTH);
-        else
-            report "Phase accumulator width is above 32 bits" severity note;
-            partial_exp       := phase_accumulator_width - 32;
-            partial_tw_offset := offset * real(2**partial_exp);
-            real_tw_offset := partial_tw_offset * real(2**32);
-        end if;
-        -- Convert to unsigned
-        result := to_unsigned(integer(real_tw_offset), phase_accumulator_width);
-        return result;
-    end function calculate_tw_offset;
-
-    function calculate_scaled_adc_value(adc_value : signed; scale : unsigned; fixed_point_precidataloggeron : integer) return signed is
-        -- Constants
-        constant C_PRODUCT_WIDTH : integer := adc_value'length + scale'length;
-        -- Variables
-
-        variable result         : signed(C_PRODUCT_WIDTH-1 downto 0)    := (others => '0');
-        variable result_int     : signed(C_PRODUCT_WIDTH*2-1 downto 0)  := (others => '0');
-        variable encoded_value  : signed(C_PRODUCT_WIDTH*2-1 downto 0)  := (others => '0');
-        variable adc_ext        : signed(C_PRODUCT_WIDTH-1 downto 0)    := (others => '0');
-        variable scale_ext      : signed(C_PRODUCT_WIDTH-1 downto 0)    := (others => '0');
-    begin
-        result := (others => '0');
-        -- Scale the ADC value
-        adc_ext   := resize(adc_value, C_PRODUCT_WIDTH);
-        scale_ext := resize(signed(scale), C_PRODUCT_WIDTH);
-        report "ADC value: " & integer'image(to_integer(adc_value)) severity note;
-        report "ADC EXT value: " & integer'image(to_integer(adc_ext)) severity note;
-        report "Scale value: " & integer'image(to_integer(scale_ext)) severity note;
-        -- Perform the multiplication
-        -- encoded_value := resize(adc_ext, C_PRODUCT_WIDTH) * resize(scale_ext, C_PRODUCT_WIDTH);
-        encoded_value := adc_ext* scale_ext;
-        result_int    := shift_right(encoded_value, fixed_point_precidataloggeron);
-        result        := result_int(C_PRODUCT_WIDTH-1 downto 0);
-        
-        report "Result: " & integer'image(to_integer(result)) severity note;
-        report "Result_int: " & to_hstring(result_int) severity note;
-        report "Encoded_value: " & to_hstring(encoded_value) severity note;
-        return result;
-    end function calculate_scaled_adc_value;
 
 end package body deepskopion_legacy_functions_pkg;

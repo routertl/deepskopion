@@ -248,6 +248,9 @@ fifoEdWrEn <= '0' when fifoEdRstBusy  = '1' else
               '0';
 ```
 
+The edge detector is cleared by RST, and a detection it held from before an enable is not written; a transition
+while the logger is disabled is reported once, at the re-enable, timestamped at the re-enable.
+
 ---
 
 ## 6. Bandwidth Analysis

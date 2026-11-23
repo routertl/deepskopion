@@ -105,7 +105,8 @@ def pll_root(cwd: str) -> Path | None:
 
 def run_tests(root: Path, python: str = sys.executable) -> tuple[bool, str]:
     """Run POST_SYNTH_TESTS against ``root``. True only if every one PASSED."""
-    env = dict(os.environ, DS_FABRIC_PLL_DIR=str(root), PYTHONDONTWRITEBYTECODE="1")
+    # DS-P3.311: the cron reads the shared checkout; a missing fetched package is a named red, never a sync there.
+    env = dict(os.environ, DS_FABRIC_PLL_DIR=str(root), PYTHONDONTWRITEBYTECODE="1", DS_FETCH_CHECK_ONLY="1")
     cmd = [python, "-m", "pytest", "-q", "-rA", "-p", "no:cacheprovider", *POST_SYNTH_TESTS]
     proc = subprocess.run(cmd, cwd=ROOT, env=env, capture_output=True, text=True,
                           errors="replace", check=False)

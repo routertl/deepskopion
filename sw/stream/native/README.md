@@ -23,11 +23,17 @@ path.
 | Step | Python path | Native path |
 |---|---|---|
 | EDGE_BATCH walk, resync, malformed batch | `DdrRingDataSource.next_batch` per frame | `ds_frames_drain`, one call per run of frames |
+| PL zero pad after a frame (to the DDR-word boundary) | `DdrRingDataSource._pad_run` | `pad_run` in `ds_frames_drain`, with `ring_word_bytes`, `ring_bytes` and `span_ofs` in `ds_drain_cfg`; a zero word after a frame that is not pad returns to `next_batch` (`STOP_OTHER_FRAME`), which resyncs it |
 | First header timestamp as the PL time anchor | `next_batch` | `ds_drain_result.first_ts_ticks`, applied by `next_batch` |
 | Stream-RLE words, other domains | `next_batch` | `next_batch`; RLE edges join the same native batch through `Batch.add_edge` |
 | Frame cut at `EDGE_ANCHOR_REACH_US` | `Batch.add_edge` | `frames_push` |
 | Wire encoding | `proto.make_edge_events` + `proto.pack_frame` | `ds_frames_pack` |
 | Stream guard | `LiveConformanceGuard.check` | `LiveConformanceGuard.check_native_edge_frame` |
+
+`ds_drain_cfg` and `ds_drain_result` carry a layout version, `DS_EDGE_DRAIN_ABI`
+(2), returned by `ds_edge_drain_abi()`. `edge_frames.py` refuses a library that
+reports another version or none, so a library built from an older `edge_drain.c`
+is rebuilt rather than read with the wrong structures.
 
 `check_native_edge_frame` decodes the first native frame of a session, and then
 one accepted frame in `NATIVE_FULL_CHECK_EVERY` (1024), and checks every word.
@@ -83,12 +89,12 @@ overlay has no library built from the checkout's sources.
 Both compilers are Buildroot 2024.11.4 (`c9e65c2c`) builds; the two build
 scripts pin that tag as `BUILDROOT_REF`. From the
 current `edge_drain.c` and `edge_drain.h` (`native_edge_source_sha256`
-`5c37c4c2…`), each build gives the same library on every run:
+`408ed66b…`), each build gives the same library on every run:
 
 | Profile | `native_edge_lib_sha256` |
 |---|---|
-| `zybo` | `0e64dbbe30bf5d465c3674ca104cbdfd4f8b0bbef09e21945638e76319642f11` |
-| `pfsoc` | `fc201ad3fa467eb4df8ea5d4045d89487a2aebbdc654d043df98f9f2cd30c28e` |
+| `zybo` | `0cdcc404de81ec0af7009c187ef9e43fe866aa657e75c2dd574147b295c41df2` |
+| `pfsoc` | `25a1f4f6f84854b3851d6185aaa84aa726b7fbd045886e5422cdd08263251a5b` |
 
 A source change changes both values, and so does a change to the build flags in `tools/native_edge_lib.py`.
 

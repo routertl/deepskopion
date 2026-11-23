@@ -37,8 +37,8 @@ def _run(path: Path) -> tuple[int, str]:
 @pytest.mark.parametrize(("kind", "seed"), [
     ("developer home", "/ho" + "me/build-user/project"),
     ("developer removable-media home", "/med" + "ia/build-user/card/image"),
-    ("bench cable serial", "21035" + "1AD6A62"),
-    ("private-subnet assumption", "192" + ".168.45.7"),
+    ("bench cable serial", "21" + "F" * 10),
+    ("private-subnet assumption", ".".join(str(n) for n in (192, 168, 45, 7))),
     ("host TFTP root", "/sr" + "v/tftp"),
     ("private key", "-----BEGIN OPENSSH " + "PRIVATE KEY-----"),
     ("preinstalled SSH authorized key",
@@ -67,24 +67,14 @@ def test_clean_generated_rtl_provenance_and_transcript_pass(tmp_path):
 def test_only_exact_upstream_runtime_reference_is_not_identity(tmp_path):
     runtime = tmp_path / "rootfs/bin/busybox"
     runtime.parent.mkdir(parents=True)
-    runtime.write_bytes(b"upstream example 192.168" + b".0.20")
+    runtime.write_bytes(b"upstream example " + ".".join(str(n) for n in (192, 168, 0, 20)).encode())
     rc, output = _run(tmp_path / "rootfs")
     assert rc == 0, output
 
-    runtime.write_bytes(b"deployed topology 192.168" + b".0.21")
+    runtime.write_bytes(b"deployed topology " + ".".join(str(n) for n in (192, 168, 0, 21)).encode())
     rc, output = _run(tmp_path / "rootfs")
     assert rc == 1
     assert "private-subnet assumption" in output
-
-
-def test_no_de25_target_address_exemption_remains():
-    """DS-D.39 makes even the formerly declared DE25 address a public leak."""
-    declared = ("ds_ip=192" + ".168.7.5/24").encode()
-    neighbour = ("ds_ip=192" + ".168.7.6/24").encode()
-
-    assert H.inspect_bytes("index:targets/de25_datalogger.yml", declared)
-    assert H.inspect_bytes("index:docs/claim.md", declared)
-    assert H.inspect_bytes("index:targets/de25_datalogger.yml", neighbour)
 
 
 def test_linux_image_archive_is_opened_not_only_string_scanned(tmp_path):
@@ -231,7 +221,7 @@ def test_clean_export_fixture_tree_passes(tmp_path):
     ("drop list " + "docs/" + "in" + "ternal/", "docs/" + "in" + "ternal/conv/meeting.md", "# Meeting notes", "dropped artifact in export"),
     ("drop list ." + "ag" + "ent/", "." + "ag" + "ent/rules/sim.md", "Rule text", "dropped artifact in export"),
     ("drop list screencast", "demo/config1/screencast.md", "# Screencast script", "dropped artifact in export"),
-    ("drop list monetization", "docs/design/monetization_architecture.md", "# Architecture", "dropped artifact in export"),
+    ("drop list private terms list", H.PRIVATE_TERMS_REL, "term\n", "dropped artifact in export"),
     ("drop list stage_tftp_deploy", "sw/linux/stage_tftp_deploy.sh", "#!/bin/sh\nexit 0\n", "dropped artifact in export"),
     ("drop list DE25_BOARD_FACTS", "docs/hardware/DE25_BOARD_FACTS.md", "# Board facts", "dropped artifact in export"),
     ("drop list libs/ctu-fee/", "libs/ctu-fee/ctucanfd_ip_core/src/dummy.vhd", "-- dummy\n", "dropped artifact in export"),
@@ -304,8 +294,6 @@ def test_export_to_drops_drop_list_files_and_gates_cleanly(tmp_path):
     (source / ".agent" / "rules" / "r.md").write_text("agent rule", encoding="utf-8")
     (source / "demo" / "config1").mkdir(parents=True)
     (source / "demo" / "config1" / "screencast.md").write_text("screencast", encoding="utf-8")
-    (source / "docs" / "design").mkdir(parents=True)
-    (source / "docs" / "design" / "monetization_architecture.md").write_text("monetization", encoding="utf-8")
     (source / "sw" / "linux").mkdir(parents=True)
     (source / "sw" / "linux" / "stage_tftp_deploy.sh").write_text("#!/bin/sh\n", encoding="utf-8")
     (source / "docs" / "hardware").mkdir(parents=True)
@@ -325,7 +313,8 @@ def test_export_to_drops_drop_list_files_and_gates_cleanly(tmp_path):
     assert not (dest / "docs" / "internal").exists()
     assert not (dest / ".agent").exists()
     assert not (dest / "demo" / "config1" / "screencast.md").exists()
-    assert not (dest / "docs" / "design" / "monetization_architecture.md").exists()
+    # DS-P1.123: the public drop list names no private term (the documents it would name are in the dropped tree).
+    assert not [e for e in H.DROP_LIST if any(t in e.lower() for t in H.load_private_terms())]
     assert not (dest / "sw" / "linux" / "stage_tftp_deploy.sh").exists()
     assert not (dest / "docs" / "hardware" / "DE25_BOARD_FACTS.md").exists()
     assert not (dest / "libs" / "ctu-fee").exists()

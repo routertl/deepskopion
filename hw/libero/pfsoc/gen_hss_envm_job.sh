@@ -66,7 +66,7 @@ BOOT_MODE="${BOOT_MODE:-1}"
 BOOT_ENTRY="${BOOT_ENTRY:-0x20220100}"   # eNVM page 1 (wrapper ENTRY / link base)
 
 # Libero licence (the bench-wide LM_LICENSE_FILE is Altera-only; add 1702@).
-export LM_LICENSE_FILE="${LM_LICENSE_FILE:-1702@localhost:1702@magic}"
+export LM_LICENSE_FILE="${LM_LICENSE_FILE:-1702@localhost}"   # DS-P2.360: set LM_LICENSE_FILE to your Libero licence server (port@host)
 
 if [[ ! -x "$FP" ]]; then
     echo "ERROR: fpgenprog not found at $FP (set LIBERO=...)" >&2

@@ -571,7 +571,15 @@ def test_port_conflict_on_the_events_lane_leaves_wave_stream_up():
     assert errors == []
     wave = _connect(wave_port)
     wave.settimeout(DEADLINE_S)
-    tag, helo = next(msgpack.Unpacker(raw=False, file_like=wave.makefile("rb")))
+    # Read HELO as it arrives. A buffered file_like read waits for a whole chunk or EOF, so it only returned when the
+    # server dropped the connection at its HELO_OK timeout; with the longer default that is after DEADLINE_S.
+    unp, frame = msgpack.Unpacker(raw=False), None
+    while frame is None:
+        data = wave.recv(4096)
+        assert data, "the server closed the wave_stream connection before HELO"
+        unp.feed(data)
+        frame = next(unp, None)
+    tag, helo = frame
     assert tag == proto.TAG_HELO
     assert helo["ver"] == "wave_stream_v1"
     blocker.close()

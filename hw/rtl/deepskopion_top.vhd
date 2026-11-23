@@ -106,8 +106,8 @@
 --    fifo_depth_g=9, ddr_data_width_g=128, ddr_base_addr_g=G_DDR_BASE_ADDR,
 --    buffer_width_g=28 → 256 MB ring.  Packs the 32-bit framer words into
 --    128-bit AXI4 bursts on S_AXI_HP0 (HP port, 125 MHz / fclk_clk1).
---    ring_write_cnt_r increments per framer 32-bit word — i.e. +6 per
---    source message (5 header + 1 payload).
+--    The core's RING_WRITE_PTR counts the 32-bit framer words the stream
+--    accepts (+6 per source message: 5 header + 1 payload).
 --
 -- ============================================================================
 --  WHY THE ZS FRAMER EXISTS  ("ZS" = Zynq Datalogger, ASCII magic 0x5A53)
@@ -178,12 +178,14 @@
 --    RING_BASE_LOW   = G_DDR_BASE_ADDR  (low 32b of physical base)
 --    RING_BASE_HIGH  = 0                (Zynq-7 is 32-bit physical)
 --    RING_BYTES      = 2^G_DDR_WIN_WIDTH = 256 MB
---    RING_WRITE_PTR  = ring_write_cnt_r (live; +6 per source message)
+--    RING_WRITE_PTR  = framer words the DDR stream accepted (live; +6 per
+--                      source message). An enqueue count, not a byte offset.
+--    RING_COMMIT_PTR = the DMA's committed DDR write address (byte offset)
 --
 --  Walk recipe:
---      delta_words = RING_WRITE_PTR_now − RING_WRITE_PTR_last_drained
---      byte_offset = (delta_words * 4) mod RING_BYTES
---      scan forward at base+offset for magic==0x5A53, then advance by
+--      the position is RING_COMMIT_PTR; RING_WRITE_PTR * 4 diverges from it
+--      (variable-length frames, whole-DDR-word commits) and is not a walk input.
+--      scan forward at the committed offset for magic==0x5A53, then advance by
 --      header_len*4 + payload_len.
 --
 -- ============================================================================
@@ -203,8 +205,8 @@
 --  4. No per-frame alignment marker beyond `magic`.  If a frame is truncated
 --     by ring overrun, the next valid frame still starts at the next 0x5A53.
 --  5. No back-pressure to the PS.  Ring overrun is detected after the fact
---     via RING_WRITE_PTR advancing past RING_READ_PTR + RING_BYTES/4;
---     DdrRingDataSource enforces this on the SW side.
+--     via the committed offset (RING_COMMIT_PTR) advancing past RING_READ_PTR +
+--     RING_BYTES; DdrRingDataSource enforces this on the SW side.
 --
 -------------------------------------------------------------------------------
 
@@ -517,7 +519,7 @@ architecture rtl of deepskopion_top is
   signal dout_datalogger_id : std_logic_vector(7 downto 0);
   signal dout_msg_type   : std_logic_vector(15 downto 0);
   signal dout_valid      : std_logic;
-  signal fifo_csr        : t_fifoCsr;
+  signal fifo_csr        : t_fifo_csr;
   signal dout_req             : std_logic;
   signal ddr_busy              : std_logic;
   -- DDR-P3.10: input-side back-pressure from rr-ddr-stream's skid.
@@ -543,7 +545,7 @@ architecture rtl of deepskopion_top is
 
   -- Per-protocol PKT_CNT_*/ERR_CNT_* bundle driven by datalogger_gather
   -- (DS-P3.26). Indexed by datalogger_config_pkg.C_PROTO_IDX_<NAME>.
-  signal proto_counters : t_protoCounterArray(0 to C_NUM_PROTO_COUNTERS-1)
+  signal proto_counters : t_proto_counter_array(0 to C_NUM_PROTO_COUNTERS-1)
                         := (others => C_INIT_PROTO_COUNTER);
 
   ---------------------------------------------------------------------------
@@ -704,7 +706,7 @@ architecture rtl of deepskopion_top is
   signal rea_tap_tdo      : std_logic;
 
   -- ── DS-T2.18 DDR-commit instrumentation ──────────────────────────────────
-  -- Diagnoses why frames enqueue (RING_WRITE_PTR advances on framer_out_valid)
+  -- Diagnoses why frames enqueue (RING_WRITE_PTR advances when the stream accepts a framer word)
   -- but never land in DRAM (cold-cache DRAM read = 100% zero). Three observers:
   --   1. clk_ddr liveness: a free-running divider in the clk_ddr (fclk_clk1,
   --      125 MHz) domain — deliberately NOT reset by rst_ddr, so it ticks even
@@ -755,13 +757,6 @@ architecture rtl of deepskopion_top is
   signal emit_valid_cnt_r : unsigned(31 downto 0) := (others => '0');  -- cycles err_fr_valid=1
   signal emit_done_cnt_r  : unsigned(31 downto 0) := (others => '0');  -- emitter→framer handshakes
 
-  -- DDR ring write counter (DS-P3.27 Phase B). With the zs_msg_framer
-  -- in the loop (DS-P3.28 v1), each datalogger message produces a 6-word
-  -- frame (5 header words + 1 payload word), so the counter advances
-  -- by 6 per source message. PS reads RING_WRITE_PTR, computes byte
-  -- offset = (count * 4) mod RING_BYTES, and drains zs_msg frames out
-  -- of the mmaped ring window.
-  signal ring_write_cnt_r : unsigned(31 downto 0) := (others => '0');
   signal ddr_backpressure_cnt_r : unsigned(31 downto 0) := (others => '0');  -- DS-T2.22 mech B
   -- DS-P3.91: burst arbiter grant counter. The regbank ARB_GRANT_CNT slot
   -- was undriven (read the ROM-init 0). Counts gather burst-arbiter GRANTS — the

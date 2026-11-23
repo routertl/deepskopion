@@ -580,7 +580,7 @@ def _make_enable_arbiter(regbank) -> EnableArbiter:
         lambda dl_id, word: apply_datalogger_config(regbank, dl_id, word))
 
 
-def apply_stimulus(regbank, protocol: str) -> Optional[str]:
+def apply_stimulus(regbank, protocol: str, route: Optional[str] = None) -> Optional[str]:
     """DS-P2.136: arm the on-board stimulus generator (ds_stimulus_gen) for
     ``protocol`` from the DAEMON, via the same DS-P1.58 production register
     sequence the witness armer uses — one arming code path, so the daemon and
@@ -589,11 +589,20 @@ def apply_stimulus(regbank, protocol: str) -> Optional[str]:
 
     The armer is production code (``stimulus_armer``), never testbench: the DE25
     rootfs ships sw/stream without sw/stream/testbench."""
-    from .stimulus_armer import ARMERS, PROTOCOLS
+    from .stimulus_armer import ARMERS, PROTOCOLS, ROUTED_ARMERS
     armer = ARMERS.get(protocol)
     if armer is None:
         return f"unknown stimulus protocol {protocol!r}; expected one of {PROTOCOLS}"
-    armer(regbank)
+    if route is None:
+        armer(regbank)
+        return None
+    # DS-P2.343: the arm writes the edge route into EMIO_MUX_SEL before its burst.
+    from .edge_route import ROUTES
+    if protocol not in ROUTED_ARMERS:
+        return f"stimulus {protocol!r} takes no edge route; routed arms: {sorted(ROUTED_ARMERS)}"
+    if route not in ROUTES:
+        return f"unknown edge route {route!r}; expected one of {sorted(ROUTES)}"
+    armer(regbank, route=route)
     return None
 
 
@@ -979,8 +988,8 @@ class RegbankDataSource:
         """Trigger revert: the latest host baseline stands again."""
         return self._enable.release_trigger_mask()
 
-    def apply_stimulus(self, protocol: str) -> Optional[str]:
-        return apply_stimulus(self._regbank, protocol)
+    def apply_stimulus(self, protocol: str, route: Optional[str] = None) -> Optional[str]:
+        return apply_stimulus(self._regbank, protocol, route)
 
     def apply_edge_route(self, route: str):
         """DS-P3.123: EMIO_MUX_SEL edge routing; ``(reject, applied word)``."""
@@ -1312,8 +1321,7 @@ class DdrRingDataSource:
         # word, rr_ddr_stream ddr_fifo_intf completes the word with zero 32-bit messages so it commits. Those
         # zeros are pad, not lost sync: a zero run from the read cursor to the next word boundary is consumed
         # silently. None (undeclared) keeps the old behaviour, a pad reads as zs_resync, and says so once.
-        # Python walk only: with the native EDGE walk loaded, a pad directly after an EDGE_BATCH run is still
-        # slid over in C and reported as resync (DS-P2.281 adds the C stop and the library rebuilds).
+        # The native EDGE walk applies the same rule in C (DS-P2.281 stop, DS-P1.117 consumption).
         self._ring_word_bytes = _check_ring_word_bytes(ring_word_bytes)
         self._pad_total = 0
         # A pad only ever follows the PL's last real message, so it is taken only right after a parsed frame;
@@ -1471,8 +1479,8 @@ class DdrRingDataSource:
         """Trigger revert: the latest host baseline stands again."""
         return self._enable.release_trigger_mask()
 
-    def apply_stimulus(self, protocol: str) -> Optional[str]:
-        return apply_stimulus(self._regbank, protocol)
+    def apply_stimulus(self, protocol: str, route: Optional[str] = None) -> Optional[str]:
+        return apply_stimulus(self._regbank, protocol, route)
 
     def apply_edge_route(self, route: str):
         """DS-P3.123: EMIO_MUX_SEL edge routing; ``(reject, applied word)``."""
@@ -1598,18 +1606,24 @@ class DdrRingDataSource:
                 # DS-P1.74: C walks the run of EDGE_BATCH frames from here (the
                 # resync, partial-frame and malformed-batch rules of the branch
                 # below) and stops before the first frame of another kind.
+                # DS-P1.117: with the word width, C also consumes the PL pad after each frame, so a run
+                # of padded frames is one call, not one call per frame.
                 walked = batch.native_edges.drain(
                     span, cursor, self._MAX_FRAMES_PER_TICK - frames_parsed,
-                    self._pl_ns_per_tick, self._sample_clk_hz // 1_000_000)
+                    self._pl_ns_per_tick, self._sample_clk_hz // 1_000_000,
+                    ring_word_bytes=self._ring_word_bytes or 0, ring_bytes=self._ring_bytes,
+                    ring_ofs=self._read_byte_ofs)
                 if walked.first_ts_ticks is not None and self._pl_ts_anchor_ticks is None:
                     self._pl_ts_anchor_ticks = walked.first_ts_ticks
                     self._pl_ts_anchor_wallclock_ns = ts_ns
                 cursor += walked.consumed
                 frames_parsed += walked.frames
                 resync_bytes += walked.resync_bytes
+                pad_bytes += walked.pad_bytes
                 if walked.consumed:
-                    # Conservative: only a run with no resync is known to end on a frame.
-                    after_frame = walked.frames > 0 and walked.resync_bytes == 0
+                    # DS-P1.117: the walk's own state (it ends after a frame, a pad or a resync), as this
+                    # loop would have it.
+                    after_frame = walked.after_frame
                 if (walked.stop == native_edge_frames.STOP_OTHER_FRAME
                         and span[cursor:cursor + _BYTES_PER_MSG] == bytes(_BYTES_PER_MSG)):
                     # DS-P2.281: the C walk stops at a zero word only right after a frame it walked, so the

@@ -750,7 +750,7 @@ async def test_fifo_cnt_tracks_occupancy_no_wraparound(dut):
     output_fifo = int(dut.G_OUTPUT_FIFO.value)
     total_capacity = fifo_capacity * (2 if output_fifo else 1)
 
-    # FIFO_CNT is `uFifoBufferCnt(0 to N-1)(...)` — try indexed access via
+    # FIFO_CNT is `t_fifo_buffer_cnt(0 to N-1)(...)` — try indexed access via
     # cocotb. Fall back to EMPTY/FULL behavioural proxy on read failure.
     def _read_cnt(i: int) -> int | None:
         try:

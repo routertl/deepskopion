@@ -36,7 +36,7 @@ port_contract:
     - { name: DOUT_FULL,  dir: out, width: "1" }
     - { name: EMPTY,      dir: out, width: "0 to G_NUM_INPUTS - 1" }
     - { name: FULL,       dir: out, width: "0 to G_NUM_INPUTS - 1" }
-    - { name: FIFO_CNT,   dir: out, width: "uFifoBufferCnt(0 to G_NUM_INPUTS-1)(G_FIFO_DEPTH downto 0)" }
+    - { name: FIFO_CNT,   dir: out, width: "t_fifo_buffer_cnt(0 to G_NUM_INPUTS-1)(G_FIFO_DEPTH downto 0)" }
     - { name: READY,    dir: in,  width: "1" }
   clocks:
     - { name: CLK }

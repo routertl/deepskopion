@@ -32,14 +32,22 @@ SYSTEM_LIB = Path("/usr/local/lib/deepskopion") / LIB_NAME
 
 class _Cfg(ctypes.Structure):
     _fields_ = [("ns_per_tick", ctypes.c_uint64), ("clk_mhz", ctypes.c_uint32),
-                ("max_frames", ctypes.c_size_t)]
+                ("max_frames", ctypes.c_size_t),
+                # DS-P1.117 (ABI 2): the PL zero-pad rule of DdrRingDataSource._pad_run.
+                ("ring_word_bytes", ctypes.c_size_t), ("ring_bytes", ctypes.c_size_t),
+                ("span_ofs", ctypes.c_size_t)]
 
 
 class _Result(ctypes.Structure):
     _fields_ = [("consumed", ctypes.c_size_t), ("frames", ctypes.c_size_t),
                 ("edges", ctypes.c_size_t), ("resync_bytes", ctypes.c_size_t),
                 ("stop", ctypes.c_int), ("has_first_ts", ctypes.c_int),
-                ("first_ts_ticks", ctypes.c_uint64)]
+                ("first_ts_ticks", ctypes.c_uint64),
+                ("pad_bytes", ctypes.c_size_t), ("after_frame", ctypes.c_int)]
+
+
+#: The ds_drain_cfg / ds_drain_result layout these structures mirror (edge_drain.h DS_EDGE_DRAIN_ABI).
+ABI = 2
 
 
 # enum ds_drain_stop
@@ -54,6 +62,8 @@ class DrainResult:
     resync_bytes: int
     stop: int
     first_ts_ticks: Optional[int]
+    pad_bytes: int = 0       # DS-P1.117: PL zero pad consumed (part of consumed, not of resync_bytes)
+    after_frame: bool = False  # DS-P1.117: the walk ended right after a frame
 
 
 class EdgeDrainLib:
@@ -63,6 +73,14 @@ class EdgeDrainLib:
         self.path = Path(path)
         lib = ctypes.CDLL(str(self.path))
         vp, sz, u64 = ctypes.c_void_p, ctypes.c_size_t, ctypes.c_uint64
+        # DS-P1.117: a library built from an older edge_drain.c has shorter structures, and would leave the
+        # appended result fields unwritten; refuse it rather than read them.
+        abi = getattr(lib, "ds_edge_drain_abi", None)
+        if abi is None:
+            raise OSError(f"{self.path}: no ds_edge_drain_abi; built before ABI {ABI}, rebuild it")
+        abi.restype, abi.argtypes = ctypes.c_int, []
+        if abi() != ABI:
+            raise OSError(f"{self.path}: edge drain ABI {abi()}, this module needs {ABI}; rebuild it")
         lib.ds_frames_new.restype = vp
         lib.ds_frames_new.argtypes = []
         lib.ds_frames_free.restype = None
@@ -132,19 +150,28 @@ class NativeEdgeFrames:
             raise MemoryError("ds_frames_add")
 
     def drain(self, span: bytes, cursor: int, max_frames: int, ns_per_tick: int,
-              clk_mhz: int) -> DrainResult:
-        """Walk ``span[cursor:]`` for at most *max_frames* frames."""
+              clk_mhz: int, ring_word_bytes: int = 0, ring_bytes: int = 0,
+              ring_ofs: int = 0) -> DrainResult:
+        """Walk ``span[cursor:]`` for at most *max_frames* frames.
+
+        DS-P1.117: with *ring_word_bytes* set, a zero run right after a walked frame up to the next
+        DDR-word boundary is consumed as PL pad, by DdrRingDataSource._pad_run's rule, where *ring_ofs*
+        is the ring byte offset of ``span[0]`` and *ring_bytes* the ring size. 0 keeps the DS-P2.281
+        walk, which stops at such a zero word."""
         if not isinstance(span, bytes):
             span = bytes(span)
         cfg = self._cfg
         cfg.ns_per_tick, cfg.clk_mhz, cfg.max_frames = ns_per_tick, clk_mhz, max_frames
+        cfg.ring_word_bytes, cfg.ring_bytes = int(ring_word_bytes or 0), int(ring_bytes or 0)
+        cfg.span_ofs = int(ring_ofs) + int(cursor)
         base = ctypes.cast(ctypes.c_char_p(span), ctypes.c_void_p).value
         if self._lib.ds_frames_drain(self._h, base + cursor, len(span) - cursor,
                                      ctypes.byref(cfg), ctypes.byref(self._res)):
             raise MemoryError("ds_frames_drain")
         r = self._res
         return DrainResult(r.consumed, r.frames, r.edges, r.resync_bytes, r.stop,
-                           r.first_ts_ticks if r.has_first_ts else None)
+                           r.first_ts_ticks if r.has_first_ts else None,
+                           r.pad_bytes, bool(r.after_frame))
 
     def frame_count(self) -> int:
         return self._lib.ds_frames_count(self._h)

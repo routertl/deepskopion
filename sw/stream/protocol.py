@@ -193,7 +193,7 @@ def make_control(datalogger_id: int, cfg_word: int, op: str = "set_config") -> D
 OP_STIM = "stim"
 
 
-def make_stim_control(protocol: str) -> Dict[str, Any]:
+def make_stim_control(protocol: str, route: Optional[str] = None) -> Dict[str, Any]:
     """CONTROL payload asking the producer to arm its on-board stimulus
     generator (DS-P2.136) for one protocol — ``uart``/``i2c``/``spi``/``edge``.
     The daemon writes the DS-P1.58 production STIM_* register sequence
@@ -208,15 +208,26 @@ def make_stim_control(protocol: str) -> Dict[str, Any]:
     wave_stream_v1 CONTROL requires ``datalogger_id`` and ``cfg_word`` on every
     op, so a stim frame carries them too: the id is the data logger that
     observes the armed generator, and ``cfg_word`` is 0 (stim applies no
-    config word). The daemon routes on ``op`` before ``decode_control``."""
+    config word). The daemon routes on ``op`` before ``decode_control``.
+
+    ``route`` (DS-P2.343, optional key): an edge route the arm writes into
+    EMIO_MUX_SEL before its burst, so the edge inputs see it (``spi`` only;
+    other protocols reject a route). The ACK echoes it. A producer that does
+    not know the key ignores it and arms without a route (COMPAT unknown_key)."""
     from .stimulus_contract import STIM_DATALOGGER_ID
     try:
         datalogger_id = STIM_DATALOGGER_ID[protocol]
     except KeyError:
         raise ValueError(f"no on-board stimulus generator for {protocol!r}; "
                          f"expected one of {sorted(STIM_DATALOGGER_ID)}") from None
-    return {"op": OP_STIM, "protocol": str(protocol),
-            "datalogger_id": datalogger_id, "cfg_word": 0}
+    frame = {"op": OP_STIM, "protocol": str(protocol),
+             "datalogger_id": datalogger_id, "cfg_word": 0}
+    if route is not None:
+        from .edge_route import ROUTES
+        if route not in ROUTES:
+            raise ValueError(f"no edge route {route!r}; expected one of {sorted(ROUTES)}")
+        frame["route"] = str(route)
+    return frame
 
 
 OP_EDGE_ROUTE = "edge_route"

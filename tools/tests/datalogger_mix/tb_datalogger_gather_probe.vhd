@@ -40,8 +40,8 @@ end entity tb_datalogger_gather_probe;
 
 architecture str of tb_datalogger_gather_probe is
 
-  signal gather_fifo_csr  : t_fifoCsr;
-  signal gather_proto_cnt : t_protoCounterArray(0 to C_NUM_PROTO_COUNTERS - 1);
+  signal gather_fifo_csr  : t_fifo_csr;
+  signal gather_proto_cnt : t_proto_counter_array(0 to C_NUM_PROTO_COUNTERS - 1);
   signal edge_err_cnts    : std_logic_vector(C_EDGE_DATALOGGERS*32-1 downto 0);
   signal edge_max_ivals   : std_logic_vector(C_EDGE_DATALOGGERS*C_EDGE_MAXFREQ_WIDTH-1 downto 0);
   signal edge_max_new     : std_logic_vector(C_EDGE_DATALOGGERS-1 downto 0);

@@ -147,3 +147,38 @@ functional_contract:
       REGBANK_VERSION equals the packed regbank version, CONTRACT_ABI_VER
       equals the core constant, and RING_BYTES equals 2**G_DDR_WIN_WIDTH with
       G_DDR_WIN_WIDTH = 28 in every target top.
+
+# DS-P2.294 / DS-P1.120: resource ceilings for the shipped targets. Each cap is the reference POST-IMPLEMENTATION
+# total of one clean build plus 15%, rounded up (owner ruling DS-D.57): the hard check judges the routed/fitted design.
+# rr judges resources at synth by default; measured_at moves the hard check to impl, so a synth run reports the clause
+# as DEFERRED and does not fail on synthesis figures, which run higher before optimisation (zybo synth of 8d38e651:
+# LUT 21471, FF 29268, LUTRAM 376, SRL 426 against routed 19231, 27210, 282, 241). Reference figures, read with rr's
+# Known false red (RTL-P2.2592): an impl that is a build-cache HIT after a new synth judges the synth figures still in
+# reports/build_report.json and fails; `rr implementation run --force` re-routes and passes (measured 2026-11-23).
+# report loader (ppa_verdict.load_build_report) from the DS-P1.114 builds:
+#   zybo_datalogger: source 80abd18d, Vivado 2024.1, xc7z020clg400-1, reports/utilization.rpt (Design State: Routed):
+#     lut 19231, ff 27210, bram 38, dsp 2, lutram 282, srl 241, pll 0.
+#   de25_datalogger: source 6a3cb558 (no HDL change to 80abd18d), Quartus 25.3, A5ED013BB32AE4SCS, fit reports:
+#     lut 21117, ff 37130, bram 87, dsp 1, lutram 977, pll 2, alut 28206.
+# pfsoc_datalogger is not declared: rr reads no resource figures from a Libero build yet (RTL-P2.2543), so a ceiling
+# there would be judged unmeasured. Per-block ceilings: DS-P3.312 (needs the instance-slice gate, RTL-P2.2542).
+technical:
+  measured_at:
+    resources: impl
+  resources:
+    - target: zybo_datalogger
+      lut: {max: 22116}
+      ff: {max: 31292}
+      bram: {max: 44}
+      dsp: {max: 3}
+      lutram: {max: 325}
+      srl: {max: 278}
+      pll: {max: 0}
+    - target: de25_datalogger
+      lut: {max: 24285}
+      ff: {max: 42700}
+      bram: {max: 101}
+      dsp: {max: 2}
+      lutram: {max: 1124}
+      pll: {max: 3}
+      alut: {max: 32437}

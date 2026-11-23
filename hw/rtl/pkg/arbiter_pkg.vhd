@@ -1,6 +1,7 @@
 -------------------------------------------------------------------------------
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
 -- File       : arbiter_pkg.vhd
--- Standard   : VHDL 2008
+-- Standard   : VHDL-2008
 -- Description: Package constants for the slim N-input round-robin arbiter
 --              (post-D.4 strip, post-flatten 2026-05-17). The previous
 --              t_arbiter_input_record / t_arbiter_output_record / t_array_*
@@ -13,9 +14,9 @@
 --              ports during board-pinout materialization.
 -------------------------------------------------------------------------------
 
-library IEEE;
-use IEEE.STD_LOGIC_1164.all;
-use IEEE.NUMERIC_STD.all;
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
 library tich;
 use tich.datalogger_pkg.all;
 

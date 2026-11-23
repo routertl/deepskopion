@@ -41,6 +41,39 @@ from .wave_stream_guard import LiveConformanceGuard
 
 logger = logging.getLogger(__name__)
 
+#: wave_stream_v1 sets no HELO_OK deadline. After sending HELO the server waits this long for the consumer's
+#: HELO_OK, then drops the connection. 2.0 s dropped a RouteWave Debug build that answers in 1.1-2.5 s under load.
+#: DS_HELO_OK_TIMEOUT_S (seconds, > 0) overrides it; an unusable value is reported and the default is used.
+DEFAULT_HELO_OK_TIMEOUT_S = 10.0
+HELO_OK_TIMEOUT_ENV = "DS_HELO_OK_TIMEOUT_S"
+
+
+def helo_ok_timeout_s() -> float:
+    """The HELO_OK wait in seconds: DS_HELO_OK_TIMEOUT_S when it is a number > 0, else the default."""
+    raw = os.environ.get(HELO_OK_TIMEOUT_ENV, "").strip()
+    if not raw:
+        return DEFAULT_HELO_OK_TIMEOUT_S
+    try:
+        value = float(raw)
+    except ValueError:
+        value = 0.0
+    if value > 0:
+        return value
+    logger.warning("%s=%r is not a number of seconds > 0; using the default %.1f s",
+                   HELO_OK_TIMEOUT_ENV, raw, DEFAULT_HELO_OK_TIMEOUT_S)
+    return DEFAULT_HELO_OK_TIMEOUT_S
+
+
+def _peer_label(conn: socket.socket) -> str:
+    """host:port of a TCP consumer, or the local-socket form, for log messages."""
+    try:
+        peer = conn.getpeername()
+    except OSError:
+        return "an unknown consumer"
+    if isinstance(peer, tuple) and len(peer) >= 2:
+        return f"{peer[0]}:{peer[1]}"
+    return f"local-socket consumer {peer!r}" if peer else "local-socket consumer"
+
 # Either a filesystem path (AF_UNIX) or a (host, port) tuple (AF_INET).
 Endpoint = Union[Path, Tuple[str, int]]
 
@@ -143,6 +176,9 @@ def _apply_stim_control(payload: dict, source: DataSource, conn: socket.socket) 
     frame (the observing logger, ``make_stim_control``), or the 0xFFFFFFFF
     sentinel when the frame has none."""
     protocol = str(payload.get("protocol", ""))
+    # DS-P2.343: an optional edge route, written by the arm before its burst. Absent: the arm as before.
+    route = payload.get("route")
+    route = None if route is None else str(route)
     datalogger_id = payload.get("datalogger_id")
     if not isinstance(datalogger_id, int) or isinstance(datalogger_id, bool) \
             or not 0 <= datalogger_id <= 0xFFFFFFFF:
@@ -152,11 +188,13 @@ def _apply_stim_control(payload: dict, source: DataSource, conn: socket.socket) 
         reject = f"stimulus unsupported by the {type(source).__name__} source (no regbank)"
     else:
         try:
-            reject = apply(protocol)
+            reject = apply(protocol) if route is None else apply(protocol, route=route)
         except Exception as exc:  # noqa: BLE001 - an arm failure must ACK, not kill the sub
             reject = f"stimulus arm failed: {exc}"
     ack = proto.make_control_ack(datalogger_id, 0, ok=reject is None, reason=reject)
     ack.update({"op": proto.OP_STIM, "protocol": protocol})
+    if route is not None:
+        ack["route"] = route
     # DS-P2.253: on a Zynq-7000 image the armed generator drives the PS EMIO
     # legs of uart/i2c/spi; the ACK says so, so a consumer that goes on to
     # drive the PS controller is told before its transfers fail.
@@ -390,7 +428,7 @@ def serve_forever(endpoint: Endpoint, source: DataSource,
 
 
 def _handshake(conn: socket.socket, source: DataSource,
-               timeout_s: float = 2.0,
+               timeout_s: Optional[float] = None,
                guard: Optional[LiveConformanceGuard] = None,
                ) -> Optional["msgpack.Unpacker"]:
     """Send HELO (channel map + sample clk) and await the consumer's HELO_OK.
@@ -436,6 +474,8 @@ def _handshake(conn: socket.socket, source: DataSource,
 
     # Best-effort HELO_OK read — consumers may omit fields, so we accept
     # anything that parses as the HELO_OK tag.
+    if timeout_s is None:
+        timeout_s = helo_ok_timeout_s()
     conn.settimeout(timeout_s)
     try:
         unp = msgpack.Unpacker(raw=False)
@@ -460,7 +500,8 @@ def _handshake(conn: socket.socket, source: DataSource,
                                 violation)
                     return unp   # keep buffered post-HELO_OK frames (DS-P3.78)
     except socket.timeout:
-        logger.error("HELO_OK timeout; aborting")
+        logger.error("HELO_OK timeout: no HELO_OK from %s within %.1f s (%s; default %.1f s); dropping the connection",
+                     _peer_label(conn), timeout_s, HELO_OK_TIMEOUT_ENV, DEFAULT_HELO_OK_TIMEOUT_S)
         return None
 
 

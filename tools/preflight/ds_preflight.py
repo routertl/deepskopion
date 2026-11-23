@@ -477,12 +477,21 @@ def _check_python(p: Probe, d: dict, root: Path) -> Result:
     spec = d["python"]
     lo, hi = _ver_tuple(spec["min"]), _ver_tuple(spec["max_exclusive"])
     got = p.python_version
+    found = ".".join(str(x) for x in got) if got else "could not determine"
     ok = got is not None and lo <= got[: len(lo)] and got[: len(hi)] < hi
+    dep = (spec.get("deprecated") or {}).get("min")
+    if not ok and dep and got is not None and _ver_tuple(dep) <= got[: len(_ver_tuple(dep))] < lo:
+        # Outside the envelope, still builds: reported, exit unaffected.
+        return Result(
+            "python", "build", False, "warn",
+            f"Python >= {spec['min']}, < {spec['max_exclusive']}; {dep} is deprecated "
+            f"(RouteRTL drops it in a coming minor release)",
+            found, f"Move to Python {spec['min']} or newer before RouteRTL drops {dep}.",
+        )
     return Result(
         "python", "build", ok, spec.get("severity", "fail"),
         f"Python >= {spec['min']}, < {spec['max_exclusive']}",
-        ".".join(str(x) for x in got) if got else "could not determine",
-        "Use the interpreter the supported host ships.",
+        found, "Use the interpreter the supported host ships.",
     )
 
 
@@ -496,7 +505,45 @@ def _check_routertl(p: Probe, d: dict, root: Path) -> Result:
     )
 
 
+def _target_build(d: dict, root: Path) -> tuple[str | None, dict | None]:
+    """(active target name, its ``targets.<name>.build`` declaration or None).
+
+    DS-P2.363: every target-dependent build check judges the selected target against ITS declaration. A target with
+    no declaration is refused by name (``_undeclared``), never judged against another target's values."""
+    path, _ = load_target(root)
+    if path is None:
+        return None, None
+    name = path.stem
+    entry = ((d.get("targets") or {}).get(name) or {}).get("build")
+    return name, entry if isinstance(entry, dict) else None
+
+
+def _undeclared(check_id: str, name: str | None) -> Result:
+    what = f"target {name}" if name else "the selected target"
+    return Result(
+        check_id, "build", False, "fail",
+        f"{what} is declared in tools/preflight/supported_environment.yml (targets.<name>.build)",
+        f"target {name} is not declared in supported_environment.yml" if name
+        else "no target resolved from project.yml",
+        "Declare the target's part, platform, tool release and self-test DT nodes under "
+        "targets.<name>.build, or select a declared target with `rr target set`.",
+    )
+
+
 def _check_vivado(p: Probe, d: dict, root: Path) -> Result:
+    name, entry = _target_build(d, root)
+    if entry is None:
+        return _undeclared("vivado.version", name)
+    tool = entry.get("tool") or {}
+    if tool.get("probe") != "vivado":
+        # Not probed until rr can report the install a target's build will use (RTL-P2.2492): PATH finds the wrong
+        # Quartus edition on a mixed host, and rr's board resolver ignores the target's tool_version pin.
+        return Result(
+            "tool.version", "build", True, "warn",
+            f"{tool.get('name')} {tool.get('version')} (the release {name} pins)",
+            f"not probed: RouteRTL resolves the {tool.get('name')} install at build time",
+            "",
+        )
     spec = d["vivado"]
     ok = p.vivado_version == spec["version"]
     found = f"{p.vivado_version} ({p.vivado_path})" if p.vivado_version else "not found"
@@ -511,7 +558,11 @@ def _check_vivado(p: Probe, d: dict, root: Path) -> Result:
 
 
 def _check_target_part(p: Probe, d: dict, root: Path) -> Result:
-    spec = d["board"]
+    name, entry = _target_build(d, root)
+    if entry is None:
+        return _undeclared("target.board", name)
+    spec = {"name": d["targets"][name].get("board", name), "part": entry["part"],
+            "platform": entry["platform"], "severity": "fail"}
     path, target = load_target(root)
     hw = target.get("hardware") or {}
     got = f"{hw.get('part')} on {hw.get('platform')}"
@@ -526,15 +577,19 @@ def _check_target_part(p: Probe, d: dict, root: Path) -> Result:
 
 
 def _check_target_tool_version(p: Probe, d: dict, root: Path) -> Result:
-    want = d["vivado"]["version"]
+    name, entry = _target_build(d, root)
+    if entry is None:
+        return _undeclared("target.tool_version", name)
+    tool = entry.get("tool") or {}
+    want = tool.get("version")
     path, target = load_target(root)
     got = ((target.get("build_options") or {}).get("tool_version"))
     ok = str(got) == str(want)
     return Result(
-        "target.tool_version", "build", ok, d["vivado"].get("severity", "fail"),
-        f"the target pins build_options.tool_version to {want}",
+        "target.tool_version", "build", ok, "fail",
+        f"the target pins build_options.tool_version to {want} ({tool.get('name')})",
         str(got) if got else "unset",
-        "The declared Vivado release and the target's pin must agree, or the "
+        f"The declared {tool.get('name')} release and the target's pin must agree, or the "
         "declaration is describing a build nobody runs.",
     )
 
@@ -617,10 +672,22 @@ def _enabled_opt_ins(spec: dict, ids: set[int]) -> list[dict]:
 
 
 def _check_traffic_source_dt(p: Probe, d: dict, root: Path) -> Result:
-    spec = d["traffic_source"]
+    name, entry = _target_build(d, root)
+    if entry is None:
+        return _undeclared("traffic_source.dt_nodes", name)
     path, target = load_target(root)
     declared = [str(n.get("path")) for n in ((target.get("linux") or {}).get("dt_nodes") or [])
                 if isinstance(n, dict)]
+    if entry.get("traffic_source") != "golden_path":
+        required = list(entry.get("required_dt_nodes") or [])
+        missing = [n for n in required if n not in declared]
+        return Result(
+            "traffic_source.dt_nodes", "build", not missing, "fail",
+            f"the device-tree nodes the {name} self-test needs: " + (", ".join(required) or "none"),
+            "missing " + ", ".join(missing) if missing else "present",
+            "The capture ring must stay reserved, or Linux allocates over the memory the fabric writes.",
+        )
+    spec = d["traffic_source"]
     ids, _where = _configured_datalogger_ids(root, target)
     required = list(spec["required_dt_nodes"])
     for opt in _enabled_opt_ins(spec, ids):

@@ -40,13 +40,16 @@ import subprocess
 import tarfile
 from pathlib import Path
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 from target_files import all_target_files  # noqa: E402  (DS-P1.103: products in targets/, the rest in bench/targets/)
 TARGETS_DIR = ROOT / "targets"
 CONTRACT_DOC = ROOT / "docs" / "DEPLOYMENT_CONTRACT.md"
-CONTRACT_YML = ROOT / "sw" / "linux" / "pfsoc" / "deployment_contract.yml"
+# DS-P1.118: the PolarFire declaration moved from the sidecar into the public contract.
+CONTRACT_YML = ROOT / "sw" / "linux" / "deployment_contract.yml"
 PFSOC_FETCH = ROOT / "sw" / "linux" / "pfsoc" / "fetch_python_overlay.sh"
 PFSOC_OVERLAY = PFSOC_FETCH.parent / "python_overlay"
 PFSOC_TARBALL = PFSOC_FETCH.parent / "python_overlay.tar.gz"
@@ -198,23 +201,37 @@ def test_deployment_contract_is_per_arch_not_armhf_only():
     `sw/linux/fetch_python_overlay.sh`, which is silently false for a riscv64
     target. Reading the YAML (not just substring-hunting markdown) is what makes
     reverting the YAML reason go RED."""
-    yml = CONTRACT_YML.read_text(encoding="utf-8")
-    # Read the executable source of truth, not only the generated prose.
-    m = re.search(r"mechanism:\s*petalinux(.*?)(?:\n\s*-\s*mechanism:|\Z)", yml, re.S)
-    assert m, "no petalinux mechanism block in deployment_contract.yml"
-    petalinux_block = m.group(1)
-    assert "sw/linux/pfsoc/fetch_python_overlay.sh" in petalinux_block, (
-        "deployment_contract.yml's petalinux reason still names only the armhf "
-        "fetch path; it must name the riscv64 PolarFire fetch script (DS-P2.141) "
-        "so the generated contract is not false for the pfsoc target"
+    # Read the executable source of truth through the YAML loader, not a regex
+    # (a regex also matched a path that sat only in a YAML comment).
+    decl = yaml.safe_load(CONTRACT_YML.read_text(encoding="utf-8"))
+    entry = next((e for e in decl.get("prohibited") or [] if e.get("mechanism") == "petalinux"), None)
+    assert entry, "no petalinux mechanism block in deployment_contract.yml"
+    petalinux_block = " ".join(str(entry.get("reason", "")).split())
+    # DS-P1.118: the public contract names the riscv64 route a public clone can run.
+    # The LFS archive is not exported, so the fetch script would exit 1 there; it is
+    # not the public route and the reason must not offer it.
+    # Each architecture paired with its own build (a swapped mapping fails).
+    # Complete and bounded: the whole Zynq recipe, and the PolarFire path up to its
+    # closing parenthesis (so a longer or renamed path does not match).
+    pairs = ("armhf Zynq built by sw/linux/build_buildroot.sh and sw/linux/extract_python_overlay.sh;",
+             "riscv64 PolarFire built by sw/linux/pfsoc/build_python_overlay.sh)")
+    assert all(pair in petalinux_block for pair in pairs) and \
+        "fetch_python_overlay" not in petalinux_block, (
+        "deployment_contract.yml's petalinux reason must name the riscv64 PolarFire "
+        "overlay build (sw/linux/pfsoc/build_python_overlay.sh) and not the "
+        f"private-archive fetch; got: {petalinux_block!r}"
     )
     assert "per-arch" in petalinux_block, (
         "the contract reason must state the overlay is per-arch (armhf Zynq vs "
         "riscv64 PolarFire), not a single shared path"
     )
-    # The generated doc says per-arch and names only what the export carries.
+    # The reason, and its generated line, name the riscv64 route a public clone
+    # can run (DS-P1.118: PolarFire ships; the export drops only the archive),
+    # not only the private-archive fetch.
     doc = CONTRACT_DOC.read_text(encoding="utf-8")
-    assert "sw/linux/pfsoc/" not in doc, (
-        "DEPLOYMENT_CONTRACT.md ships in the public export, which drops sw/linux/pfsoc/"
+    petalinux_line = next((ln for ln in doc.splitlines() if "**petalinux**" in ln), "")
+    assert all(pair in " ".join(petalinux_line.split()) for pair in pairs), (
+        "the petalinux reason (YAML and generated line) must name the riscv64 overlay "
+        "build a public clone runs"
     )
     assert "per-arch" in doc

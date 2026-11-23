@@ -238,7 +238,7 @@ dependencies:
     - libs/routertl/rr_ddr_stream/rtl/support/xilinx/rr_fifo_async_xpm_body.vhd
     - libs/routertl/rr_ddr_stream/rtl/support/xilinx/rr_fifo_async_mixed_xpm_body.vhd
   url: https://github.com/djmazure/rr-ddr-stream.git
-locked_at: '2026-11-17T19:24:48+00:00'
+locked_at: '2026-11-23T17:25:14+00:00'
 package_constraints:
 - kind: xdc
   path: libs/routertl/rr_ddr_stream/constraints/ddr_stream_cdc_scoped.xdc
@@ -357,11 +357,11 @@ resolved_hierarchy:
   - hw/rtl/pfsoc/deepskopion_pfsoc_top.vhd
   top: deepskopion_pfsoc_top
 sdk:
-  commit: unknown
+  commit: 0d373080747fa3555ed7836da937986369aa62cb
   dirty: false
   dirty_path_count: 0
   dirty_paths: []
-  version: 5.6.0
+  version: 5.7.0
 simulation:
   simulator: nvc
   version: 1.19.3
@@ -387,11 +387,11 @@ sources:
 - path: hw/rtl/datalogger/i2c/i2c_slave.vhd
   sha256: b2b02a6fa64997772f99684c9e6d230d9a03aa436c78a0b3eddc95068e2e7b2c
 - path: hw/rtl/datalogger/infra/arbiter/arbiter.vhd
-  sha256: a43a0ac861686dd03fd7120bc9907f5c9580e2a377fcc5a9125da10f150e2c98
+  sha256: 51c1f021aeeb8cbd735afb4e908cfdff277c2df30e22e25e8ba19d0556b6db43
 - path: hw/rtl/datalogger/infra/config_control/config_control.vhd
   sha256: 4d8d13301d090647f4b0740312708713b3306b80065d42b2a96739fe85c877b1
 - path: hw/rtl/datalogger/infra/datalogger_gather/datalogger_gather.vhd
-  sha256: add45490dd81579264980d0d498ddded47b4d3774b08aad3d199061d331da487
+  sha256: ce400771a43546e7e9a4c956cfdf592485a420638fc6af6e7be265f083a96d69
 - path: hw/rtl/datalogger/infra/datalogger_lifecycle/datalogger_lifecycle.vhd
   sha256: 0478f672f900593b91c7c32717ea901404c6dde6c45617a04f71df8fa6d25c8c
 - path: hw/rtl/datalogger/infra/edge_batcher/edge_batcher.vhd
@@ -409,7 +409,7 @@ sources:
 - path: hw/rtl/datalogger/infra/zs_msg_framer/zs_msg_framer.vhd
   sha256: 119932a5f23a83575bd58a8da004d1d663340fb796f7cfdddca5295e913dab7b
 - path: hw/rtl/datalogger/nonstd/edge_datalogger/edge_datalogger.vhd
-  sha256: 1c02f3f30351963a6bf65cac8ffe3a7b206e2bca2a8c88f53062d3db26241b3c
+  sha256: 3f7e81ae85df45f3bb549050662ebb35faf3b78d102d1fcc36b8240512337d3d
 - path: hw/rtl/datalogger/qspi/qspi_datalogger.vhd
   sha256: e771415beafc7d7ed1fb8e45a82e0b46d10ab234d09d3e5f0a5fa6521f726bfa
 - path: hw/rtl/datalogger/uart/uart_baudrate_gen.vhd
@@ -429,7 +429,7 @@ sources:
 - path: hw/rtl/de25/lwh2f_axilite_bridge.vhd
   sha256: 2410be3de74342c0240ec064ea7475056b5f6f3857406600e6635cd994c63664
 - path: hw/rtl/deepskopion_core.vhd
-  sha256: 457615d5968c47ca257375c5a2434e4d0ab474d7539cdf75ff9ad31e311686cf
+  sha256: c91e045f749f41b4770a0b9158b4d0360c6993b2708baa081602a09371726263
 - path: hw/rtl/emio/ds_emio_mux.vhd
   sha256: 3263d8dfb94550af2823daaa37cab6d22f98700265c656f3cb0ea23ca0412f99
 - path: hw/rtl/emio/glitch_filter.vhd
@@ -449,23 +449,23 @@ sources:
 - path: hw/rtl/pfsoc/pf_known_answer_core.vhd
   sha256: 31b157d3d9566c9c205b8f2939d1f5add98fdb6ef4c5069bf62a724ad4322af5
 - path: hw/rtl/pkg/arbiter_pkg.vhd
-  sha256: 4756b8e3522e8706b4267ef69443e69d5437e0416780d1630f8fae37d4f8bdf5
+  sha256: 4b344c893c6f7e3c3cb4da53ec93fb946cf65103623ac4c6999239382060eee6
 - path: hw/rtl/pkg/axi_pkg.vhd
-  sha256: 4254f17e32b4ac9dbc465330ec4b3a44e70738a1ed71f67282eb06c81006041e
+  sha256: e6c0362bbda70985f1849128281750b4715d1ef12461a21baab6b9490173048f
 - path: hw/rtl/pkg/datalogger_config_pkg.vhd
   sha256: ed143ec848112418931994bacb7ac4a8210e81c6ca9c2bb5644d67f0c7558782
 - path: hw/rtl/pkg/datalogger_pkg.vhd
-  sha256: 5aa53a4dd5a08db4346fae1e1095d9c6e76d0e474bcaece12bd47c7e2ac50cc3
+  sha256: b094c1429e83b2546cb3583cbe30ae7405cbde06ced599508cfbb12ff87d3cc5
 - path: hw/rtl/pkg/datalogger_records_pkg.vhd
-  sha256: 3b7a05edb9099d1bb3e5c6d6aa3a21f16463111a271cc7e060a3e4e23f526a26
+  sha256: a14083f3fcd751f77d23cb6160e8fc9deacf769a769786b1517333fd256d2992
 - path: hw/rtl/pkg/system_config_pkg.vhd
-  sha256: da734869720c58d19d8bec4888c76622374edc9fd8a05b43b2781694eb918397
+  sha256: b14ac703170d68c046f0c262a3fd82f9d604bb15063963b7b5119f5119c5ebe2
 - path: hw/rtl/pkg/system_regbank_pkg.vhd
   sha256: 6ac3bd04a1b5fb7ecff9a8dfee54bcee9ff50b768153382856451a8c1939a516
 - path: hw/rtl/pkg/uart_pkg.vhd
-  sha256: 670da95b97679a5a4de1771bc70c15711bd0a2ba2317d826cad43412c33ab78e
+  sha256: 402a72f38ca7648c77f6ed5c9b4545fa440289c4411282ed90a67546190ced72
 - path: hw/rtl/pkg/zs_msg_pkg.vhd
-  sha256: def3fd7facf34b6a882988f7d75c300326ceb419a800aca035c92e1724bd39ad
+  sha256: 866478c962d5e06796282a50d69e1edcaffc6bbe0b0e8844eea2a9e649df3f64
 - path: hw/rtl/regbank/regbank_rom.vhd
   sha256: 068e416120ada51b6f976148c22c350bb878550c5c36c23e3b9f9735694e4238
 - path: hw/rtl/regbank/system_regbank.vhd
@@ -499,7 +499,7 @@ sources:
 - path: hw/sim/tb_axil_demux3_wedge_guard.vhd
   sha256: f12df9795bdcc9616e23d6e9bf6cf636b50d6b3d2e93e19e861cee7b5257d666
 - path: hw/sim/tb_datalogger_gather.vhd
-  sha256: 3f111f2ed047d6ec2e8cd8cda7cbe0ee60937b3103dfd5c465baf6a2556479e3
+  sha256: ee4ebe2a7bd487ec7b94853dc111e1783c5162968ddd9a16fea3e1869a8a68e2
 - path: hw/sim/tb_datalogger_gather_edge.vhd
   sha256: baba7530fa876b0a1ed0da3705ab0970ad30a716a5a8c54119d9bffd17eed176
 - path: hw/sim/tb_datalogger_gather_i2c.vhd
@@ -513,7 +513,7 @@ sources:
 - path: hw/sim/tb_datalogger_gather_uart.vhd
   sha256: 89fe8b424dbd6d8cdb0eca8fb00c1a30a49fd92145cc6b7cda1a4a9458d4d666
 - path: hw/sim/tb_datalogger_to_ddr.vhd
-  sha256: a8204bcfb47420d6727d60a7d81183e19d9b2411d30178c1b019ee777b54a95e
+  sha256: d1b9612c528888172f70de5c3f9eee218296ca60e3fa6fb11ff4f2699340a891
 - path: hw/sim/tb_default_mix_core.vhd
   sha256: 5d71fa38c3c2f6f8f2bd9d591351583962db2d8f9b1291320cb305a129607337
 - path: hw/sim/tb_edge_maxfreq_chain.vhd

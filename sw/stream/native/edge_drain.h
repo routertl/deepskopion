@@ -16,13 +16,21 @@ struct ds_drain_cfg {
     uint64_t ns_per_tick;  /* data_source.py: 1_000_000_000 // sample_clk_hz */
     uint32_t clk_mhz;      /* data_source.py: sample_clk_hz // 1_000_000 */
     size_t max_frames;     /* data_source.py: _MAX_FRAMES_PER_TICK */
+    /* DS-P1.117: the PL zero-pad rule of data_source.py _pad_run (DS-P2.280), so a pad directly after a
+     * frame is consumed here instead of returning to Python once per frame. ring_word_bytes 0 = undeclared:
+     * the walk stops at such a zero word as before (STOP_OTHER_FRAME). Appended fields: ABI version 2. */
+    size_t ring_word_bytes;  /* data_source.py: _ring_word_bytes (G_DDR_DATA_WIDTH / 8), or 0 */
+    size_t ring_bytes;       /* data_source.py: _ring_bytes; 0 = no ring wrap applied */
+    size_t span_ofs;         /* ring byte offset of span[0]: (_read_byte_ofs + cursor) % _ring_bytes */
 };
 
 enum ds_drain_stop {
     DS_DRAIN_STOP_END = 0,        /* fewer than a header's bytes left */
-    DS_DRAIN_STOP_PARTIAL,        /* a frame runs past the span: next call */
+    DS_DRAIN_STOP_PARTIAL,        /* a frame, or a zero run that may be pad (its word boundary lies
+                                   * past the span end, DS-P1.117), runs past the span: next call */
     DS_DRAIN_STOP_OTHER_FRAME,    /* a frame that is not a non-error EDGE_BATCH, or a zero word
-                                   * right after a frame (DS-P2.281, maybe PL pad): Python's */
+                                   * right after a frame that is not pad by the ring_word_bytes rule
+                                   * (or with ring_word_bytes 0): Python's */
     DS_DRAIN_STOP_FULL,           /* the output array is full */
     DS_DRAIN_STOP_MAX_FRAMES,     /* cfg->max_frames reached */
 };
@@ -36,7 +44,14 @@ struct ds_drain_result {
     int has_first_ts;         /* 1 when at least one frame was walked */
     uint64_t first_ts_ticks;  /* header timestamp & 48 bits of the first frame walked:
                                * data_source.py seeds _pl_ts_anchor_ticks from it */
+    size_t pad_bytes;         /* DS-P1.117: PL zero pad consumed (counted in consumed, not in resync_bytes) */
+    int after_frame;          /* DS-P1.117: 1 when the walk ended right after a frame (data_source.py after_frame) */
 };
+
+/* The layout version of ds_drain_cfg / ds_drain_result: 2 since DS-P1.117 appended fields to both.
+ * edge_frames.py refuses a library that reports another version, or none. */
+#define DS_EDGE_DRAIN_ABI 2
+int ds_edge_drain_abi(void);
 
 int ds_edge_drain(const uint8_t *span, size_t len, const struct ds_drain_cfg *cfg,
                   struct ds_edge *out, size_t cap, struct ds_drain_result *res);

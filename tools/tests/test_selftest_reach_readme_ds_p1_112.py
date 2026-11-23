@@ -5,11 +5,12 @@ The README said the default targets generate their own bus traffic so a capture
 runs with the board alone. Measured in simulation by
 hw/sim/cocotb/tests/datalogger/infra/default_mix/test_selftest_coverage.py
 (the real deepskopion_core, every logger of the default mix armed, header pins
-idle, one board-alone source per scenario), the sources reach five of the nine
-loggers on all three boards; I2C 5, UART 13 and CAN 20 need external traffic,
-and Edge 3 (MISO under the SPI edge route) is not reached because the self-test
-does not arm the SPI responder (DS-T2.100: its former reach was the
-source-switch edge of the route, never traffic).
+idle, one board-alone source per scenario), the sources reach six of the nine
+loggers on all three boards; I2C 5, UART 13 and CAN 20 need external traffic.
+Edge 3 (MISO under the SPI edge route) is reached since DS-P2.343: arm_spi arms
+the on-chip SPI responder and takes the edge route before its first byte
+(DS-T2.100: the reach it showed before was the source-switch edge of the route,
+never traffic).
 
 This file holds the README's In-System Self-Test table to that test's own
 expectation table (read from its source, not copied), and checks the test's
@@ -58,7 +59,7 @@ def _readme_rows() -> dict[int, str]:
 def test_the_readme_no_longer_claims_the_board_alone_covers_every_logger():
     text = README.read_text(encoding="utf-8")
     assert "the default targets generate their own bus traffic, so a capture runs with the board alone" not in text
-    assert "five of the nine data loggers of the default mix" in text
+    assert "six of the nine data loggers of the default mix" in text
 
 
 def test_the_readme_table_lists_every_logger_of_the_mix():

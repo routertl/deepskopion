@@ -68,6 +68,9 @@ libs/ctu-fee/
 libs/.targets/
 libs/enclustra/
 libs/open-logic/
+# Registry IP is fetched by rr workspace sync / rr pkg add, never vendored.
+libs/routertl/rea/
+libs/routertl/rr_ddr_stream/
 
 # ── Stale Outputs (should never be committed) ──────────
 full_output.txt

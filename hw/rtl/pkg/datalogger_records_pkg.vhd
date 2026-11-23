@@ -1,4 +1,6 @@
 -------------------------------------------------------------------------------
+-- Standard   : VHDL-2008
+-- SPDX-License-Identifier: CERN-OHL-W-2.0
 -- File       : datalogger_records_pkg.vhd
 -- Description: Stable structural types + constants for datalogger_gather and
 --              its consumers. Hand-written, never generated — the
@@ -35,13 +37,13 @@ package datalogger_records_pkg is
   -- internal arbiter back-pressure care about. Anything else is
   -- diagnostic noise and lives outside this record.
   --------------------------------------------------------------------------
-  type t_fifoStatus is record
+  type t_fifo_status is record
     full     : std_logic;  -- arbiter cannot accept more this cycle
     empty    : std_logic;  -- nothing to drain
     overflow : std_logic;  -- one-shot pulse on lost word
-  end record t_fifoStatus;
+  end record t_fifo_status;
 
-  constant C_INIT_FIFO_STATUS : t_fifoStatus := (
+  constant C_INIT_FIFO_STATUS : t_fifo_status := (
     full     => '0',
     empty    => '1',
     overflow => '0'
@@ -54,13 +56,13 @@ package datalogger_records_pkg is
   --   - level           : current fill (PS reads via regbank)
   --   - overflowCnt     : saturating count of overflow events since reset
   --------------------------------------------------------------------------
-  type t_fifoCsr is record
-    fifoStatus   : t_fifoStatus;
+  type t_fifo_csr is record
+    fifoStatus   : t_fifo_status;
     level        : std_logic_vector(C_FIFO_LEVEL_WIDTH-1 downto 0);
     overflowCnt  : std_logic_vector(C_FIFO_OVERFLOW_WIDTH-1 downto 0);
-  end record t_fifoCsr;
+  end record t_fifo_csr;
 
-  constant C_INIT_FIFO_CSR : t_fifoCsr := (
+  constant C_INIT_FIFO_CSR : t_fifo_csr := (
     fifoStatus  => C_INIT_FIFO_STATUS,
     level       => (others => '0'),
     overflowCnt => (others => '0')
@@ -73,19 +75,19 @@ package datalogger_records_pkg is
   -- the sorted-name C_PROTO_IDX_<NAME> constants the datalogger-builder
   -- emits into datalogger_config_pkg.vhd. DS-P3.26.
   --------------------------------------------------------------------------
-  type t_protoCounter is record
+  type t_proto_counter is record
     pkt_cnt  : std_logic_vector(31 downto 0);
     err_cnt  : std_logic_vector(31 downto 0);
     drop_cnt : std_logic_vector(31 downto 0);  -- DS-T2.22: VLD && !RDY backpressure
-  end record t_protoCounter;
+  end record t_proto_counter;
 
-  constant C_INIT_PROTO_COUNTER : t_protoCounter := (
+  constant C_INIT_PROTO_COUNTER : t_proto_counter := (
     pkt_cnt  => (others => '0'),
     err_cnt  => (others => '0'),
     drop_cnt => (others => '0')
   );
 
-  type t_protoCounterArray is array (natural range <>) of t_protoCounter;
+  type t_proto_counter_array is array (natural range <>) of t_proto_counter;
 
 end package datalogger_records_pkg;
 

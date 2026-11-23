@@ -53,7 +53,7 @@ entity arbiter is
     -- Per-input FIFO status.
     EMPTY      : out std_logic_vector(0 to G_NUM_INPUTS - 1);
     FULL       : out std_logic_vector(0 to G_NUM_INPUTS - 1);
-    FIFO_CNT   : out uFifoBufferCnt(0 to G_NUM_INPUTS - 1)(G_FIFO_DEPTH + 1 - 1 downto 0);
+    FIFO_CNT   : out t_fifo_buffer_cnt(0 to G_NUM_INPUTS - 1)(G_FIFO_DEPTH + 1 - 1 downto 0);
     -- Output-side ready (consumer back-pressure).
     READY      : in  std_logic
   );

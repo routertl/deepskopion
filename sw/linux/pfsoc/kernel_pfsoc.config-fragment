@@ -32,3 +32,17 @@ CONFIG_MACB=y
 # The generated initramfs source is necessarily an absolute build path. Do not
 # embed .config in the public kernel image and turn that path into board data.
 # CONFIG_IKCONFIG is not set
+
+# DS-P2.357: the FAT boot partition (P2: Image, system.dtb, boot.scr) must be mountable from Linux on the kit, so
+# boot files can be checked and updated in place. The base config builds FAT as modules (=m) and this image loads
+# no modules (there is no /lib/modules), so `mount -t vfat` failed "No such device" (measured on the kit
+# 2026-11-18: /proc/filesystems listed ext2/ext3/ext4 only). The vfat mount uses codepage 437 and the ascii
+# iocharset by default (CONFIG_FAT_DEFAULT_CODEPAGE / _IOCHARSET); ISO 8859-1 is the NLS default.
+CONFIG_FAT_FS=y
+CONFIG_VFAT_FS=y
+CONFIG_NLS_CODEPAGE_437=y
+CONFIG_NLS_ISO8859_1=y
+# DS-P2.357 (fix-forward): the vfat mount loads CONFIG_FAT_DEFAULT_IOCHARSET ("ascii" in the base config) as its IO
+# charset. With NLS_ASCII=m the image has no module to load, and the mount failed "Invalid argument" on the kit
+# (2026-11-18) while vfat itself was registered.
+CONFIG_NLS_ASCII=y
