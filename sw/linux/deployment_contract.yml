@@ -103,6 +103,9 @@ autostart:
     note: >-
       After the network, before the daemon. Host keys generate on first use;
       SSH remains closed until the owner provisions an authorized key.
+      The DE25 image leaves this script and deepskopion-authorize-key out: it
+      stages no AArch64 dropbear, so it has no SSH server
+      (tools/de25_linux_image.py DE25_OVERLAY_EXCLUDE).
 
   - path: etc/init.d/S99deepskopion-stream
     provenance: tracked
@@ -179,7 +182,11 @@ provenance_rule: >-
 # hole in the documentation.
 not_autostarted:
   - component: sw/telemetry
-    status: not staged into the rootfs at all; run it by hand over ssh
+    status: >-
+      not staged into the rootfs at all; copied to the board and run by hand
+      (ssh with cat on the Zybo Z7-20 and the PolarFire SoC Discovery Kit; on the DE25,
+      which has no SSH server, onto its card's root partition), see
+      docs/software/telemetry_exporter.md
     note: >-
       Its exporter is a periodic snapshot tool, not part of the capture path.
       It carried a systemd service+timer recipe until SW-C0; on a busybox

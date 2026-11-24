@@ -201,6 +201,7 @@ def test_build_accepts_enabled_node_with_the_shipped_watchdog(tmp_path, monkeypa
 
     # Watchdog armed in the shipped top → the enabled ctucanfd node is bounded →
     # build() runs through the dtb+bootscr+sdcard steps without refusing.
+    monkeypatch.setattr(mod, "rootfs_image_problems", lambda *_a, **_k: [])  # DS-P3.316: build() now reads the card image; this test stubs every tool run
     mod.build(root)
     assert any("linux dtb" in c for c in recorded), recorded
     assert any("linux bootscr" in c for c in recorded), recorded

@@ -66,8 +66,8 @@ def expected_transfer(mosi: int, miso: int, clk_div: int,
     ds_stimulus_gen p_spi, D = clk_div cycles: CS falls at 0; MOSI <- b7 at D;
     SCLK rises at (2+2k)D and falls at (3+2k)D, k=0..7; MOSI <- b(6-k) at
     (3+2k)D, k=0..6; CS rises at 18D (CS_HOLD counts D after the last fall).
-    spi_slave (TX FIFO = [miso, 0x00]): MISO <- m7 at CS fall, <- m(6-k) at the
-    falls k=0..6, <- 0 (the reloaded 0x00) at the 8th fall; released to 0 at
+    spi_slave (TX FIFO = [miso]): MISO <- m7 at CS fall, <- m(6-k) at the
+    falls k=0..6, <- 0 (zeros reloaded from the empty FIFO) at the 8th fall; released to 0 at
     CS rise. Only level CHANGES are edges."""
     d = clk_div * NS_PER_CYCLE
     out: Dict[str, List[Edge]] = {

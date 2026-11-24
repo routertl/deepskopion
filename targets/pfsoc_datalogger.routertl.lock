@@ -238,7 +238,7 @@ dependencies:
     - libs/routertl/rr_ddr_stream/rtl/support/xilinx/rr_fifo_async_xpm_body.vhd
     - libs/routertl/rr_ddr_stream/rtl/support/xilinx/rr_fifo_async_mixed_xpm_body.vhd
   url: https://github.com/djmazure/rr-ddr-stream.git
-locked_at: '2026-11-23T17:25:14+00:00'
+locked_at: '2026-11-23T23:48:36+00:00'
 package_constraints:
 - kind: xdc
   path: libs/routertl/rr_ddr_stream/constraints/ddr_stream_cdc_scoped.xdc
@@ -477,7 +477,7 @@ sources:
 - path: hw/rtl/responder/spi_injector.vhd
   sha256: 5a2c1da2860a90a090110400d31fed5965588418086d9554b74b79decf8c9491
 - path: hw/rtl/responder/spi_slave.vhd
-  sha256: 90e532e288ae3c3a357a947a15f8ea073a9c2df608cc2dd77dd4eae083ea3912
+  sha256: 017144c81449d7e5c56e75d396ac70a8c2ff2468682138cadf4c2fbce8ccfab0
 - path: hw/rtl/ring_watermark.vhd
   sha256: 4f1001b541c535e773e164dfa450eb2234101989d93260ba3e37b26da7835a0e
 - path: hw/rtl/stimulus/ds_stimulus_gen.vhd

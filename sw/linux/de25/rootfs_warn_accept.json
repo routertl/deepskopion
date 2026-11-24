@@ -1,0 +1,12 @@
+{
+  "about": "Reviewed WARNs of the DE25 init-script scan (tools/de25_linux_image.py check-rootfs). The scan does not judge these constructs; each entry is one exact WARN on one exact line text, accepted with its reason. A WARN not listed here fails check-rootfs and the image gate. The list must equal the WARNs of the shipped init scripts exactly (a test checks it), so a moved or removed line is reviewed again.",
+  "accept": [
+    {
+      "script": "S99deepskopion-stream",
+      "line": 140,
+      "construct": ". (a sourced file is not judged)",
+      "text": ". \"${EXPECT_FILE}\"",
+      "reason": "Sources /etc/deepskopion-expect only when an operator has dropped that file; it is not in the image, and it sets DS_EXPECTED_GIT_HASH / DS_EXPECTED_DAEMON_VERSION, which the script only exports. It runs no program."
+    }
+  ]
+}

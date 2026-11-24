@@ -260,6 +260,9 @@ sw/linux/*backups*/
 # the routertl REA examples): a committed copy would go stale against the
 # source it is supposed to identify.
 generated/rr_rea_build_id_pkg.vhd
+# Per-target generated datalogger packages (bench/targets/{canfd_demo,de25_canfd}.yml)
+generated_mix/canfd_demo/
+generated_mix/de25_canfd/
 # Build metadata (git hash, build date, word counts), written by
 # tools/regen_regbank.sh on every build (pre_build regbank-regen) and before
 # every sim (pre_sim rom-info-sim). Tracking it left every clone dirty after a

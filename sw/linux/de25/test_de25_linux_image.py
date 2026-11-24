@@ -1751,8 +1751,14 @@ def test_build_leaves_uboot_env_absent_from_output_and_card(
     checked = []
     monkeypatch.setattr(de25_linux_image, "assert_uboot_itb_default_bootargs",
                         lambda itb, ba: checked.append((itb, ba)))
+    # DS-P3.316: record the card-rootfs check instead of running it on the fake
+    # card (which has no ext4 P2); pinned below.
+    rootfs_checked = []
+    monkeypatch.setattr(de25_linux_image, "rootfs_image_problems",
+                        lambda image, offset=0: rootfs_checked.append((image, offset)) or [])
     de25_linux_image.build(root)
     assert checked == [(out / "u-boot.itb", de25_linux_image.deployment_bootargs(root))]
+    assert rootfs_checked == [(out / "sdcard.img", de25_linux_image.SDCARD_ROOTFS_OFFSET_BYTES)]
     assert rr_steps.index("kernel") < rr_steps.index("dtb") < rr_steps.index("sdcard"), (
         "the canonical /chosen bootargs must be patched into the DTB shipped "
         "to the default distro boot flow"

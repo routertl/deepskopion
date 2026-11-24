@@ -819,9 +819,10 @@ def _quick_start_step(number: int) -> str:
 
 
 def test_the_quick_start_builds_the_zynq_python_overlay_from_source():
-    """DS-P1.106: step 6 builds the overlay. The retired fetch script exited 1 on every public clone,
-    which carries no tarball (docs/REDISTRIBUTION.md item 1)."""
-    step = _quick_start_step(6)
+    """DS-P1.106: step 4 builds the overlay (step 6 before DS-P1.121 moved install and clone into a
+    common section). The retired fetch script exited 1 on every public clone, which carries no tarball
+    (docs/REDISTRIBUTION.md item 1)."""
+    step = _quick_start_step(4)
     assert "sw/linux/build_buildroot.sh" in step
     assert "sw/linux/extract_python_overlay.sh" in step
     assert "fetch_python_overlay" not in step

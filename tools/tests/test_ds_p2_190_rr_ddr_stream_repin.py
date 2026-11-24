@@ -101,7 +101,9 @@ def _declared_requests() -> dict[str, str]:
         spec = (yaml.safe_load(p.read_text()) or {}).get("packages", {}).get(PKG)
         if spec is not None:
             got[str(p.relative_to(ROOT))] = spec["version"] if isinstance(spec, dict) else spec
-    for p in sorted(ROOT.glob("ref_design*.yml")):
+    # DS-P1.121: per-board manifests live in ref_design/; a legacy root-level manifest is still
+    # scanned, so one re-added with a stale pin is caught here as well as by the layout test.
+    for p in sorted([*ROOT.glob("ref_design/*.yml"), *ROOT.glob("ref_design*.yml")]):
         for dep in (yaml.safe_load(p.read_text()) or {}).get("uses", []) or []:
             if isinstance(dep, dict) and dep.get("ref") == PKG:
                 got[str(p.relative_to(ROOT))] = dep.get("version")
@@ -143,8 +145,12 @@ def test_every_declaring_target_requests_the_locked_release():
     got = _declared_requests()
     # 12 targets + 3 ref designs declared the package when it was repinned; DS-P1.103 deleted
     # 4 of those targets (the datalogger mix flavours), so 8 targets + 3 ref designs remain.
-    # The public export carries the three products and the four public ref designs (7).
-    assert len(got) >= per_tree(7, 11, ROOT), f"only {len(got)} declarations found: {sorted(got)}"
+    # DS-P1.121: one manifest per board under ref_design/ (the root DE25 duplicate is gone), so the
+    # public export carries the three products and the three ref designs (6); bench/ adds 5 (11).
+    public = {f"targets/{b}_datalogger.yml" for b in ("de25", "pfsoc", "zybo")} | {
+        f"ref_design/{b}.yml" for b in ("de25", "pfsoc", "zybo")}
+    assert public <= set(got), f"public declarations missing: {sorted(public - set(got))}"
+    assert len(got) >= per_tree(6, 11, ROOT), f"only {len(got)} declarations found: {sorted(got)}"
     stale = {k: v for k, v in got.items() if v != REQUEST}
     assert not stale, f"{REQ_FAIL}: {stale}"
     assert _lock_entry()["requested_version"] == REQUEST

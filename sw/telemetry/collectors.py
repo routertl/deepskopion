@@ -15,10 +15,10 @@ Dependencies: Python 3 stdlib only (no pip packages).
 from __future__ import annotations
 
 import logging
-import subprocess
+import os
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -276,61 +276,86 @@ def compute_irq_rate_from_snapshots(
 
 
 # ---------------------------------------------------------------------------
-# Kernel Errors — dmesg
+# Kernel Errors — /dev/kmsg
 # ---------------------------------------------------------------------------
+
+# DS-P3.335: the board images ship BusyBox dmesg (rr linux rootfs builds BusyBox 1.36.1), which refuses
+# util-linux's --level/-T, so the collector reads the kernel's own record interface instead. Each
+# /dev/kmsg record is "<pri>,<seq>,<usec>,<flags>;<message>", continuation lines start with a space,
+# and the syslog level is pri & 7.
+KMSG_PATH = "/dev/kmsg"
+_KMSG_MAX_LEVEL = 4      # emerg (0) .. warning (4): the err,warn set plus anything more severe
+_KMSG_MAX_RECORDS = 100_000
+
+
+def _read_kmsg(path: str) -> str:
+    """Every record currently in the kernel log, without blocking for new ones."""
+    fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+    chunks: List[bytes] = []
+    try:
+        while len(chunks) < _KMSG_MAX_RECORDS:
+            try:
+                chunk = os.read(fd, 8192)
+            except BlockingIOError:      # device: no further record
+                break
+            except BrokenPipeError:      # device: the next record was overwritten; read on
+                continue
+            if not chunk:                # regular file: end
+                break
+            chunks.append(chunk)
+    finally:
+        os.close(fd)
+    return b"".join(chunks).decode("utf-8", errors="replace")
+
 
 def collect_kernel_errors(
     max_lines: int = 20,
-    _dmesg_cmd: Optional[List[str]] = None,
+    kmsg_path: str | None = None,
 ) -> MetricDict:
-    """Collect recent kernel errors from dmesg.
-
-    Uses ``dmesg --level=err,warn -T`` for human-readable timestamps.
-    Falls back gracefully if dmesg is unavailable or permission is denied.
+    """Count the kernel log records at warning level or more severe, from /dev/kmsg.
 
     Args:
-        max_lines: Maximum number of recent error lines to return.
-        _dmesg_cmd: Override dmesg command (for testing/mocking).
+        max_lines: Maximum number of recent records to return.
+        kmsg_path: The kernel log device; ``None`` reads ``KMSG_PATH`` at call time.
 
     Returns:
         ``{"error_count": int,
-           "recent_errors": [{"timestamp": str, "message": str}, ...]}``
+           "recent_errors": [{"timestamp": str, "message": str}, ...]}``, the timestamp in
+        seconds since boot. When the log cannot be read, or holds no parseable record,
+        ``error_count`` is 0 and an ``error`` field says why: a failure never reads as
+        "no errors".
     """
-    cmd = _dmesg_cmd or ["dmesg", "--level=err,warn", "-T"]
-
+    kmsg_path = kmsg_path or KMSG_PATH
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode != 0:
-            return {
-                "error_count": 0,
-                "recent_errors": [],
-                "error": result.stderr.strip() or f"dmesg exited with {result.returncode}",
-            }
-        lines = result.stdout.strip().splitlines() if result.stdout else []
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
-        logger.debug("dmesg failed: %s", exc)
-        return {
-            "error_count": 0,
-            "recent_errors": [],
-            "error": str(exc),
-        }
+        text = _read_kmsg(kmsg_path)
+    except OSError as exc:
+        logger.debug("kmsg read failed: %s", exc)
+        return {"error_count": 0, "recent_errors": [], "error": f"{kmsg_path}: {exc}"}
 
-    errors: List[Dict[str, str]] = []
-    for line in lines[-max_lines:]:
-        # dmesg -T format: [Mon Mar 25 12:00:00 2026] message text
-        ts, _, msg = line.partition("] ")
-        if ts.startswith("["):
-            ts = ts[1:]  # strip leading [
-        errors.append({"timestamp": ts.strip(), "message": msg.strip()})
+    records = 0
+    matched: List[Dict[str, str]] = []
+    for line in text.splitlines():
+        if not line or line.startswith(" "):
+            continue
+        header, sep, message = line.partition(";")
+        fields = header.split(",")
+        if not sep or len(fields) < 3:
+            continue
+        try:
+            level = int(fields[0]) & 7
+            usec = int(fields[2])
+        except ValueError:
+            continue
+        records += 1
+        if level <= _KMSG_MAX_LEVEL:
+            matched.append({"timestamp": f"{usec / 1_000_000:.6f}", "message": message.strip()})
 
+    if text.strip() and records == 0:
+        return {"error_count": 0, "recent_errors": [],
+                "error": f"{kmsg_path}: no record in the kernel log format"}
     return {
-        "error_count": len(lines),
-        "recent_errors": errors,
+        "error_count": len(matched),
+        "recent_errors": matched[-max_lines:],
     }
 
 

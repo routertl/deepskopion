@@ -39,9 +39,17 @@ def test_readme_quickstart_specifies_venv_and_ram_oversubscribe() -> None:
         "README.md quickstart missing 'source .venv/bin/activate'"
     )
 
-    # Selecting Targets must document RR_EDA_ALLOW_OVERSUBSCRIBE=1
-    assert "RR_EDA_ALLOW_OVERSUBSCRIBE=1" in text, (
-        "README.md missing 'RR_EDA_ALLOW_OVERSUBSCRIBE=1' note for <=16 GB RAM hosts"
+    # DS-P1.121: the README's host RAM is the preflight's hard floor. A tip for hosts below
+    # it (RR_EDA_ALLOW_OVERSUBSCRIBE on 16 GB) contradicted the preflight, which fails there.
+    import yaml
+    decl = yaml.safe_load((ROOT / "tools/preflight/supported_environment.yml").read_text(encoding="utf-8"))
+    floor = decl["host"]["ram_gb_min"]
+    assert floor["severity"] == "fail"
+    assert f"{floor['value']} GB RAM as the OS sees it" in text, (
+        "README.md host RAM disagrees with tools/preflight/supported_environment.yml ram_gb_min"
+    )
+    assert "RR_EDA_ALLOW_OVERSUBSCRIBE" not in text, (
+        "README.md suggests building below the preflight's RAM floor"
     )
 
 

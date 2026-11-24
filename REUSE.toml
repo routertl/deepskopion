@@ -128,3 +128,12 @@ SPDX-License-Identifier = "MIT"
 path = ["libs/routertl/**"]
 SPDX-FileCopyrightText = "2024-2026 Daniel J. Mazure"
 SPDX-License-Identifier = "MIT"
+
+# --- Third-party GPL inputs of the init-script parser (DS-P3.341) -------------
+# The patch adds a parse-tree dump to BusyBox's ash; the config is Buildroot's package/busybox/busybox.config
+# (Buildroot 2024.11.4, the build of the DE25 image's busybox). Both are inputs to a BusyBox build that runs as a
+# separate process: nothing here is linked into, or changes the licence of, any other file.
+[[annotations]]
+path = ["tools/ash_dump/ash-dump.patch", "tools/ash_dump/busybox.config"]
+SPDX-FileCopyrightText = ["2026 Daniel J. Mazure", "BusyBox and Buildroot contributors"]
+SPDX-License-Identifier = "GPL-2.0-only"

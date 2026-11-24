@@ -342,6 +342,31 @@ into `clk_sys`; bit 3 is not a separate downloader CS. The generated row above
 lists these bits LSB-first as {downloader_cs, uploader_cs, pipeBusyDdr,
 pipeBusy}; its description is corrected at the next regbank ROM regeneration.
 
+SPI_INJ_DATAIN entries are consumed one per byte started. An entry is eligible
+for a byte if it is queued when that byte is loaded: at CS_N fall for the first
+byte, and at the falling SCLK edge after the 8th bit for the next one. An
+eligible head entry leaves the TX FIFO when the first SCLK rising edge of its
+byte reaches the slave (the SPI_INJ_STATUS data count falls by one a few
+`clk_sys` cycles after that edge). An entry that arrives after a byte was
+loaded is not that byte's data. Eligibility is sampled when the slave processes
+the synchronised CS_N or SCLK edge that loads the byte. A byte whose load found
+no eligible head entry (an empty FIFO, or a preload invalidated by a drain)
+returns zeros even if an entry is queued before its first rising edge, and that
+entry stays queued. A byte whose load found an entry returns that entry. A transaction of N bytes consumes at most N entries. Selecting the
+slave without clocking leaves the entry queued. A transaction aborted after the
+first rising edge of a byte has consumed that byte; the next transaction
+returns the entry behind it. A drain through SPI_INJ_CONTROL bit 9 after the
+slave was selected is protected from the stale preload only: the drained entry
+is not popped and, once the drain has completed ahead of the first rising edge,
+not returned; an entry queued after the drain stays queued unless a later byte
+of the same selection loads it. A drain that races the first rising edge leaves
+the bits already clocked out undefined, so the drain is issued with CS_N high.
+A transaction that outlasts the queued entries returns zeros after the last
+one, and the data count stays 0 on an empty FIFO. Software that sets up one
+transaction pushes exactly the bytes that transaction returns; an entry pushed
+in addition stays queued and is returned by the next transaction
+(`hw/rtl/responder/requirements.yml`, SPI-INJ-REQ-7).
+
 ### Host and Linux interface
 
 | Item | Implementation |

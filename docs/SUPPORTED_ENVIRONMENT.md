@@ -88,6 +88,20 @@ there is no licence purchase on the golden path; ML Enterprise works too.
 Preflight finds Vivado via `$XILINX_VIVADO`, then `PATH`, then the usual
 install roots — it does not require you to have sourced `settings64.sh` first.
 
+The two tests that execute the telemetry exporter's copy recipes
+(`tools/tests/test_telemetry_copy_blocks_execute_ds_p3_337.py` and
+`tools/tests/test_telemetry_copy_blocks_hook_leg_ds_p3_337.py`) also need
+bubblewrap (`bwrap`) with unprivileged user namespaces, `unshare -Urm`
+(util-linux) able to make a shared mount, and `markdown-it-py`. Measured on
+Ubuntu 22.04 with bubblewrap 0.6.1 and util-linux `unshare`: they run. The Forgejo CI job
+runs in a `python:3.11` Docker image, where bubblewrap 0.12.0 exits 1 with "No
+permissions to create a new namespace". The GitHub CI job runs on
+`ubuntu-latest` and does not install bubblewrap; that runner's user-namespace
+policy is not measured. Both jobs leave the two tests out
+(`tools/ci/desk_test_exclusions.txt`). Without a prerequisite they are skipped
+by name. They fail instead where `CI`, `RR_BENCH_CONFIG` or `RR_BENCH_FILE` is
+set, where `runtimes/hw.local.yml` exists, and in the private pre-commit check.
+
 ### Board
 
 **Digilent Zybo Z7-20 — `xc7z020clg400-1`.**

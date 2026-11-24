@@ -77,6 +77,7 @@ def test_build_gives_rr_linux_uboot_the_same_bootargs_as_rr_linux_dtb(monkeypatc
     checked: list[tuple[Path, str]] = []
     monkeypatch.setattr(image, "assert_uboot_itb_default_bootargs",
                         lambda itb, bootargs: checked.append((itb, bootargs)), raising=False)
+    monkeypatch.setattr(image, "rootfs_image_problems", lambda *_a, **_k: [])  # DS-P3.316: build() now reads the card image; this test stubs every tool run
     image.build(root)
 
     uboot = next(c for c in calls if c[:3] == ["rr", "linux", "uboot"])

@@ -72,7 +72,8 @@
   <!-- Processor subsystem -->
   <rect class="dom ps" x="500" y="12" width="250" height="396" rx="10"/>
   <text class="lbl" x="514" y="34">Processor subsystem (Linux)</text>
-  <text class="s" x="514" y="50">Zynq PS or Agilex HPS</text>
+  <text class="s" x="514" y="50">Zynq PS (Arm), Agilex HPS (Arm) or</text>
+  <text class="s" x="514" y="64">PolarFire SoC MSS (RISC-V)</text>
 
   <rect class="blk" x="522" y="168" width="206" height="70" rx="5"/>
   <text class="t" x="532" y="190">Ring buffer in board DDR</text>
@@ -84,7 +85,7 @@
   <text class="t" x="532" y="298">Capture daemon</text>
   <text class="m" x="532" y="315">python3 -m sw.stream</text>
   <text class="s" x="532" y="332">drains the ring, decodes,</text>
-  <text class="s" x="532" y="347">serves the stream</text>
+  <text class="s" x="532" y="347">serves both streams</text>
   <path class="data" d="M625,238 V272" marker-end="url(#ad)"/>
   <path class="ctl" d="M522,328 H478" marker-end="url(#ac)" marker-start="url(#ac)"/>
   <text class="s" x="530" y="374">MMIO to the register bank</text>
@@ -103,6 +104,6 @@
 
   <path class="data" d="M728,300 H760 V268 H780" marker-end="url(#ad)"/>
   <path class="data" d="M760,300 V328 H780" marker-end="url(#ad)"/>
-  <text class="m" x="784" y="376">TCP 7475</text>
-  <text class="m" x="784" y="390">wave_stream_v1</text>
+  <text class="m" x="784" y="372">TCP 7475  wave_stream_v1</text>
+  <text class="m" x="784" y="388">TCP 7476  wave_events_v1</text>
 </svg>

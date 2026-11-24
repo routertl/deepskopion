@@ -1,0 +1,31 @@
+{
+  "purpose": "What the image's busybox was built from, so the dump ash can be compared with it (DS-P3.341).",
+  "image_build": {
+    "buildroot": "2024.11.4",
+    "buildroot_config_sha256": "9300d2ba93082933677965d6aa493984571c44f4911b12432602c9022694e4d6",
+    "BR2_PACKAGE_BUSYBOX_CONFIG": "package/busybox/busybox.config",
+    "BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES": "",
+    "busybox_config_sha256": "cc69fa5a7519fbac9997466eedb444b7a459f1980171a4be4f4c8904797e4504",
+    "busybox_version": "1.36.1",
+    "source_tarball_sha256": "b8cc24c9574d809e7279c3be349795c5d5ceb6fdf19ca709f80cde50e47de314"
+  },
+  "buildroot_patches_to_busybox": {
+    "0001-networking-libiproute-use-linux-if_packet.h-instead-.patch": "91456b44b6b91f7fecee0cec375d6d9dc8ab497eb6f9dae0d475f2bbd4daeaf4",
+    "0002-Makefile.flags-strip-non-l-arguments-returned-by-pkg.patch": "80f5c505e59f6a3ad2d1fb6006c6814b572849a15396083e959ab0f08657cb1f",
+    "0003-libbb-sockaddr2str-ensure-only-printable-characters-.patch": "2c2aa143af8add7776cbce9c43ba0a7dcfa965a4b8986de0ae8976d3e2a4a989",
+    "0004-nslookup-sanitize-all-printed-strings-with-printable.patch": "d4bd8462339df9bd0250f8bae9886c5f447df86727530da9887f2114c7828df6",
+    "0005-seedrng-fix-for-glibc-2.24-not-providing-getrandom.patch": "41caeb8ee4ab119b07d8f3e08a8272fab55b028430d22dac5cfae57647682d67",
+    "0006-seedrng-fix-for-glibc-2.24-not-providing-random-head.patch": "885c107d2378ef6c52f903f8f235f14c316fdc4d07b4d47e628533cf4f8b4d70",
+    "0007-seedrng-fix-getrandom-detection-for-non-glibc-libc.patch": "f6d1e336c596432b1e6299eec05d7b8a4df7b4af0319df9ef4effda4ba212fa4",
+    "0008-shell-fix-SIGWINCH-and-SIGCHLD-in-hush-interrupting-.patch": "803f55bb3a44e9815f9e07052e34c9d0cd9e43645ecfd4773e8953cc0cc1fa42",
+    "0009-menuconfig-gcc-failing-saying-ncurses-is-not-found.patch": "f92f7700968973436bdac5b8b2466fa1b054a701710126b2fc39377ade224c94",
+    "0010-Linux-v6.8-rc1-removed-the-definitions-related-to-CB.patch": "beaeecac5f17aaaba40d72a7ffb3c0560707ebfb03034337612da893d60e0611",
+    "0011-awk-fix-use-after-realloc-CVE-2021-42380-closes-1560.patch": "2954716a1e8732d007c96453cb31fd46798b8c901272898830e86b3e1bfdfbb2",
+    "0012-awk-fix-use-after-free-CVE-2023-42363.patch": "0d10bfad35400324b8683107c8e0bf22d2f4bba46ae8c1c2130097f4d36f8a55",
+    "0013-awk-fix-precedence-of-relative-to.patch": "52eb4d300029b6b42d76551a6f679da80dabe780b9958a2c9624c1c4d7869988",
+    "0014-awk-fix-ternary-operator-and-precedence-of.patch": "c88eb5dba2a1c5fc78003a45101097d8dcf6581331d79d0920974e7080987774",
+    "0015-awk.c-fix-CVE-2023-42366-bug-15874.patch": "787dae36e58c82a4495bcd4039303cda614db3d1884c454039d1e8fd21d9dafa",
+    "0016-hwclock-Check-for-SYS_settimeofday-before-calling-sy.patch": "223ea8f31d901689f0e3d96b0eea24afacce557c641c11211c3e6731f39a05e8"
+  },
+  "parser_relevant_patch_hunks": "none: only patch 0008 touches shell/ash.c, one comment line in preadfd()"
+}

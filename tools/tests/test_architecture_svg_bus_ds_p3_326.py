@@ -118,7 +118,7 @@ def _bus_problems(text: str) -> list[str]:
 #: and the pin is updated in the same commit. A structural reader alone cannot close
 #: every SVG drawing trick (styles, markers, number forms), so the pin is the guard
 #: and the structural checks below say what the review looks for.
-REVIEWED_SHA256 = "1316d805f16b0b2be8a7d23c84b941df2b50fed5b2e4972f58fec91a0f03d5b2"
+REVIEWED_SHA256 = "35f3c051181a1a2bdefed0f119ff86b6b8f394bb687d8dff8eb9ab28c4e66a80"
 BUS_BLOCK = """\
   <path class="data" d="M174,137 H214"/>
   <path class="data" d="M174,181 H214"/>

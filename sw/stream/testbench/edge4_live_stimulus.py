@@ -85,6 +85,10 @@ SPI_INJ_ENABLE = 0x1
 CLK_HZ = 100_000_000
 
 
+# Margin after a transfer's CS rise (18 half-periods after its start write) before the next MISO byte is queued.
+MIN_PRELOAD_GAP_S = 20e-6
+
+
 @dataclass(frozen=True)
 class Phase:
     name: str
@@ -186,24 +190,36 @@ def run(rb, phase: Phase,
         sleep: Callable[[float], None] = time.sleep) -> RunLog:
     """Arm, then issue every transfer on an absolute schedule.
 
-    Before each transfer the responder FIFO receives two bytes: the MISO byte,
-    popped at CS fall, and 0x00, popped at the 8th SCLK falling edge
-    (spi_slave.vhd DS-T2.8 reload) so MISO returns low during CS hold."""
+    Before each transfer the responder FIFO receives the MISO byte alone. No
+    trailing 0x00 is queued (DS-P2.386): with an empty FIFO the responder
+    reloads zeros at the 8th SCLK falling edge (spi_slave.vhd DS-T2.8), so
+    MISO returns low during CS hold. Once DS-T2.102 moves the pop to the first
+    SCLK rising edge of a byte, a queued pad survives its own transfer and, at
+    the FIFO head, is returned as the next transfer's data, displacing its
+    MISO byte."""
     log = RunLog(phase=phase.name, clk_div=phase.clk_div)
     log.regs_before = snapshot(rb)
     arm(rb, phase, sleep)
     log.enable_mono_ns = clock_ns()
     sleep(phase.settle_s)
     t0 = clock_ns()
+    prev_start_ns = None
     for k, (mosi, miso) in enumerate(phase.transfers):
         due = t0 + int(k * phase.period_s * 1e9)
+        if prev_start_ns is not None:
+            # DS-P2.386: a MISO byte queued while the previous transfer is still running is consumed at that
+            # transfer's trailing SCLK edge (spi_slave.vhd, until DS-T2.102) and lost; the old trailing 0x00 pad hid
+            # this. A late loop therefore never preloads before the previous transfer's CS has risen.
+            due = max(due, prev_start_ns + int((phase.transfer_s + MIN_PRELOAD_GAP_S) * 1e9))
         now = clock_ns()
         if due > now:
             sleep((due - now) / 1e9)
         rb.write_u32(SPI_INJ_DATAIN, miso)
-        rb.write_u32(SPI_INJ_DATAIN, 0x00)
         t_write = clock_ns()
         rb.write_u32(STIM_SPI_DATA, mosi)
+        # Taken AFTER the start write returns: the transfer may already be underway by then, so the deadline derived
+        # from it is conservative; a stall before the store cannot make the next preload early (DS-P2.386 review).
+        prev_start_ns = clock_ns()
         log.transfers.append({"k": k, "mosi": mosi, "miso": miso, "mono_ns": t_write})
     sleep(phase.transfer_s + phase.settle_s)
     log.regs_after = snapshot(rb)

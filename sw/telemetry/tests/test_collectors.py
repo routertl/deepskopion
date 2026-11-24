@@ -122,22 +122,26 @@ class TestIrqRate(unittest.TestCase):
 
 
 class TestKernelErrors(unittest.TestCase):
-    def test_successful_dmesg(self):
-        result = collect_kernel_errors(
-            _dmesg_cmd=["echo", "[Mon Mar 25 12:00:00 2026] test error message"],
-        )
+    # DS-P3.335: the collector reads /dev/kmsg (BusyBox dmesg refuses --level/-T); these
+    # cases were the dmesg-command cases, now driven through a kmsg-format file.
+    def test_successful_kmsg(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            kmsg = Path(tmp) / "kmsg"
+            kmsg.write_text("3,1,1000000,-;test error message\n", encoding="utf-8")
+            result = collect_kernel_errors(kmsg_path=str(kmsg))
         self.assertEqual(result["error_count"], 1)
         self.assertEqual(len(result["recent_errors"]), 1)
         self.assertIn("test error message", result["recent_errors"][0]["message"])
 
-    def test_failed_dmesg(self):
-        result = collect_kernel_errors(_dmesg_cmd=["false"])
+    def test_unreadable_kmsg(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = collect_kernel_errors(kmsg_path=tmp)   # a directory: read fails
         self.assertEqual(result["error_count"], 0)
         self.assertIn("error", result)
 
-    def test_missing_binary(self):
+    def test_missing_kmsg(self):
         result = collect_kernel_errors(
-            _dmesg_cmd=["/nonexistent/binary"],
+            kmsg_path="/nonexistent/kmsg",
         )
         self.assertEqual(result["error_count"], 0)
         self.assertIn("error", result)

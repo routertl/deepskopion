@@ -54,7 +54,7 @@ def test_responder_is_reset_enabled_and_preloaded_before_each_byte():
     burst = [(o, v) for o, v in w if o in (SPI_INJ_DATAIN, STIM_SPI_DATA)]
     expected = []
     for mosi, miso in zip(MOSI, MISO):
-        expected += [(SPI_INJ_DATAIN, miso), (SPI_INJ_DATAIN, 0x00), (STIM_SPI_DATA, mosi)]
+        expected += [(SPI_INJ_DATAIN, miso), (STIM_SPI_DATA, mosi)]
     assert burst == expected
 
 

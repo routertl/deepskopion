@@ -22,10 +22,16 @@
 --
 --   TX path mirrors i2c_slave's I2C_TX_DIN/VLD/RDY handshake so the
 --   spi_injector wrapper can drop a FIFO in front and pre-load
---   response bytes from regbank writes. SPI_TX_RDY pulses for one
---   clk_sys cycle when the slave latches a new TX byte (start of
---   each MISO byte = CS falling edge OR after the 8th MOSI rising
---   edge of the previous byte).
+--   response bytes from regbank writes. The slave LOADS the next TX byte
+--   into its MISO shift register at the CS falling edge and at the SCLK
+--   falling edge after the 8th bit of the previous byte, but it CONSUMES
+--   that byte (SPI_TX_RDY pulses for one clk_sys cycle) only at the first
+--   SCLK rising edge of the byte, the edge that samples its first bit
+--   (DS-T2.102). A byte is therefore consumed once it has started to be
+--   clocked, and an abort after that edge loses it by design. A byte that
+--   was loaded but never clocked (CS released first, or the trailing SCLK
+--   falling edge of a transaction that ends there) is NOT consumed and is
+--   loaded again by the next transaction.
 --
 --   RX path (received MOSI bytes) is exposed for symmetry but not
 --   used by the injector wrapper.
@@ -54,7 +60,7 @@ entity spi_slave is
     -- TX byte source (from injector FIFO).
     SPI_TX_DIN  : in  std_logic_vector(7 downto 0);
     SPI_TX_VLD  : in  std_logic;
-    SPI_TX_RDY  : out std_logic;  -- pulses '1' when slave latches a TX byte
+    SPI_TX_RDY  : out std_logic;  -- pulses '1' when a TX byte is consumed (its first SCLK rising edge, DS-T2.102)
 
     -- RX byte sink (MOSI bytes captured each 8 SCLKs).
     SPI_RX_DOUT : out std_logic_vector(7 downto 0);
@@ -94,6 +100,13 @@ architecture rtl of spi_slave is
   -- below double-shifts the freshly loaded byte and drops its MSB.
   signal load_pending_r : std_logic := '0';
 
+  -- DS-T2.102: a TX byte has been loaded into miso_shift_r but not yet
+  -- consumed from the FIFO. Set at the CS-fall preload and at the byte-boundary
+  -- reload when SPI_TX_VLD='1'; cleared (and SPI_TX_RDY pulsed) at the first
+  -- SCLK rising edge of that byte. The FIFO head cannot change in between
+  -- (writes only append), so the byte popped is the byte that was loaded.
+  signal popPending_r : std_logic := '0';
+
 begin
 
   ---------------------------------------------------------------------------
@@ -131,21 +144,44 @@ begin
         mosi_shift_r   <= (others => '0');
         miso_shift_r   <= (others => '0');
         load_pending_r <= '0';
+        popPending_r  <= '0';
       else
+        -- DS-T2.102: a pending pop belongs to the head byte that was loaded. When
+        -- the FIFO stops offering a byte (a drain) before that byte's first SCLK
+        -- edge, the load is stale: it must neither pop whatever is queued next
+        -- nor be returned on MISO, so the unstarted preload becomes zeros.
+        -- Later assignments below win.
+        if popPending_r = '1' and SPI_TX_VLD = '0' then
+          popPending_r <= '0';
+          miso_shift_r  <= (others => '0');
+        end if;
         if cs_n_fe = '1' then
           -- Start of a transaction — preload the first TX byte (whatever the
           -- FIFO presents). MISO sits at MSB on the next falling SCLK edge.
+          -- DS-T2.102: the byte is only LOADED here; it is popped at its first
+          -- SCLK rising edge, so a select with no clock loses nothing.
           if SPI_TX_VLD = '1' then
-            miso_shift_r <= SPI_TX_DIN;
-            tx_rdy_r     <= '1';
+            miso_shift_r  <= SPI_TX_DIN;
+            popPending_r <= '1';
           else
-            miso_shift_r <= (others => '0');  -- no data ready → drive 0s
+            miso_shift_r  <= (others => '0');  -- no data ready → drive 0s
+            popPending_r <= '0';
           end if;
           bit_idx_r      <= (others => '0');
           load_pending_r <= '0';
         elsif cs_n_q = '0' then
           -- Transaction in progress.
           if sclk_re = '1' then
+            -- DS-T2.102: first rising edge of a byte that was loaded =
+            -- the byte is now consumed; pop it from the FIFO exactly once.
+            -- SPI_TX_VLD is re-checked so a FIFO that was drained since the
+            -- load is not popped again (it holds nothing to consume).
+            if popPending_r = '1' then
+              popPending_r <= '0';
+              if SPI_TX_VLD = '1' then
+                tx_rdy_r <= '1';
+              end if;
+            end if;
             -- Sample MOSI into RX shift register (MSB first).
             mosi_shift_r <= mosi_shift_r(6 downto 0) & mosi_sync_r(1);
             bit_idx_r    <= bit_idx_r + 1;
@@ -162,11 +198,16 @@ begin
             if load_pending_r = '1' then
               -- Byte-boundary falling edge: take the new TX byte verbatim
               -- (no shift) so the MSB hits the wire on this cycle.
+              -- DS-T2.102: LOAD only. This falling edge also ends a transaction
+              -- that carries no further byte (CS rises half an SCLK period
+              -- later), so popping here lost the next queued byte; the pop
+              -- waits for the first rising edge of the byte.
               if SPI_TX_VLD = '1' then
-                miso_shift_r <= SPI_TX_DIN;
-                tx_rdy_r     <= '1';
+                miso_shift_r  <= SPI_TX_DIN;
+                popPending_r <= '1';
               else
-                miso_shift_r <= (others => '0');
+                miso_shift_r  <= (others => '0');
+                popPending_r <= '0';
               end if;
               load_pending_r <= '0';
             else

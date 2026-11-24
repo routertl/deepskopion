@@ -11,7 +11,10 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 EXCLUSIONS = ROOT / "tools" / "ci" / "desk_test_exclusions.txt"
 RUNNER = ROOT / "tools" / "ci" / "run_desk_tests.sh"
-REASONS = {"simulator", "coverage entitlement"}
+REASONS = {"simulator", "coverage entitlement", "user namespaces"}  # DS-P3.337: bubblewrap
+# DS-P3.339: a reason that covers only named files; any other row giving it is refused.
+REASON_PATHS = {"user namespaces": {"tools/tests/test_telemetry_copy_blocks_execute_ds_p3_337.py",
+                                    "tools/tests/test_telemetry_copy_blocks_hook_leg_ds_p3_337.py"}}
 
 
 def _steps() -> list[dict]:
@@ -76,6 +79,9 @@ def test_every_exclusion_names_a_known_reason():
     rows = _exclusions()
     assert rows
     assert {reason for _, reason in rows} <= REASONS, rows
+    for node, reason in rows:
+        if reason in REASON_PATHS:
+            assert node.partition("::")[0] in REASON_PATHS[reason], (node, reason)
 
 
 def test_every_exclusion_names_a_test_that_exists():

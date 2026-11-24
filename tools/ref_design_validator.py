@@ -140,23 +140,27 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "manifest",
-        nargs="?",
-        default="ref_design.yml",
-        help="Path to ref_design manifest YAML (default: ref_design.yml)",
+        nargs="*",
+        help="Manifest YAML path(s) (default: every board manifest in ref_design/)",
     )
     args = parser.parse_args(argv)
 
-    path = Path(args.manifest)
-    errors = validate_deepskopion_manifest(path)
-    if errors:
-        print(f"Manifest validation failed for {path} ({len(errors)} error(s)):")
-        for err in errors:
-            print(f"  • {err}")
+    paths = [Path(m) for m in args.manifest] or sorted(Path("ref_design").glob("*.yml"))
+    if not paths:
+        print("No manifest given and none found in ref_design/")
         return 1
-
-    rd = load_manifest(path)
-    print(f"✓ Manifest valid: {rd.org}/{rd.name}@{rd.version} ({path})")
-    return 0
+    failed = 0
+    for path in paths:
+        errors = validate_deepskopion_manifest(path)
+        if errors:
+            failed += 1
+            print(f"Manifest validation failed for {path} ({len(errors)} error(s)):")
+            for err in errors:
+                print(f"  • {err}")
+            continue
+        rd = load_manifest(path)
+        print(f"✓ Manifest valid: {rd.org}/{rd.name}@{rd.version} ({path})")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

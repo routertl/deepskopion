@@ -10,6 +10,7 @@ fresh-looking mixture of old and new files behind.
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import importlib.util
 import ipaddress
@@ -19,6 +20,7 @@ from pathlib import Path
 import shutil
 import struct
 import subprocess
+import sys
 import tarfile
 import re
 import tempfile
@@ -44,6 +46,21 @@ _toolchain_stage_spec = importlib.util.spec_from_file_location(
 )
 de25_toolchain_stage = importlib.util.module_from_spec(_toolchain_stage_spec)
 _toolchain_stage_spec.loader.exec_module(de25_toolchain_stage)
+# DS-P3.341: the init-script scan reads each script's parse tree from the image's own BusyBox ash (built
+# from the same source and options, tools/ash_dump.py). Loaded by file path on first use, like the sibling above,
+# so a clone that stages only this file (the golden-path provider imports it by path) can still import it.
+_ash_dump_module = None
+
+
+def _ash():
+    global _ash_dump_module
+    if _ash_dump_module is None:
+        spec = importlib.util.spec_from_file_location("de25_ash_dump", Path(__file__).with_name("ash_dump.py"))
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["de25_ash_dump"] = module      # the module's dataclass needs to find itself
+        spec.loader.exec_module(module)
+        _ash_dump_module = module
+    return _ash_dump_module
 MSGPACK_VERSION = "1.1.1"
 MSGPACK_URL = (
     "https://files.pythonhosted.org/packages/45/b1/"
@@ -879,6 +896,642 @@ def _fetch_pinned(archive: Path, *, url: str, expected: str, label: str) -> None
         tmp.unlink(missing_ok=True)
 
 
+#: DS-P3.316: shared-overlay files the DE25 image leaves out. The DE25 image stages
+#: no AArch64 dropbear, so S49dropbear would fail at every boot and the key tool
+#: would provision a server that does not exist. The DE25 has no SSH server; its
+#: console and the stream on port 7475 do not need one.
+DE25_OVERLAY_EXCLUDE = frozenset({
+    Path("etc/init.d/S49dropbear"),
+    Path("usr/local/bin/deepskopion-authorize-key"),
+})
+#: What the built DE25 image may not hold: the two excluded files and the server itself.
+DE25_IMAGE_FORBIDDEN = DE25_OVERLAY_EXCLUDE | {
+    Path(d, "dropbear") for d in ("usr/local/bin", "usr/local/sbin", "usr/bin", "usr/sbin", "bin", "sbin")}
+#: A script the DE25 image always ships; its absence means the image was not read.
+DE25_SHIPPED_INIT_SCRIPT = Path("etc/init.d/S99deepskopion-stream")
+
+#: Directories whose files an init script runs as programs.
+_BIN_DIRS = ("bin/", "sbin/", "usr/bin/", "usr/sbin/", "usr/local/bin/", "usr/local/sbin/")
+#: DS-P3.342: a program under one of these is created or mounted at boot, so the image cannot be expected to hold it.
+_RUNTIME_DIRS = ("tmp/", "run/", "var/", "dev/", "proc/", "sys/", "mnt/", "media/")
+_ROOT_PREFIX = re.compile(r"^\$\{?ROOT_PREFIX(?::-)?\}?(?=/)")
+_SHELL_DECLARE = {"export", "local", "readonly"}
+_ASSIGN = re.compile(r"^[A-Za-z_]\w*=(.*)$", re.S)
+
+
+def _image_path(word: str) -> str | None:
+    """*word* as an image path ("usr/sbin/x"), with a leading ${ROOT_PREFIX} removed, or None when it is not an
+    absolute path. The word is the text the shell resolves (the parse has already removed quotes and escapes), so
+    a quote left in it is a character of the path."""
+    word = _ROOT_PREFIX.sub("", word)
+    if not word.startswith("/"):
+        return None
+    rel = word[1:]
+    # Under a bin directory a lone constant $((N)) is the number N (the shell computes nothing else), so the file
+    # the shell runs is known. Anywhere else it stays computed: the path is a WARN, never a guessed refusal.
+    return _ARITH_CONST.sub(r"\1", rel) if rel.startswith(_BIN_DIRS) else rel
+
+
+# DS-P3.316: a bare command name is looked up in the PATH the images' profile exports
+# (sw/linux/rootfs_overlay/etc/profile, Buildroot's BR2_SYSTEM_DEFAULT_PATH).
+_INIT_PATH = ("usr/local/bin", "usr/local/sbin", "usr/bin", "usr/sbin", "bin", "sbin")
+# BusyBox ash builtins: never looked up in PATH. Reserved words are not here: the parse never yields one as a
+# command word, and a quoted one (`'if'`) is a command that PATH decides.
+_SHELL_BUILTINS = frozenset({
+    ":", ".", "[", "[[", "alias", "bg", "break", "cd", "chdir", "command", "continue", "echo", "eval", "exec",
+    "exit", "export", "false", "fg", "getopts", "hash", "help", "jobs", "kill", "let", "local", "printf", "pwd",
+    "read", "readonly", "return", "set", "shift", "source", "test", "times", "trap", "true", "type", "ulimit",
+    "umask", "unalias", "unset", "wait",
+})
+_COMMAND_NAME = re.compile(r"^[A-Za-z0-9_][\w.+-]*$")                 # what PATH lookup is done for
+
+
+#: DS-P3.316: the init-script scan's scope (worded identically in sw/linux/README.md and
+#: tools/tests/test_de25_no_ssh_ds_p3_316.py). DS-P3.341 replaced the hand-written scanner by the image's own
+#: BusyBox ash parse; judging more of the WARN classes is DS-P3.342.
+INIT_SCRIPT_SCAN_SCOPE = (
+    "Parsed: each script is parsed by the ash of BusyBox 1.36.1 (tools/ash_dump.py), built from the same "
+    "source and with the same ash options as the image's busybox, not the same binary, in a sandbox with "
+    "no network; nothing in a script is executed. Judged: every simple command the parse yields, wherever "
+    "it sits: lists, pipelines and && / || chains, if, while, until, for and case (patterns included), "
+    "subshells ( ), brace groups { }, redirected compound commands, function bodies, and the $( ) and "
+    "backtick substitutions (compound commands inside them included) in any word, redirection target, for "
+    "list, case pattern or here-document body that the shell expands; the literal command words, quotes, "
+    "escapes and line continuations as the shell resolves them; literal NAME=value assignments, prefix "
+    "assignments included; a literal PATH assignment at the top level of the file, unconditional only; "
+    "function definitions, visible in their own subshell scope, to calls after the definition, and inside "
+    "function bodies (command NAME bypasses a function); the -x operand of [ and test; the #! "
+    "interpreter; and a command word that is exactly $NAME or ${NAME} for a variable the script assigns, "
+    "judged by each literal value assigned. At each judged program position a path under a bin directory, "
+    "or any other absolute command word whose every segment is a plain name of letters, digits and . _ + "
+    "- (and not . or ..), except the runtime and computed paths named below, must be an executable file "
+    "in the image, and a bare name must resolve through the PATH in effect. Not judged, and reported as "
+    "one WARN line naming script:line and the construct, and refused by the image gate unless it is on the reviewed accept list: command -p; a PATH "
+    "assignment that is conditional or inside a compound command, a subshell, a function body, a pipeline "
+    "or the background (it is not applied); a PATH entry that is not a literal absolute directory; an "
+    "absolute command path under tmp, run, var, dev, proc, sys, mnt or media (the file is created at "
+    "boot), and an absolute command path that is computed (a variable, substitution, arithmetic "
+    "expansion, unquoted glob or tilde, or a character outside the plain-name set in it) or has a . or .. "
+    "segment; a command word that is not a literal name or absolute path, such as a relative path; a "
+    "command word that joins a variable with other text; eval; alias; a here-document fed to a shell; "
+    "process substitution; sh -c strings; . and source; a command word held in a variable the script does "
+    "not assign or assigns a value that is not a literal; a command word produced by a substitution; and "
+    "a program run through a wrapper (env, nice, nohup, setsid, timeout, xargs, chroot, su, flock, or "
+    "start-stop-daemon with --exec or --startas), whose own name is judged. A script that ash refuses is "
+    "an error, never skipped. What the scan cannot know is what a variable, a substitution or a sourced "
+    "file holds when the script runs. An accepted WARN passes with its reason; a clean run is not a proof."
+)
+_WRAPPERS = frozenset({"env", "nice", "nohup", "setsid", "timeout", "xargs", "chroot", "su", "flock"})
+_SSD_EXEC = frozenset({"--exec", "-x", "--startas", "-a"})
+_SHELLS = frozenset({"sh", "ash", "bash", "dash"})
+
+
+_SUBST = "${__ds_subst__}"          # a command word that is a substitution's output
+_GLOBBED = "${__ds_glob__}"          # a command word with an unquoted glob or tilde: not the path the shell runs
+_EXPANSION = "${__ds_expansion__}"   # ash_dump.Word.template's spelling of any expansion but a plain $NAME
+
+
+def _parsed(script_text: str, name: str) -> list:
+    """The parse trees of *script_text* from the image's own ash (tools/ash_dump.py), cached per text.
+    A script ash refuses, or a parse that cannot be done safely, raises: it is never skipped."""
+    return list(_parse_cached(script_text, name))
+
+
+@functools.lru_cache(maxsize=64)
+def _parse_cached(script_text: str, name: str) -> tuple:
+    try:
+        ash = _ash()
+        return tuple(ash.dump(script_text))
+    except _ash().AshDumpError as exc:
+        raise RuntimeError(f"{name}: cannot inspect this script ({exc})") from exc
+
+
+_ARITH_CONST = re.compile(r"\$\{__ds_const_(\d+)\}")
+
+
+def _shown(text: str) -> str:
+    """A command word as a WARN line quotes it: $NAME for a plain variable, $(...) for another expansion."""
+    text = _ARITH_CONST.sub(r"$((\1))", text.replace(_GLOBBED, ""))
+    return re.sub(r"\$\{(\w+)\}", r"$\1", text).replace(_EXPANSION, "$(...)")
+
+
+def _word_text(word) -> str:
+    """The text a word contributes to a judged position: the literal when it has no expansion, else its
+    template (a plain $NAME written ${NAME}, any other expansion ${__ds_expansion__})."""
+    return word.literal if word.literal is not None else word.template
+
+
+def _scan_script(script_text: str, name: str = "script") -> tuple[list[tuple[str, str, int]], list[str]]:
+    """DS-P3.316: the one walk over an init script. Returns its program positions as
+    (kind, word, line): kind "head" (a command word), "value" (the value of a NAME=value)
+    or "x-test" (the -x operand of [ / test); and its WARN lines for constructs outside
+    INIT_SCRIPT_SCAN_SCOPE, as "<script>:<line>: <construct>". The script is parsed by the
+    image's own ash (DS-P3.341), so quoting, escapes, line continuations, here-documents and
+    substitutions are what the shell reads, not a guess."""
+    positions, warnings, _lookups = _walk_script(script_text, name)
+    return positions, warnings
+
+
+def _walk_script(script_text: str, name: str):
+    """_scan_script's walk, also returning each bare command word with the PATH in
+    effect where it runs, as (word, dirs, line)."""
+    state = {"path": (_INIT_PATH,), "functions": set(), "cond": False, "in_func": False}
+    positions: list[tuple] = []
+    assignments: dict[str, list[tuple[str, int]]] = {}
+    for tree in _parsed(script_text, name):
+        _walk_node(tree, state, positions, assignments, 0)
+    warnings: list[str] = []
+    kept: list[tuple[str, str, int]] = []
+    lookups: list[tuple[str, tuple[str, ...], int]] = []
+    for entry in positions:
+        kind, word, number = entry[:3]
+        if kind == "warn":
+            warnings.append(f"{name}:{number}: {word}")
+            continue
+        if kind == "head" and word.startswith("$") and _image_path(word) is None:
+            var = re.fullmatch(r"\$(?:([A-Za-z_]\w*)|\{([A-Za-z_]\w*)\})", word)
+            var_name = var and (var.group(1) or var.group(2))
+            if word.startswith(_SUBST):
+                warnings.append(f"{name}:{number}: a command word produced by a substitution")
+            elif not var:
+                warnings.append(f"{name}:{number}: a command word that joins a variable with other text "
+                                f"({_shown(word)!r}, not judged)")
+            elif var_name not in assignments:
+                warnings.append(f"{name}:{number}: a command word held in {_shown(word)!r}, which the script does not assign")
+            else:                               # judged by the literal value(s) the script assigns
+                for value, at in assignments[var_name]:
+                    vrel = _image_path(value)
+                    if vrel is not None:
+                        vcls = _outside_bin_class(vrel)
+                        if vcls == "runtime":
+                            warnings.append(f"{name}:{number}: an absolute command path under a directory the "
+                                            f"system fills at boot ({_shown(value)!r} held in {_shown(word)!r}, not judged)")
+                        elif vcls in ("computed", "lexical"):
+                            warnings.append(f"{name}:{number}: an absolute command path that is computed or has a "
+                                            f"./.. segment ({_shown(value)!r} held in {_shown(word)!r}, not judged)")
+                        kept.append(("head", value, at))
+                    elif _COMMAND_NAME.match(value):
+                        kept.append(("head", value, at))
+                        lookups.append((value, entry[3], number, entry[4], entry[5]))
+                    else:
+                        warnings.append(f"{name}:{number}: a command word held in {_shown(word)!r}, assigned a value "
+                                        f"that is not a literal ({_shown(value)!r}, line {at})")
+            continue
+        kept.append((kind, word, number))
+        if kind == "head":
+            rel = _image_path(word)
+            cls = _outside_bin_class(rel) if rel is not None else None
+            if cls == "runtime":
+                warnings.append(f"{name}:{number}: an absolute command path under a directory the system fills "
+                                f"at boot ({_shown(word)!r}, not judged)")
+            elif cls in ("computed", "lexical"):
+                warnings.append(f"{name}:{number}: an absolute command path that is computed or has a ./.. segment "
+                                f"({_shown(word)!r}, not judged)")
+            elif rel is None and not _COMMAND_NAME.match(word) and word not in _SHELL_BUILTINS:
+                warnings.append(f"{name}:{number}: a command word that is not a literal name or absolute "
+                                f"path ({_shown(word)!r}, not judged)")
+            lookups.append((word, entry[3], number, entry[4], entry[5]))
+    # a name the script defines as a function in scope is not looked up, unless run as `command NAME`
+    return kept, warnings, [(w, alts, n) for w, alts, n, fset, bypass in lookups if bypass or w not in fset]
+
+
+def _walk_node(node, state: dict, positions: list, assignments: dict, line: int) -> None:
+    """Walk one parse tree node of ash_dump, in the order the shell runs it. *state* carries the PATH in
+    effect, the functions in scope and whether this node runs unconditionally ("cond" False)."""
+    if node is None:
+        return
+    kind = node["t"]
+    if kind == "cmd":
+        _walk_cmd(node, state, positions, assignments)
+    elif kind == "pipe":                        # every element runs detached: it changes no PATH for the rest
+        for cmd in node["cmds"]:
+            _walk_node(cmd, dict(state, cond=True), positions, assignments, line)
+    elif kind in ("and", "or"):
+        _walk_node(node["l"], state, positions, assignments, line)
+        _walk_node(node["r"], dict(state, cond=True), positions, assignments, line)
+    elif kind == "semi":
+        _walk_node(node["l"], state, positions, assignments, line)
+        _walk_node(node["r"], state, positions, assignments, line)
+    elif kind in ("bg", "redir", "subshell"):
+        inner = dict(state, cond=True)
+        if kind == "subshell":                  # its own PATH and function scope
+            inner["functions"] = set(state["functions"])
+        _walk_node(node["body"], inner, positions, assignments, line)
+        _walk_redirs(node.get("redir", []), state, positions, assignments, line)
+    elif kind == "not":
+        _walk_node(node["body"], state, positions, assignments, line)
+    elif kind == "if":
+        inner = dict(state, cond=True)
+        for part in ("test", "then", "else"):
+            _walk_node(node[part], inner, positions, assignments, line)
+    elif kind in ("while", "until"):
+        inner = dict(state, cond=True)
+        _walk_node(node["test"], inner, positions, assignments, line)
+        _walk_node(node["body"], inner, positions, assignments, line)
+    elif kind == "for":
+        for word in node["args"]:
+            _walk_subs(word, state, positions, assignments, node["line"])
+        assignments.setdefault(node["var"], []).append(("$" + node["var"], node["line"]))
+        _walk_node(node["body"], dict(state, cond=True), positions, assignments, node["line"])
+    elif kind == "case":
+        _walk_subs(node["expr"], state, positions, assignments, node["line"])
+        for clause in node["cases"]:
+            for word in clause["pat"]:
+                _walk_subs(word, state, positions, assignments, node["line"])
+            _walk_node(clause["body"], dict(state, cond=True), positions, assignments, node["line"])
+    elif kind == "defun":
+        state["functions"].add(node["name"])    # defined from here on, also inside its own body
+        _walk_node(node["body"], dict(state, cond=True, in_func=True), positions, assignments, node["line"])
+    else:
+        positions.append(("warn", f"a shell construct the scan does not know ({kind}, not judged)", line))
+
+
+def _walk_subs(word, state: dict, positions: list, assignments: dict, line: int) -> None:
+    """The command substitutions inside *word*, each its own shell context, judged where they run. A process
+    substitution is run too, and is not judged."""
+    if "proc" in word.expands:
+        positions.append(("warn", "a process substitution (not judged)", line))
+    for tree in word.subs:
+        sub = {"path": state["path"], "functions": set(state["functions"]), "cond": False, "in_func": False}
+        _walk_node(tree, sub, positions, assignments, line)
+
+
+def _walk_redirs(redirs: list, state: dict, positions: list, assignments: dict, line: int) -> None:
+    for redir in redirs:
+        for key in ("to", "doc"):
+            if key in redir:
+                _walk_subs(redir[key], state, positions, assignments, line)
+
+
+def _walk_cmd(node: dict, state: dict, positions: list, assignments: dict) -> None:
+    number = node["line"]
+    for word in node["assign"] + node["args"]:
+        _walk_subs(word, state, positions, assignments, number)
+    _walk_redirs(node["redir"], state, positions, assignments, number)
+    heredoc = any(r["k"] in (24, 25) for r in node["redir"])
+    conditional = state["cond"] or state["in_func"]
+
+    def assign_path(new):
+        if conditional:                   # outside the judged grammar: reported, not applied
+            positions.append(("warn", "a PATH assignment that is conditional or inside a compound command "
+                                      "(not applied)", number))
+        elif new is not None:
+            state["path"] = new
+
+    prefix_path = None
+    path_assigned = False
+    for word in node["assign"]:
+        var, value = _word_text(word).split("=", 1)
+        _record_assignment(var, value, word, number, positions, assignments)
+        if var == "PATH":
+            path_assigned = True
+            prefix_path = _set_path(value, number, positions, state["path"])
+    args = list(node["args"])
+    bypass = False
+    while args:
+        first = args[0].literal if args[0].is_plain else None
+        if first == "command" and len(args) > 1:
+            option = args[1].literal if args[1].is_plain else ""
+            if option.startswith("-"):
+                if any(c in option for c in "vV"):
+                    return                # command -v / -V NAME looks NAME up; it runs nothing
+                positions.append(("warn", f"command {option} (not judged)", number))
+                return
+            bypass = True                 # command NAME runs NAME, never a function of that name
+            args.pop(0)
+        elif first == "exec":
+            args.pop(0)
+        else:
+            break
+    if not args:                          # NAME=value alone sets it for the rest of the script
+        if path_assigned:
+            assign_path(prefix_path)
+        return
+    head, rest = args[0], args[1:]
+    head_text = head.literal if head.is_plain else None
+    if head_text in _SHELL_DECLARE:
+        for word in rest:
+            text = _word_text(word)
+            if _ASSIGN.match(text):
+                var, value = text.split("=", 1)
+                _record_assignment(var, value, word, number, positions, assignments)
+                if var == "PATH":
+                    assign_path(_set_path(value, number, positions, state["path"]))
+        return
+    if head_text in ("[", "test"):
+        for i, word in enumerate(rest[:-1]):
+            if word.is_plain and word.literal == "-x" and _judgeable_text(rest[i + 1]) is not None:
+                positions.append(("x-test", _judgeable_text(rest[i + 1]), number))
+        return
+    if head_text in ("read", "for") and rest:   # read NAME: the shell assigns NAME a runtime value
+        for word in rest:
+            if word.is_plain and re.fullmatch(r"[A-Za-z_]\w*", word.literal):
+                assignments.setdefault(word.literal, []).append(("$" + word.literal, number))
+    positions.append(("head", _head_text(head), number,
+                      prefix_path if prefix_path is not None else state["path"],
+                      state["functions"] if state["in_func"] else frozenset(state["functions"]), bypass))
+    base = (_image_path(head_text) or head_text).rsplit("/", 1)[-1] if head_text else None
+    literal_args = {w.literal for w in rest if w.is_plain}
+    if head_text in ("eval", "alias"):
+        positions.append(("warn", head_text, number))
+    elif head_text in (".", "source"):
+        positions.append(("warn", f"{head_text} (a sourced file is not judged)", number))
+    elif base in _SHELLS and "-c" in literal_args:
+        positions.append(("warn", f"{base} -c (the command string is not judged)", number))
+    elif base in _SHELLS and heredoc:
+        positions.append(("warn", f"a here-document run by {base} (its body is not judged)", number))
+    elif base in _WRAPPERS or (base == "start-stop-daemon" and _SSD_EXEC & literal_args):
+        positions.append(("warn", f"a program run through {base} (its arguments are not judged)", number))
+
+
+def _judgeable_text(word) -> str | None:
+    """The word's text when it is a literal, or a literal after a leading ${ROOT_PREFIX} (the hermetic-test
+    prefix that is empty on the image); None when any other expansion is in it."""
+    if word.literal is not None:
+        return word.literal
+    rest = _ROOT_PREFIX.sub("", word.template)
+    return word.template if "${" not in rest else None
+
+
+def _record_assignment(var: str, value: str, word, number: int, positions: list, assignments: dict) -> None:
+    assignments.setdefault(var, []).append((value, number))
+    if word.literal is not None or "${" not in _ROOT_PREFIX.sub("", value):   # only a literal is a program position
+        positions.append(("value", value, number))
+
+
+def _head_text(word) -> str:
+    """A command word as the judge reads it: its literal; $NAME for a word that is exactly one plain variable; the
+    substitution marker for one that starts with a command substitution; else its template (expansions marked)."""
+    if word.is_plain:
+        return word.literal
+    if word.var is not None:
+        return "$" + word.var
+    if word.literal is not None:              # a glob or a tilde: not the path the shell runs
+        return word.literal + _GLOBBED
+    if not word.glob and not word.tilde and _judgeable_text(word) is not None:
+        return word.template                  # ${ROOT_PREFIX}/usr/bin/x
+    if word.expands and word.expands[0] == "cmd" and word.template.startswith(_EXPANSION):
+        return _SUBST
+    return word.template
+
+
+def _set_path(value: str, number: int, positions: list, alts: tuple) -> tuple | None:
+    """The PATH alternatives after assigning the literal *value* under each of *alts*
+    (${PATH} stands for that alternative's list), or None (with a WARN) when an
+    entry is not a literal absolute directory."""
+    out = []
+    for alt in alts:
+        dirs: list[str] = []
+        for entry in value.split(":"):
+            if entry in ("$PATH", "${PATH}"):
+                dirs += alt
+            elif entry.startswith("/") and "$" not in entry and "`" not in entry:
+                dirs.append(entry.strip("/"))
+            elif entry:
+                positions.append(("warn", f"a PATH entry that is not a literal absolute directory ({_shown(entry)!r})", number))
+                return None
+        out.append(tuple(dirs))
+    return tuple(dict.fromkeys(out))
+
+
+def _bare_lookups(script_text: str, name: str = "script") -> list[tuple[str, tuple, int]]:
+    """DS-P3.316: each name *script_text* runs without a path, with the PATH alternatives
+    that may be in effect where it runs: command words of the walk that have a command
+    name's shape and are not a shell builtin, a reserved word or a function the walk saw
+    the script define."""
+    _positions, _warnings, lookups = _walk_script(script_text, name)
+    return [(w, alts, n) for w, alts, n in lookups
+            if _COMMAND_NAME.match(w) and w not in _SHELL_BUILTINS]
+
+
+def _bare_commands(script_text: str, name: str = "script") -> set[str]:
+    """DS-P3.316: the names *script_text* runs without a path (see _bare_lookups)."""
+    return {w for w, _dirs, _n in _bare_lookups(script_text, name)}
+
+
+_LITERAL_SEGMENT = re.compile(r"[A-Za-z0-9._+-]+")
+
+
+def _outside_bin_class(rel: str, raw: str = "") -> str | None:
+    """DS-P3.342: how the scan treats an absolute command path (leading "/" removed). An ALLOW-LIST: "judge"
+    (it must be an executable file in the image) only when every segment is a plain literal name,
+    [A-Za-z0-9._+-]+ and neither "." nor "..", and the path is not under _RUNTIME_DIRS. Everything else is a WARN,
+    and a refusal needs this positive match: "runtime" (under _RUNTIME_DIRS), "lexical" (a ".", ".." or empty
+    segment outside a bin directory: the directory walked decides) or "computed" (any other segment: an
+    expansion, a glob, a quote or a space; the path the shell runs is not this text). None for a path under a
+    bin directory whose segments are plain names; a bin path with an expansion or a glob in it is "computed"
+    too, never judged as a file of that name. *raw* is unused (the parse resolves quoting)."""
+    segments = rel.split("/")
+    if rel.startswith(_BIN_DIRS):
+        return None if all(seg in ("", ".", "..") or _LITERAL_SEGMENT.fullmatch(seg) for seg in segments) \
+            else "computed"
+    if any(seg in ("", ".", "..") for seg in segments):
+        return "lexical"
+    if not all(_LITERAL_SEGMENT.fullmatch(seg) for seg in segments):
+        return "computed"
+    return "runtime" if rel.startswith(_RUNTIME_DIRS) else "judge"
+
+
+def _program_refs(script_text: str, name: str = "script") -> set[str]:
+    """DS-P3.316: the image paths at any program position of _scan_script: under a bin
+    directory (a command word, a NAME=value value or a -x operand), or an absolute command
+    word anywhere else except under _RUNTIME_DIRS (DS-P3.342), with a leading ${ROOT_PREFIX}
+    removed."""
+    positions, _warnings = _scan_script(script_text, name)
+    refs = set()
+    for kind, word, _n in positions:
+        rel = _image_path(word)
+        if not rel:
+            continue
+        cls = _outside_bin_class(rel)
+        if (rel.startswith(_BIN_DIRS) and cls is None) or (kind == "head" and cls == "judge"):
+            refs.add(rel)
+    return refs
+
+
+def _executable_in(tree: Path, rel: str) -> bool:
+    """Whether /*rel* in the image rooted at *tree* resolves, following symlinks inside
+    the image, to an executable regular file."""
+    parts, cur, hops = [p for p in rel.split("/") if p], [], 0
+    while parts:
+        part = parts.pop(0)
+        if part in ("", "."):
+            continue
+        if part == "..":                       # the kernel walks into each component first
+            if not tree.joinpath(*cur).is_dir():
+                return False
+            if cur:
+                cur.pop()
+            continue
+        cand = tree.joinpath(*cur, part)
+        if cand.is_symlink():
+            hops += 1
+            if hops > 40:
+                return False
+            target = os.readlink(cand)
+            if target.startswith("/"):
+                cur = []
+            parts = [p for p in target.split("/") if p] + parts
+            continue
+        cur.append(part)
+    final = tree.joinpath(*cur)
+    return final.is_file() and not final.is_symlink() and bool(final.stat().st_mode & 0o111)
+
+
+def init_script_missing_binaries(tree: Path, provided: frozenset[str] = frozenset(),
+                                 *, bare: bool = True, warnings: list[str] | None = None) -> list[str]:
+    """DS-P3.316: each init script in *tree* (etc/init.d/S*) whose #! interpreter, or a
+    program at any program position of _scan_script, the image does not hold as an
+    executable file: "<script>: /<path>" for a path under a bin directory, "<script>:
+    <name> (not in PATH)" for a bare name (when *bare*), "<script>: /<path> (interpreter)".
+    *provided* lists image paths (or bare names) another layer supplies. Constructs
+    outside the scan's scope are appended to *warnings*, never refused.
+
+    Scope: Parsed: each script is parsed by the ash of BusyBox 1.36.1 (tools/ash_dump.py), built from the same source
+    and with the same ash options as the image's busybox, not the same binary, in a sandbox with no network;
+    nothing in a script is executed. Judged: every simple command the parse yields, wherever it sits: lists,
+    pipelines and && / || chains, if, while, until, for and case (patterns included), subshells ( ), brace
+    groups { }, redirected compound commands, function bodies, and the $( ) and backtick substitutions (compound
+    commands inside them included) in any word, redirection target, for list, case pattern or here-document body
+    that the shell expands; the literal command words, quotes, escapes and line continuations as the shell
+    resolves them; literal NAME=value assignments, prefix assignments included; a literal PATH assignment at the
+    top level of the file, unconditional only; function definitions, visible in their own subshell scope, to
+    calls after the definition, and inside function bodies (command NAME bypasses a function); the -x operand of
+    [ and test; the #! interpreter; and a command word that is exactly $NAME or ${NAME} for a variable the
+    script assigns, judged by each literal value assigned. At each judged program position a path under a bin
+    directory, or any other absolute command word whose every segment is a plain name of letters, digits and . _
+    + - (and not . or ..), except the runtime and computed paths named below, must be an executable file in the
+    image, and a bare name must resolve through the PATH in effect. Not judged, and reported as one WARN line
+    naming script:line and the construct, and refused by the image gate unless it is on the reviewed accept list: command -p; a PATH assignment that is conditional
+    or inside a compound command, a subshell, a function body, a pipeline or the background (it is not applied);
+    a PATH entry that is not a literal absolute directory; an absolute command path under tmp, run, var, dev,
+    proc, sys, mnt or media (the file is created at boot), and an absolute command path that is computed (a
+    variable, substitution, arithmetic expansion, unquoted glob or tilde, or a character outside the plain-name
+    set in it) or has a . or .. segment; a command word that is not a literal name or absolute path, such as a
+    relative path; a command word that joins a variable with other text; eval; alias; a here-document fed to a
+    shell; process substitution; sh -c strings; . and source; a command word held in a variable the script does
+    not assign or assigns a value that is not a literal; a command word produced by a substitution; and a
+    program run through a wrapper (env, nice, nohup, setsid, timeout, xargs, chroot, su, flock, or
+    start-stop-daemon with --exec or --startas), whose own name is judged. A script that ash refuses is an
+    error, never skipped. What the scan cannot know is what a variable, a substitution or a sourced file holds
+    when the script runs. An accepted WARN passes with its reason; a clean run is not a proof.
+    """
+    missing = []
+    for script in sorted((tree / "etc/init.d").glob("S*")):
+        text = script.read_text(encoding="utf-8", errors="replace")
+        first = text.splitlines()[0] if text else ""
+        if first.startswith("#!"):              # the interpreter runs first; a comment to the parser
+            interp = first[2:].split()
+            rel = _image_path(interp[0]) if interp else None
+            if rel and not (f"/{rel}" in provided or _executable_in(tree, rel)):
+                missing.append(f"{script.name}: /{rel} (interpreter)")
+        _positions, found = _scan_script(text, script.name)
+        if warnings is not None:
+            warnings.extend(found)
+        if bare:     # a command by name must resolve through the PATH in effect to an executable
+            for cmd in sorted({c for c, alts, _n in _bare_lookups(text, script.name) if c not in provided
+                               and not all(any(_executable_in(tree, f"{d}/{c}") for d in alt) for alt in alts)}):
+                missing.append(f"{script.name}: {cmd} (not in PATH)")
+        for rel in sorted(_program_refs(text, script.name)):
+            if f"/{rel}" in provided or _executable_in(tree, rel):
+                continue
+            missing.append(f"{script.name}: /{rel}")
+    return missing
+
+
+#: DS-P3.348: the reviewed WARNs of the init-script scan, one exact WARN per entry with its reason.
+ROOTFS_WARN_ACCEPT_REL = Path("sw/linux/de25/rootfs_warn_accept.json")
+
+
+def rootfs_warn_accepts(path: Path | None = None) -> dict[str, dict[str, str]]:
+    """The accept list as {"<script>:<line>: <construct>": {"text": <the line, stripped>, "reason": ...}}.
+    Every entry must name a script, a positive line, a construct, the line's exact text and a
+    reason; a malformed or duplicated entry is refused."""
+    path = path or ROOT / ROOTFS_WARN_ACCEPT_REL
+    data = json.loads(path.read_text(encoding="utf-8"))
+    accepts: dict[str, dict[str, str]] = {}
+    for entry in data["accept"]:
+        script, line, construct, text, reason = (entry.get(k) for k in ("script", "line", "construct", "text", "reason"))
+        if not (isinstance(script, str) and script and type(line) is int and line > 0   # a JSON true is no line
+                and isinstance(construct, str) and construct and isinstance(text, str) and text.strip()
+                and isinstance(reason, str) and reason.strip()):
+            raise RuntimeError(f"{path}: an accept entry needs script, line, construct, text and reason: {entry}")
+        key = f"{script}:{line}: {construct}"
+        if key in accepts:
+            raise RuntimeError(f"{path}: {key} is accepted twice")
+        accepts[key] = {"text": text.strip(), "reason": reason}
+    return accepts
+
+
+def script_line(tree: Path, warning: str) -> str | None:
+    """The stripped text of the init-script line a WARN names, read from the image tree."""
+    script, number = warning.split(":", 2)[:2]
+    path = tree / "etc/init.d" / script
+    if path.is_symlink() or not path.is_file():
+        return None
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    return lines[int(number) - 1].strip() if 0 < int(number) <= len(lines) else None
+
+
+def unaccepted_warnings(found: list[str], accepts: dict[str, dict[str, str]], *, tree: Path) -> list[str]:
+    """DS-P3.348: a WARN is a pass only when it is on the reviewed accept list. (That the list
+    holds exactly the WARNs of the shipped scripts, so a moved or removed line is reviewed again,
+    is checked against the tracked overlay by the DS-P3.348 test.)"""
+    problems = [f"WARN {w} is not on the reviewed accept list {ROOTFS_WARN_ACCEPT_REL}"
+                for w in found if w not in accepts]
+    # one entry accepts one occurrence: a second identical WARN on that line is not reviewed
+    problems += [f"WARN {w} occurs {found.count(w)} times; the accept list reviews one occurrence"
+                 for w in sorted(set(found)) if w in accepts and found.count(w) > 1]
+    for w in sorted(set(found)):    # the reviewed operation, not only its line number and construct
+        if w in accepts and script_line(tree, w) != accepts[w]["text"]:
+            problems.append(f"WARN {w} is accepted for the line {accepts[w]['text']!r}, "
+                            f"but the line reads {script_line(tree, w)!r}")
+    return problems
+
+
+def rootfs_image_problems(image: Path, offset: int = 0, *, warnings: list[str] | None = None,
+                          accepts: dict[str, dict[str, str]] | None = None) -> list[str]:
+    """DS-P3.316, checked on the artifact: an ext4 image (at byte *offset*, e.g. the SD
+    card's P2) extracted with debugfs, which must yield the shipped init script; then
+    DE25_IMAGE_FORBIDDEN must be absent and no init script may name a program the image
+    does not hold. Each construct outside the init-script scan's scope is appended to
+    *warnings*, or, when no list is given, printed to stderr as one "WARN <script>:<line>:
+    <construct>" line. DS-P3.348: a WARN not on the reviewed accept list (*accepts*, by
+    default ROOTFS_WARN_ACCEPT_REL) is a problem."""
+    spec = f"{image}?offset={offset}" if offset else str(image)
+    with tempfile.TemporaryDirectory(prefix=".de25-rootfs-check-") as tmp:
+        tree = Path(tmp) / "root"
+        tree.mkdir()
+        # rdump also tries to restore ownership; as a normal user that part fails
+        # and prints a warning, which does not affect the extracted content.
+        proc = subprocess.run([sbin_tool("debugfs"), "-R", f"rdump / {tree}", spec],
+                              capture_output=True, text=True, errors="replace", check=False)
+        if not (tree / DE25_SHIPPED_INIT_SCRIPT).is_file():
+            raise RuntimeError(f"cannot inspect the rootfs of {spec}: /{DE25_SHIPPED_INIT_SCRIPT} was not "
+                               f"extracted ({proc.stderr.strip()[-300:]})")
+        problems = [f"/{rel} is in the image" for rel in sorted(map(str, DE25_IMAGE_FORBIDDEN))
+                    if (tree / rel).exists() or (tree / rel).is_symlink()]
+        found: list[str] = []
+        problems += init_script_missing_binaries(tree, warnings=found)
+        accepts = rootfs_warn_accepts() if accepts is None else accepts
+        if warnings is None:
+            for line in found:
+                note = f" (accepted: {accepts[line]['reason']})" if line in accepts else ""
+                print(f"WARN {line}{note}", file=os.sys.stderr)
+        else:
+            warnings.extend(found)
+        return problems + unaccepted_warnings(found, accepts, tree=tree)
+
+
+def de25_overlay_files(root: Path) -> list[Path]:
+    """The tracked shared-overlay files the DE25 image ships (DE25_OVERLAY_EXCLUDE left out)."""
+    files = _tracked_overlay_files(root)
+    absent = DE25_OVERLAY_EXCLUDE - set(files)
+    if absent:  # a renamed file would silently ship again under its new name
+        raise RuntimeError(f"DE25_OVERLAY_EXCLUDE names files the overlay does not track: {sorted(map(str, absent))}")
+    return [rel for rel in files if rel not in DE25_OVERLAY_EXCLUDE]
+
+
 def _tracked_overlay_files(root: Path) -> list[Path]:
     proc = subprocess.run(
         ["git", "ls-files", "-z", "sw/linux/rootfs_overlay"],
@@ -1365,7 +2018,8 @@ def stage(root: Path, output: Path, python_output: Path, cache: Path,
         native_sha = build_native_edge_lib(root, toolchain_dir, native_lib)
         can_tools = build_can_tools(cache, toolchain_dir, native_dir / "can-tools")
         shared = root / "sw/linux/rootfs_overlay"
-        for rel in _tracked_overlay_files(root):
+        # DS-P3.316: the SSH files stay out; build() checks the merged card rootfs.
+        for rel in de25_overlay_files(root):
             _copy_file(shared / rel, temp / rel)
 
         share = temp / "usr/local/share/deepskopion"
@@ -2317,6 +2971,16 @@ def build(root: Path) -> None:
     normalize_artifact_mtimes(out)
     subprocess.run(["rr", "linux", "sdcard", "--no-deps", "--refresh"],
                    cwd=root, env=env, check=True)
+    # DS-P3.316: judge the card the board boots, after every layer is merged.
+    assert_card_rootfs(out)
+
+
+def assert_card_rootfs(out: Path) -> None:
+    """The image gate (DS-P3.316, DS-P3.348): refuse the built card when its rootfs has a
+    problem, an unaccepted WARN of the init-script scan included, naming each one."""
+    problems = rootfs_image_problems(out / "sdcard.img", SDCARD_ROOTFS_OFFSET_BYTES)
+    if problems:
+        raise RuntimeError("the DE25 card's rootfs is not bootable as built: " + "; ".join(problems))
 
 
 def build_lock(root: Path, out_dir: Path, source_root: Path) -> dict[str, object]:
@@ -2415,6 +3079,11 @@ def main(argv: list[str] | None = None) -> int:
     normalize_parser = sub.add_parser("normalize-provenance")
     normalize_parser.add_argument("--root", type=Path, default=ROOT)
     normalize_parser.add_argument("--rootfs", type=Path)
+    rootfs_parser = sub.add_parser("check-rootfs")
+    rootfs_parser.add_argument("--root", type=Path, default=ROOT)
+    rootfs_parser.add_argument("image", type=Path)
+    rootfs_parser.add_argument("--offset", type=int, default=0,
+                               help=f"byte offset of the ext4 (the DE25 card's P2: {SDCARD_ROOTFS_OFFSET_BYTES})")
     mtimes_parser = sub.add_parser("normalize-artifact-mtimes")
     mtimes_parser.add_argument("--root", type=Path, default=ROOT)
     mtimes_parser.add_argument("--out-dir", type=Path)
@@ -2448,6 +3117,11 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "check-ctucanfd":
             output = (args.dtb or linux_out_dir(root) / DTB_ARTIFACT)
             assert_ctucanfd_probe_is_bounded(output, root)
+        elif args.command == "check-rootfs":
+            output = args.image.resolve()
+            problems = rootfs_image_problems(output, args.offset)
+            if problems:
+                raise RuntimeError("; ".join(problems))
         elif args.command == "normalize-provenance":
             rootfs = (args.rootfs or linux_out_dir(root) / "rootfs").resolve()
             normalize_provenance(root, rootfs)
@@ -2480,6 +3154,9 @@ def main(argv: list[str] | None = None) -> int:
         print("DS-T2.71 lwh2f decode crosscheck passed: every enabled dt_node "
               f"window in {output} is declared in {MEMORY_MAP_REL} and decoded "
               f"by {LWH2F_DEMUX_RTL}")
+    elif args.command == "check-rootfs":
+        print(f"DS-P3.316 rootfs check passed: {output} holds no dropbear init script, key "
+              "tool or dropbear binary, and every program its init scripts name")
     elif args.command == "normalize-provenance":
         print(f"DE-L0 normalized rootfs provenance: {output}")
     else:

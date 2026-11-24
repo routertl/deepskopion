@@ -151,3 +151,30 @@ functional_contract:
       every 8 SCLK rising edges). The injector wrapper currently
       drops these; this REQ keeps the slave's RX contract documented
       for future use.
+
+  - id: SPI-INJ-REQ-7
+    kind: behavioral
+    desc: >-
+      One TX FIFO entry is consumed per byte started. An entry is eligible
+      for a byte if it is queued when that byte is loaded: at CS_N fall for
+      the first byte, and at the falling SCLK edge after the 8th bit for the
+      next one. An eligible head entry leaves the FIFO when the first SCLK
+      rising edge of its byte reaches the slave, and not before. An entry
+      that arrives after a byte was loaded is not that byte's data. Eligibility
+      is sampled when the slave processes the synchronised CS_N or SCLK edge
+      that loads the byte. A byte whose load found no eligible head entry (an
+      empty FIFO, or a preload invalidated by a drain) returns zeros even if
+      an entry is queued before its first rising edge; that entry stays
+      queued for a later byte or transaction. A byte whose load found an
+      entry returns that entry, and entries queued later stay behind it. Selecting the slave (CS_N falls) without clocking leaves
+      the entry queued. A transaction aborted after the first rising edge of
+      a byte has consumed that byte; it is not returned again. A transaction
+      that outlasts the queued entries returns zeros after the last one (the
+      end of a byte with the FIFO empty reloads zeros) and a read of the
+      empty FIFO does not change the data count. A drain (CONTROL[9]) while
+      the slave is selected is protected from the stale preload only: the
+      entry loaded before the drain is not popped and, once the drain has
+      completed ahead of the first rising edge, not returned; an entry queued
+      after the drain stays queued unless a later byte of the same selection
+      loads it. A drain that races the first rising edge itself leaves the
+      bits already clocked out undefined; software drains with CS_N high.

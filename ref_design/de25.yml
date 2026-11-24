@@ -1,8 +1,5 @@
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
-# NOTE: ref_design.yml and ref_design_de25.yml are intentional duplicates.
-# ref_design.yml serves as the repo-root default manifest for bare `rr ref publish`,
-# while ref_design_de25.yml provides explicit target-named discovery alongside
-# ref_design_zybo.yml and ref_design_pfsoc.yml (matching RouteRTL multi-target reference design convention).
+# The DE25 reference design (target de25_datalogger). Published with `rr ref publish ref_design/de25.yml`.
 ref_design:
   org: routertl
   name: deepskopion-de25

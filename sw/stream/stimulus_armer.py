@@ -160,15 +160,17 @@ def arm_spi(rb, route: Optional[str] = None) -> None:
     for device_id in edge_ids:
         _enable_datalogger(rb, device_id)
     # DS-P2.343: the on-chip responder answers the stimulus master on the EMIO bus MISO. FIFO reset, enable, then
-    # per transfer the MISO byte (popped at CS fall) and 0x00 (popped at the 8th SCLK fall, so MISO returns low;
-    # spi_slave.vhd DS-T2.8). The sequence of sw/stream/testbench/edge4_live_stimulus.py, DE25 silicon 2026-10-02.
+    # per transfer the MISO byte alone. No trailing 0x00 is queued (DS-P2.386): with an empty FIFO the responder
+    # reloads zeros at the 8th SCLK fall, so MISO returns low without it. Once DS-T2.102 moves the FIFO pop to the
+    # first SCLK rising edge of a byte, a queued pad survives its own transfer and, at the FIFO head, is returned
+    # as the next transfer's data, displacing that transfer's MISO byte. The sequence of
+    # sw/stream/testbench/edge4_live_stimulus.py (DE25 silicon 2026-10-02, which queued the pad).
     rb.write_u32(SPI_INJ_CONTROL, SPI_INJ_FIFO_RESET)
     rb.write_u32(SPI_INJ_CONTROL, SPI_INJ_ENABLE)
     rb.write_u32(STIM_SPI_CLK_DIV, SPI_CLK_DIV)
     rb.write_u32(STIM_SPI_CONTROL, 0x1)
     for mosi, miso in zip(SPI_PAYLOAD, SPI_MISO_PAYLOAD):
         rb.write_u32(SPI_INJ_DATAIN, miso)
-        rb.write_u32(SPI_INJ_DATAIN, 0x00)
         rb.write_u32(STIM_SPI_DATA, mosi)
         time.sleep(_INTER_BYTE_S)
 

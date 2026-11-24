@@ -24,7 +24,8 @@ Verdict, per case (stated before the first run, corrected after it, see below):
         word_length [3:0] = 8, stop_bits [6] = 0, no parity;
   I2C:  exactly enabled, start, A0, AB, CD, 3E, stop (address byte 0x50 << 1, then I2C_DATA);
   SPI:  exactly start (0x03, logger enabled), cs_down_new_pol_l (0x11, the first CS fall reports CPOL 0), then per
-        byte MOSI, MISO 0x00 (the bench ties emio_spi_miso_o_i to '0'), cs_up, with cs_down (0x09) opening bytes 2-4
+        byte MOSI, MISO (the on-chip responder's payload A5 5A C3 3C, routed to the logger by DS-P2.343; hard-coded
+        here, not imported), cs_up, with cs_down (0x09) opening bytes 2-4
         (qspi_datalogger_protocol.yml events);
   every protocol: no record with severity WARN or ERROR (msg_type[15:12] = 1 or 2).
   Prediction on today's armer order: the header-low cases RED (an extra or error record at the mux switch), the
@@ -94,10 +95,11 @@ EXPECTED = {
             (I2C_BYTE, 0x3E), (I2C_EV, I2C_STOP)],
 }
 SPI_MOSI_BYTES = [0xDE, 0xAD, 0xBE, 0xEF]
+SPI_MISO_BYTES = [0xA5, 0x5A, 0xC3, 0x3C]   # the responder's payload, one byte per transfer (DS-P2.386)
 SPI_START, SPI_CS_DOWN_NEW_POL_L = 0x03, 0x11
 EXPECTED["spi"] = [(SPI_EV, SPI_START), (SPI_EV, SPI_CS_DOWN_NEW_POL_L)]
-for _i, _b in enumerate(SPI_MOSI_BYTES):
-    EXPECTED["spi"] += ([] if _i == 0 else [(SPI_EV, SPI_CS_DOWN)]) + [(SPI_MOSI, _b), (SPI_MISO, 0x00), (SPI_EV, SPI_CS_UP)]
+for _i, (_b, _m) in enumerate(zip(SPI_MOSI_BYTES, SPI_MISO_BYTES)):
+    EXPECTED["spi"] += ([] if _i == 0 else [(SPI_EV, SPI_CS_DOWN)]) + [(SPI_MOSI, _b), (SPI_MISO, _m), (SPI_EV, SPI_CS_UP)]
 
 SLEEP_RESET_NS, SLEEP_BYTE_NS = 20_000, 100_000
 

@@ -55,6 +55,23 @@ volatile_lines:
     - field: vivado_generated_at
       pattern: '^--Date\s*:.*$'
 
+# DS-P2.219: gitignored outputs that only SOME targets write, because their datalogger mix differs from the
+# tracked default. Kept apart from runtime_families on purpose: hw/sim/cocotb/ds_sim_sources.py hands every
+# runtime_families output to EVERY sim, which would shadow the tracked default-mix package in sims of the
+# default targets. Each such target excludes the tracked copy (sources_per_vendor) and compiles this one;
+# its pre_sim hook writes it so a first sim of a fresh clone has it.
+# tools/tests/test_target_hooks_leave_tree_clean_ds_p2_219.py judges this inventory.
+per_target_families:
+  datalogger-can-mix:
+    producer: tools/datalogger-builder/datalogger_gather_gen.py
+    targets:
+      bench/targets/canfd_demo.yml:
+        outputs:
+          - generated_mix/canfd_demo/datalogger_config_pkg.vhd
+      bench/targets/de25_canfd.yml:
+        outputs:
+          - generated_mix/de25_canfd/datalogger_config_pkg.vhd
+
 runtime_families:
   # DS-P2.231: build metadata (git hash, system version, build date, regbank
   # word counts). Written by tools/regen_regbank.sh: the pre_build

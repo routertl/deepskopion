@@ -20,7 +20,7 @@ board's own stimulus log (``stimulus.json``), and checks:
   2. each S=1 word carries the line's real idle level when the logger was
      armed (``ds_stimulus_gen.vhd`` p_spi: SCLK 0, CS 1, MOSI = bit 0 of the
      last byte shifted since power-up (power-up value 0); MISO 0, because the
-     responder reloads 0x00 at the 8th SCLK fall, spi_slave.vhd DS-T2.8);
+     responder reloads zeros from its empty FIFO at the 8th SCLK fall, spi_slave.vhd DS-T2.8);
   3. each logger's ENABLED marker arrived as an ``edge_lifecycle`` annotation
      (msg_type 0x0608), and, when the loggers were running before ``arm()``,
      each DISABLED marker too. So the markers are still on the wire, but as

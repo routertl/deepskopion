@@ -19,3 +19,9 @@ tools/tests/test_uart_rearm_powerup_state_ds_t1_16.py::test_uart_rearm_clears_po
 # rr sim coverage-map needs the coverage entitlement; the free wheel refuses it.
 tools/tests/test_contract_mapping_drift_ds_p2_139.py  # coverage entitlement
 tools/tests/test_contract_mapping_drift_ds_p2_187.py  # coverage entitlement
+
+# Runs documentation shell blocks inside bubblewrap. The CI job container (python:3.11 under
+# Docker) refuses user namespaces: measured 2026-11-24, bwrap 0.12.0 there exits 1 with
+# "No permissions to create a new namespace". The bench gate runs it.
+tools/tests/test_telemetry_copy_blocks_execute_ds_p3_337.py  # user namespaces
+tools/tests/test_telemetry_copy_blocks_hook_leg_ds_p3_337.py  # user namespaces

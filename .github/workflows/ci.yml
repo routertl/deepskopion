@@ -70,6 +70,9 @@ jobs:
         run: python tools/ci/rr_schema_keys.py
       - name: Lock matches the tree on the floor release
         if: matrix.routertl == 'floor'
+        # The rr on PATH here is the floor wheel installed above; without this the leg would build its own.
+        env:
+          DS_RR_BIN: rr
         run: python tools/lock_check_leg.py --all
       - name: Generate the build-time package lint reads
         # rom_info_pkg.vhd is gitignored; rr linting runs no hooks.

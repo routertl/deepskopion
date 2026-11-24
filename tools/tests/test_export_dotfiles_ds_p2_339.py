@@ -25,8 +25,8 @@ import export_github  # noqa: E402
 import public_artifact_hygiene as hygiene  # noqa: E402
 
 # The rule lines of .gitignore (non-blank, non-comment), unchanged by this ticket.
-GITIGNORE_RULES = 145   # DS-P2.360: + libs/routertl/rea/, libs/routertl/rr_ddr_stream/
-GITIGNORE_RULES_SHA256 = "a569a710cf81cd0791cf2a08f5d569540f8e123c5f4edd07cbfe2a56c39ce56a"
+GITIGNORE_RULES = 147   # DS-P2.360: + libs/routertl/rea/, libs/routertl/rr_ddr_stream/; DS-P2.219: + generated_mix/canfd_demo/, generated_mix/de25_canfd/
+GITIGNORE_RULES_SHA256 = "48c35d926407d00397382c637724508381799d046b3c705098bc2bbe73809965"
 PLANTED = b"# kept out of the history (DS-P1.106)\n"
 
 

@@ -254,6 +254,63 @@ def floor_mismatches(floor: str, parsed: dict[str, dict]) -> list[tuple[str, str
     return off
 
 
+#: DS-P1.124: the rr the lock check runs. The lock records what the DECLARED FLOOR produces (DS-P2.347), and CI's
+#: floor leg runs the published `routertl==<floor>` wheel. A bench check that ran whatever `rr` is first on PATH
+#: (the shared editable checkout, which follows routertl main) judged the lock with another tool: the lock of a tree
+#: written under the floor went red the moment the checkout passed a fix the floor lacks. So the leg runs a wheel of
+#: exactly the floor, from a venv it creates once and reuses. DS_RR_BIN still overrides it (stand-ins, tests).
+FLOOR_RR_HOME_ENV = "DS_FLOOR_RR_HOME"
+FLOOR_RR_PIP_ENV = "DS_FLOOR_RR_PIP"
+RR_VERSION_PREFIX = "RouteRTL SDK, version "
+
+
+class FloorRrError(Exception):
+    """The floor rr could not be provided or is not the floor."""
+
+
+def _rr_version(rr: Path | str) -> str:
+    """The version `rr --version` reports, "" when it cannot run."""
+    env = dict(os.environ, RR_NO_PYTHON_DEPRECATION_WARNING="1")
+    done = subprocess.run([str(rr), "--version"], capture_output=True, text=True, errors="replace",
+                          check=False, env=env, stdin=subprocess.DEVNULL, timeout=120)
+    for line in (done.stdout + done.stderr).splitlines():
+        if RR_VERSION_PREFIX in line:
+            return line.split(RR_VERSION_PREFIX, 1)[1].split()[0].strip(" ,")
+    return ""
+
+
+def floor_rr(floor: str) -> str:
+    """Path of an rr that reports *floor*, from a venv under DS_FLOOR_RR_HOME (default ~/.cache/deepskopion/floor-rr),
+    created on first use with `pip install routertl==<floor>` and reused after. Raises FloorRrError."""
+    home = Path(os.environ.get(FLOOR_RR_HOME_ENV) or Path.home() / ".cache" / "deepskopion" / "floor-rr")
+    venv = home / floor
+    rr = venv / "bin" / "rr"
+    if not rr.is_file():
+        pip = os.environ.get(FLOOR_RR_PIP_ENV)
+        try:
+            venv.parent.mkdir(parents=True, exist_ok=True)
+            subprocess.run([sys.executable, "-m", "venv", str(venv)], check=True, capture_output=True, text=True)
+            cmd = pip.split() if pip else [str(venv / "bin" / "python"), "-m", "pip", "install", "-q"]
+            subprocess.run([*cmd, f"routertl=={floor}"], check=True, capture_output=True, text=True, timeout=900)
+        except (OSError, subprocess.SubprocessError) as exc:
+            detail = getattr(exc, "stderr", "") or str(exc)
+            raise FloorRrError(f"could not install routertl=={floor} into {venv}: {detail.strip()[-400:]}") from exc
+    got = _rr_version(rr)
+    if got != floor:
+        raise FloorRrError(f"{rr} reports routertl {got or '(nothing)'}, not the floor {floor}; remove {venv} to rebuild it")
+    return str(rr)
+
+
+def pick_rr(floor: str | None) -> tuple[str, str]:
+    """(rr, how): DS_RR_BIN when set, else the floor wheel, else PATH's rr when no floor is declared."""
+    override = os.environ.get("DS_RR_BIN")
+    if override:
+        return override, "DS_RR_BIN"
+    if floor is None:
+        return "rr", "PATH (no floor declared)"
+    return floor_rr(floor), f"routertl {floor}, the declared floor wheel"
+
+
 def main(argv: list[str] | None = None) -> int:
     check_all = "--all" in (argv if argv is not None else sys.argv[1:])
     root_tracked = _git("ls-files", "--error-unmatch", "--", ROOT_LOCK).returncode == 0
@@ -313,7 +370,18 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {path}")
         print("Stage them or restore them, then commit again.")
         return 1
-    rr = os.environ.get("DS_RR_BIN", "rr")
+    if not os.environ.get("DS_RR_BIN"):
+        # the floor wheel must import ITS routertl: a caller's PYTHONPATH/PYTHONHOME (the bench points them at a
+        # routertl checkout when testing one) would make the pinned rr run that checkout's code instead
+        for var in ("PYTHONPATH", "PYTHONHOME"):
+            os.environ.pop(var, None)
+    try:
+        rr, how = pick_rr(floor)
+    except FloorRrError as exc:
+        print(f"Cannot provide the floor rr: {exc}")
+        print(f"Set DS_RR_BIN to an rr of routertl {floor} to judge the locks with it, or fix the install above.")
+        return 2
+    print(f"rr: {rr}, {how}")
     print(f"Checking {len(targets)} target lock(s) ({why}): {', '.join(targets)}")
     worst = 0
     for target in targets:

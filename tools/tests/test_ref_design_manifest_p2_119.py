@@ -2,11 +2,12 @@
 """Regression tests for Reference Design manifests (DS-P2.119).
 
 Guards the requirements of DS-P2.119:
-1. Both committed targets have manifests:
-   - de25: ref_design.yml and ref_design_de25.yml (Agilex-5, Quartus Pro, exact version)
-   - canfd_demo: ref_design_canfd_demo.yml (zybo-z7-20, Vivado, exact version)
-   - pfsoc_datalogger: ref_design_pfsoc.yml (polarfire-soc-discovery, Libero SoC,
+1. Each board has one manifest under ref_design/ (DS-P1.121; the root ref_design.yml duplicate is gone):
+   - de25: ref_design/de25.yml (Agilex-5, Quartus Pro, exact version)
+   - zybo_datalogger: ref_design/zybo.yml (zybo-z7-20, Vivado, exact version; DS-P1.103)
+   - pfsoc_datalogger: ref_design/pfsoc.yml (polarfire-soc-discovery, Libero SoC,
      exact version; DS-P3.156)
+   - canfd_demo: bench/ref_design_canfd_demo.yml (the bench design, tested in the _bench file)
 2. Schema validation: all manifests pass sdk.engine.ref_design_schema validation.
 3. Exact tool versions: version ranges (>=, <=, >, <, commas) are rejected.
 4. Canonical board IDs: board IDs must be canonical (de25-standard, zybo-z7-20).
@@ -37,14 +38,14 @@ from tools.ref_design_validator import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-DE25_MANIFEST = ROOT / "ref_design.yml"
-DE25_NAMED_MANIFEST = ROOT / "ref_design_de25.yml"
-ZYBO_MANIFEST = ROOT / "ref_design_zybo.yml"  # DS-P1.103: the Zybo product design
-PFSOC_MANIFEST = ROOT / "ref_design_pfsoc.yml"
+# DS-P1.121: one manifest per board under ref_design/; the root duplicate of the DE25 manifest is gone.
+DE25_MANIFEST = ROOT / "ref_design" / "de25.yml"
+ZYBO_MANIFEST = ROOT / "ref_design" / "zybo.yml"  # DS-P1.103: the Zybo product design
+PFSOC_MANIFEST = ROOT / "ref_design" / "pfsoc.yml"
 
 # DS-P1.103 param split: the CTU bench manifest (path2) runs in the _bench.py sibling; the ids
 # are the original ones, so no node id changes.
-ALL_MANIFEST_PATHS = [pytest.param(DE25_MANIFEST, id="path0"), pytest.param(DE25_NAMED_MANIFEST, id="path1"),
+ALL_MANIFEST_PATHS = [pytest.param(DE25_MANIFEST, id="path0"),
                       pytest.param(ZYBO_MANIFEST, id="path3"), pytest.param(PFSOC_MANIFEST, id="path4")]
 
 
@@ -149,7 +150,7 @@ class TestRefDesignSchemaConformance:
         assert "DS-P1.88" in raw["verification"]["blocker"]
         assert rd.verification.last_verified_tool_version == "2025.2"
 
-    @pytest.mark.parametrize("path", [DE25_MANIFEST, DE25_NAMED_MANIFEST])
+    @pytest.mark.parametrize("path", [DE25_MANIFEST])
     def test_de25_verification_evidence_rule(self, path: Path):
         """DE25 qualification evidence in DS-P2.118 (commit cac8361) witnessed successful
         image build (job 71e7feee75aa, exit 0), programming on silicon, and RouteWave v2 accept,
@@ -285,13 +286,18 @@ class TestCliSurface:
         assert res.returncode == 0, f"CLI ref publish failed: {res.stdout}\n{res.stderr}"
         assert "Manifest valid" in res.stdout
 
-    def test_cli_ref_publish_bare_defaults_to_ref_design_yml(self):
+    def test_cli_ref_publish_bare_names_no_board(self):
+        """DS-P1.121: no board is the default. The root holds no ref_design.yml, so a bare
+        `rr ref publish` publishes nothing and fails naming the missing manifest."""
+        assert not (ROOT / "ref_design.yml").exists()
+        assert sorted(p.name for p in ROOT.glob("ref_design*.yml")) == [], "a manifest belongs in ref_design/"
+        assert sorted(p.name for p in (ROOT / "ref_design").glob("*.yml")) == ["de25.yml", "pfsoc.yml", "zybo.yml"]
         res = subprocess.run(
             ["rr", "ref", "publish"],
             cwd=ROOT, capture_output=True, text=True, check=False,
         )
-        assert res.returncode == 0, f"Bare CLI ref publish failed: {res.stdout}\n{res.stderr}"
-        assert "Manifest valid" in res.stdout
+        assert res.returncode != 0, f"Bare CLI ref publish succeeded: {res.stdout}\n{res.stderr}"
+        assert "Manifest not found" in res.stdout + res.stderr
 
 
     def test_cli_ref_publish_pfsoc(self):

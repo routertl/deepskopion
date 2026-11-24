@@ -258,6 +258,7 @@ def test_build_sequence_runs_dtb_patch_step(monkeypatch, tmp_path):
                         raising=False)
     monkeypatch.setattr(image, "_stage_uboot_env_on_sdcard",
                         lambda *_a, **_k: None, raising=False)
+    monkeypatch.setattr(image, "rootfs_image_problems", lambda *_a, **_k: [])  # DS-P3.316: build() now reads the card image; this test stubs every tool run
     image.build(root)
 
     rr_steps = [c[2] for c in calls if c[:2] == ["rr", "linux"]]

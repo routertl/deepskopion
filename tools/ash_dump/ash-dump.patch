@@ -1,0 +1,220 @@
+SPDX-License-Identifier: GPL-2.0-only
+SPDX-FileCopyrightText: 2026 Daniel J. Mazure
+SPDX-FileCopyrightText: BusyBox contributors
+
+Adds a parse-tree dump to the ash of BusyBox 1.36.1 (shell/ash.c): with DS_ASH_DUMP in
+the environment, `sh -n SCRIPT` prints each parsed command tree as one line of JSON
+instead of skipping it. Nothing is expanded or executed. The braces of `{ ...; }` are kept as a
+redirection-free group node, which ash would otherwise drop. Applied to the pinned source
+tarball by tools/ash_dump.py; the tool never links the result, it runs it as a process.
+
+--- a/shell/ash.c
++++ b/shell/ash.c
+@@ -9299,6 +9299,176 @@
+ static void prehash(union node *);
+ 
+ /*
++ * DS-P3.341: with DS_ASH_DUMP set in the environment and `sh -n`, print each
++ * parsed command tree as one line of JSON instead of skipping it. Nothing is
++ * expanded or executed. A word is the raw text ash stored for it as hex: the
++ * bytes CTLESC, CTLVAR, CTLENDVAR, CTLBACKQ, CTLARI, CTLENDARI and CTLQUOTEMARK
++ * (0x81, 0x82, 0x83, 0x84, 0x86, 0x87, 0x88) keep which characters were quoted,
++ * escaped or expanded; a word holding a command substitution lists the parsed
++ * trees of its substitutions, in order, as "bq".
++ */
++static void ds_tree(union node *n);
++
++static void ds_word(union node *a)
++{
++	const unsigned char *p;
++	struct nodelist *l;
++
++	out1fmt("{\"w\":\"");
++	for (p = (const unsigned char *)a->narg.text; *p; p++)
++		out1fmt("%02x", *p);
++	out1fmt("\"");
++	if (a->narg.backquote) {
++		out1fmt(",\"bq\":[");
++		for (l = a->narg.backquote; l; l = l->next) {
++			ds_tree(l->n);
++			if (l->next)
++				out1fmt(",");
++		}
++		out1fmt("]");
++	}
++	out1fmt("}");
++}
++
++static void ds_words(union node *a)
++{
++	out1fmt("[");
++	for (; a; a = a->narg.next) {
++		ds_word(a);
++		if (a->narg.next)
++			out1fmt(",");
++	}
++	out1fmt("]");
++}
++
++static void ds_redirs(union node *r)
++{
++	out1fmt("[");
++	for (; r; r = r->nfile.next) {
++		out1fmt("{\"k\":%d,\"fd\":%d", r->type, r->nfile.fd);
++		if (r->type == NHERE || r->type == NXHERE) {
++			out1fmt(",\"doc\":");
++			ds_word(r->nhere.doc);
++		} else if (r->type == NTOFD || r->type == NFROMFD) {
++			out1fmt(",\"dup\":%d", r->ndup.dupfd);
++			if (r->ndup.vname) {
++				out1fmt(",\"to\":");
++				ds_word(r->ndup.vname);
++			}
++		} else if (r->nfile.fname) {
++			out1fmt(",\"to\":");
++			ds_word(r->nfile.fname);
++		}
++		out1fmt("}");
++		if (r->nfile.next)
++			out1fmt(",");
++	}
++	out1fmt("]");
++}
++
++static void ds_tree(union node *n)
++{
++	struct nodelist *l;
++	union node *c;
++
++	if (!n) {
++		out1fmt("null");
++		return;
++	}
++	switch (n->type) {
++	case NCMD:
++		out1fmt("{\"t\":\"cmd\",\"line\":%d,\"assign\":", n->ncmd.linno);
++		ds_words(n->ncmd.assign);
++		out1fmt(",\"args\":");
++		ds_words(n->ncmd.args);
++		out1fmt(",\"redir\":");
++		ds_redirs(n->ncmd.redirect);
++		out1fmt("}");
++		break;
++	case NPIPE:
++		out1fmt("{\"t\":\"pipe\",\"bg\":%d,\"cmds\":[", n->npipe.pipe_backgnd);
++		for (l = n->npipe.cmdlist; l; l = l->next) {
++			ds_tree(l->n);
++			if (l->next)
++				out1fmt(",");
++		}
++		out1fmt("]}");
++		break;
++	case NREDIR:
++	case NBACKGND:
++	case NSUBSHELL:
++		out1fmt("{\"t\":\"%s\",\"body\":",
++			n->type == NREDIR ? "redir" : n->type == NBACKGND ? "bg" : "subshell");
++		ds_tree(n->nredir.n);
++		out1fmt(",\"redir\":");
++		ds_redirs(n->nredir.redirect);
++		out1fmt("}");
++		break;
++	case NAND:
++	case NOR:
++	case NSEMI:
++		out1fmt("{\"t\":\"%s\",\"l\":", n->type == NAND ? "and" : n->type == NOR ? "or" : "semi");
++		ds_tree(n->nbinary.ch1);
++		out1fmt(",\"r\":");
++		ds_tree(n->nbinary.ch2);
++		out1fmt("}");
++		break;
++	case NIF:
++		out1fmt("{\"t\":\"if\",\"test\":");
++		ds_tree(n->nif.test);
++		out1fmt(",\"then\":");
++		ds_tree(n->nif.ifpart);
++		out1fmt(",\"else\":");
++		ds_tree(n->nif.elsepart);
++		out1fmt("}");
++		break;
++	case NWHILE:
++	case NUNTIL:
++		out1fmt("{\"t\":\"%s\",\"test\":", n->type == NWHILE ? "while" : "until");
++		ds_tree(n->nbinary.ch1);
++		out1fmt(",\"body\":");
++		ds_tree(n->nbinary.ch2);
++		out1fmt("}");
++		break;
++	case NFOR:
++		out1fmt("{\"t\":\"for\",\"line\":%d,\"var\":\"%s\",\"args\":", n->nfor.linno, n->nfor.var);
++		ds_words(n->nfor.args);
++		out1fmt(",\"body\":");
++		ds_tree(n->nfor.body);
++		out1fmt("}");
++		break;
++	case NCASE:
++		out1fmt("{\"t\":\"case\",\"line\":%d,\"expr\":", n->ncase.linno);
++		ds_word(n->ncase.expr);
++		out1fmt(",\"cases\":[");
++		for (c = n->ncase.cases; c; c = c->nclist.next) {
++			out1fmt("{\"pat\":");
++			ds_words(c->nclist.pattern);
++			out1fmt(",\"body\":");
++			ds_tree(c->nclist.body);
++			out1fmt("}");
++			if (c->nclist.next)
++				out1fmt(",");
++		}
++		out1fmt("]}");
++		break;
++	case NDEFUN:
++		out1fmt("{\"t\":\"defun\",\"line\":%d,\"name\":\"%s\",\"body\":", n->ndefun.linno, n->ndefun.text);
++		ds_tree(n->ndefun.body);
++		out1fmt("}");
++		break;
++	case NNOT:
++		out1fmt("{\"t\":\"not\",\"body\":");
++		ds_tree(n->nnot.com);
++		out1fmt("}");
++		break;
++	default:
++		out1fmt("{\"t\":\"unknown\",\"k\":%d}", n->type);
++		break;
++	}
++}
++
++/*
+  * Evaluate a parse tree.  The value is left in the global variable
+  * exitstatus.
+  */
+@@ -9312,8 +9482,13 @@
+ 
+ 	setstackmark(&smark);
+ 
+-	if (nflag)
++	if (nflag) {
++		if (n && getenv("DS_ASH_DUMP")) {
++			ds_tree(n);
++			out1fmt("\n");
++		}
+ 		goto out;
++	}
+ 
+ 	if (n == NULL) {
+ 		TRACE(("evaltree(NULL) called\n"));
+@@ -12328,7 +12503,14 @@
+ 		t = TRP;
+ 		break;
+ 	case TBEGIN:
+-		n1 = list(0);
++		if (getenv("DS_ASH_DUMP")) {
++			/* keep the braces of `{ ...; }` in the tree: ash drops them, and a group is not the top level */
++			n1 = stzalloc(sizeof(struct nredir));
++			n1->type = NREDIR;
++			n1->nredir.linno = savelinno;
++			n1->nredir.n = list(0);
++		} else
++			n1 = list(0);
+ 		t = TEND;
+ 		break;
+ 	IF_BASH_FUNCTION(case TFUNCTION:)

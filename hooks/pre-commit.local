@@ -201,6 +201,48 @@ if [ "$ds_ci_rc" -ne 0 ]; then
 fi
 echo "✓ Public CI workflow guards pass (DS-P2.197)"
 
+# ── DS-P3.337 — the telemetry exporter's copy blocks, executed ──
+#
+# The documented ssh and card copy blocks run inside bubblewrap with stub tools.
+# A docs-only edit seeds no import closure at land, so no other check runs this
+# guard when the doc changes. Public CI cannot run it (the Forgejo job's Docker
+# container refuses user namespaces; the GitHub job installs no bubblewrap), so it
+# runs here, in the private tree (context.json, as the legs below), on every
+# commit. A host without bwrap or markdown-it-py fails it.
+if git cat-file -e :context.json 2>/dev/null; then
+    echo "🚧 Running the telemetry exporter copy blocks in a sandbox (DS-P3.337)..."
+    # Judge the STAGED doc: a broken staged copy with a corrected unstaged one must not pass.
+    ds_copy_rc=0
+    ds_copy_doc=$(mktemp)
+    if git show :docs/software/telemetry_exporter.md > "$ds_copy_doc" 2>/dev/null; then
+        # DS_COPY_BLOCKS_REQUIRED: a missing bwrap or markdown-it fails here, never skips (DS-P3.339).
+        ds_copy_out=$(DS_COPY_BLOCKS_REQUIRED=1 DS_TELEMETRY_DOC="$ds_copy_doc" "$DS_GUARD_PY" -m pytest -q --no-header \
+            -p no:cacheprovider tools/tests/test_telemetry_copy_blocks_execute_ds_p3_337.py 2>&1) \
+            || ds_copy_rc=$?
+    else
+        ds_copy_out="docs/software/telemetry_exporter.md is not in the index"; ds_copy_rc=1
+    fi
+    rm -f "$ds_copy_doc"
+    if [ "$ds_copy_rc" -ne 0 ]; then
+        printf '%s\n' "$ds_copy_out"
+        echo ""
+        case "$ds_copy_rc" in
+            1)
+                echo "❌ a documented telemetry copy block does not do what the doc says (DS-P3.337)."
+                echo "   Commit aborted. See docs/software/telemetry_exporter.md, Per board."
+                ;;
+            *)
+                echo "❌ GATE COULD NOT RUN: telemetry copy-block guard (exit $ds_copy_rc)."
+                echo "   It never ran the blocks, so this is NOT a finding about the staged"
+                echo "   files. Interpreter: $DS_GUARD_PY (bwrap is required)."
+                echo "   Commit aborted — a gate that cannot run is not a green gate."
+                ;;
+        esac
+        exit 1
+    fi
+    echo "✓ Telemetry exporter copy blocks do what the doc says (DS-P3.337)"
+fi
+
 # ── DS-P3.184 — pinned write plane is the silicon-witnessed one ──
 #
 # A commit moved the rr_ddr_stream pin past the image the DE25 gate witnessed and
