@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 _stim_common — shared helpers for the DS-P2.100 / DS-D.38 stimulus-gen test
 suite: test_stimulus_uart_frame.py, test_stimulus_uart_idle.py,

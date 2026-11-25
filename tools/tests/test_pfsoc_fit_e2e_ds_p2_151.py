@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """PF-F0 (DS-P2.151) end-to-end Libero fit guard.
 
 Kept SEPARATE from test_pfsoc_sdc_scope_ds_p2_151.py (the always-on static

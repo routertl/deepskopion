@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.132 — regression guards for the PolarFire SoC PF-T9 + first-silicon REA
 witness (pf_known_answer_* / rr_rea_ujtag_local).
 

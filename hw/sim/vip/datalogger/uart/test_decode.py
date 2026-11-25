@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T3.15 drift-gate: the VIP UART decoder's wire type codes [26:24] must match
 the single-sourced protocol_codes.UART_TYPES — generated from
 uart_datalogger_protocol.yml (DS-P3.59) and already drift-gated, the same table the

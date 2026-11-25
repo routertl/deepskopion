@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Invoke a routertl SDK generator through its MODULE, not its source file.
 
 DS-X6 (DS-P1.37): on the first off-bench rehearsal, every pre_build hook that

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DS-P2.109 — cocotb dependency-floor consistency guard.
 
 THE DEFECT (measured 2026-09-03). Deepskopion's ``requirements.txt`` line 1

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """scp on the board rootfs — the dev-loop file-push path (DS-P3.79 / NET-5).
 
 Dropbear (the running sshd) never ships scp when BR2_PACKAGE_DROPBEAR_SMALL=y

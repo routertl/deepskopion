@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """On-silicon CAN decode validator — runs the real CanReassembler over the DDR ring.
 
 Reads ONE contiguous ring span and feeds CAN-domain events (device_id 20, the

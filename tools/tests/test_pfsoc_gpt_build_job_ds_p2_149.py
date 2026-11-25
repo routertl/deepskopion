@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.149 — the deterministic GPT build job (deliverable 2) contract.
 
 The prior landing refused this branch partly because deliverable (2) — *rebuild

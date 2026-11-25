@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- Title      : i2c_injector
 -- Project    : deepskopion / datalogger self-validation (DS-P2.51 Phase 2)

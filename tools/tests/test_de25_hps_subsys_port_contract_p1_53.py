@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.53 regression guard: deepskopion_de25_top.vhd's `component
 hps_subsys` declaration must match the port SHAPE the REAL rr hps_preset
 generator actually renders for this project's ip.yml — not a hand-authored

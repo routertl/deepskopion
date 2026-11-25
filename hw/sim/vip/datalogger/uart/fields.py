@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # tb/datalogger/uart/fields.py
 #
 # 16-bit UART-datalogger CONFIG word — the REAL decode map (uart_datalogger.vhd

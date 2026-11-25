@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.189 — the REA RR-CDC-002 waiver survives a re-vendor of REA.
 
 DS-T1.21 waived rr_rea_sync_word s1/s2 (quasi-static MCP, REA-REQ-959) inline

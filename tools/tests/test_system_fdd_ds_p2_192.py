@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.192: the system Firmware Design Document passes the rr FDD gate.
 
 The project-root ``requirements.yml`` makes deepskopion a project-level FDD

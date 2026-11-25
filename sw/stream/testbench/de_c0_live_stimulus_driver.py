@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.101 — on-board driver that armed the DE-C0 live-silicon witness.
 
 Runs ON THE BOOTED DE25 BOARD (over the console, root shell — see

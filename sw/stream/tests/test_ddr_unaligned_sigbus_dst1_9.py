@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-FileCopyrightText: 2026 Daniel J. Mazure
 # SPDX-License-Identifier: MPL-2.0
 """DS-T1.9 regression: the production stream daemon died SILENTLY the moment the

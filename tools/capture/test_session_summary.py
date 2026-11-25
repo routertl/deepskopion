@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Unit tests for sw.stream.session_summary (JSON-lines log -> markdown)."""
 
 from __future__ import annotations

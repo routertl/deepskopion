@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Check every project.yml and target-yml key against the installed rr's schema.
 
 ``rr schema --json`` is the installed RouteRTL release's own field reference:

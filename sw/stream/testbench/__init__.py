@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """sw.stream.testbench — PS-side end-to-end self-test harness (DS-P3.44).
 
 Contract: sw/stream/testbench/requirements.yml (PS-LOOP-REQ-1..9).

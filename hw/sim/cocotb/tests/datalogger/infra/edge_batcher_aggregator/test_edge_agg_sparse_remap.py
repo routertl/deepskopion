@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.50 — sparse→dense channel remap (EBA-REQ-30).
 
 Drives the aggregator (via tb_edge_agg_sparse) with the real deepskopion edge id

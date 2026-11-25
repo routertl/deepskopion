@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Cheap contract guards for the expensive DS-X3 queued simulation gate."""
 
 from __future__ import annotations

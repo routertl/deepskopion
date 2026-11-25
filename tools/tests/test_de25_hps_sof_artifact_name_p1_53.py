@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.53 revision regression guard: the HPS-bootable ``.sof`` basename
 must be ONE NAME end-to-end — the staged ``linux.sof_path`` stem,
 ``run_socfpga_sof_hps``'s derived output name, ``tools/de25_linux_image.py``'s

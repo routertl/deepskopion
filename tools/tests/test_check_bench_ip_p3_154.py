@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.154: the deployed DE25 image must carry the address it declares.
 
 DS-P3.152 split one fact into two artifacts.  Before it, the DE25's address

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """DS-P1.103: the commit hook runs a split test file's bench sibling when the checkout has it, and only then.
 

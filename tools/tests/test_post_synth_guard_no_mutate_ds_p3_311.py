@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """DS-P3.311: a post-synth guard run leaves the checkout it reads unchanged.
 

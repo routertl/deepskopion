@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.239: a failed autoSync calibration emits a STATUS frame naming it.
 
 Before the fix, an autoSync calibration that matched no format instance set

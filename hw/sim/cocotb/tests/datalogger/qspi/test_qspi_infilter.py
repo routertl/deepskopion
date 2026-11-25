@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.93 — qspi_datalogger input glitch-filter (G_ENABLE_INFILTER) coverage.
 
 The G_ENABLE_INFILTER=1 generate branch (qspi_datalogger.vhd:169-181) wraps every

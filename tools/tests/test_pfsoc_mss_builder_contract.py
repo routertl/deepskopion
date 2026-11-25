@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """PF-H0 (DS-P2.124): guards for the Libero SmartDesign builder tcl.
 
 The landing refusal proved two things about hw/libero/pfsoc/pfsoc_mss_subsys.tcl:

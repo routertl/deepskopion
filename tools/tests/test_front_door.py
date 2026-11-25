@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-C0 (DS-P2.88) — the visible front door of a fresh clone.
 
 A stranger's first `ls` after `git clone` must show no agent config, debug

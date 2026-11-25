@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """DS-P2.138: a tiny unit sim must not depend on unrelated root-project units.
 

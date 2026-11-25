@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """DS-P1.124: the bench lock check runs the declared floor rr, not whatever `rr` is first on PATH.
 

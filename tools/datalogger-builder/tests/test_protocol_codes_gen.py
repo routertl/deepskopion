@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Drift-guard for the single-sourced decoder codes (DS-P3.59).
 
 protocol_codes.py must stay generated-in-sync with the *_datalogger_protocol.yml

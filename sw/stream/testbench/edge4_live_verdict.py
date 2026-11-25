@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DS-P1.71 — judge a LIVE four-channel EDGE capture as RouteWave rendered it.
 
 Inputs, all produced by one live session (``tools/capture/edge4_live_session.py``):

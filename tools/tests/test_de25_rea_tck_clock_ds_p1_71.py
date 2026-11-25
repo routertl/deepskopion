@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.71: the DE25 constraints must clock REA's JTAG domain.
 
 MEASURED 2026-10-02 building ``de25_datalogger`` at ``cda264a`` for the DS-P1.71

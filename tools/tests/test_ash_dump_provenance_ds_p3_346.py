@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: MPL-2.0
 # SPDX-FileCopyrightText: 2026 Daniel J. Mazure
 """DS-P3.346 (a): the parser's busybox is compared with the busybox the shipped DE25 image holds.

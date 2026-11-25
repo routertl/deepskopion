@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- Title      : tb_emio_loop
 -- Project    : deepskopion / datalogger self-validation (DS-T2.11)

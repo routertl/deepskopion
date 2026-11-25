@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.147 — PolarFire boot-media assembly: payload.bin(U-Boot) + overlay rootfs.
 
 The kit boots HSS (DS-P2.145) but had no next stage: no committed recipe that

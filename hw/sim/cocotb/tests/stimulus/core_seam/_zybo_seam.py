@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """_zybo_seam — shared helpers for the DS-P1.90 Zynq-wiring seam tests.
 
 The bench is hw/sim/tb_stimulus_core_seam_zybo.vhd: the REAL deepskopion_core

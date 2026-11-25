@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.98 desk-side guard for the DE25 image's init= override.
 
 DE25 boots straight to its real disk root: boot.cmd's

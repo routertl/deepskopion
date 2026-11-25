@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- Title      : tb_spi_injector
 -- Project    : deepskopion (DS-P3.46 — DS-P2.51 cocotb regression, SPI side)

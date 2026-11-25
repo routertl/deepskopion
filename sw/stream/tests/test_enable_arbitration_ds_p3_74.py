@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.74: host CONFIG.enable vs trigger enable-mask arbitration.
 
 Rule (datalogger_gather_contract.md §"Enable arbitration"): the host word is the

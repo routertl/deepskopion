@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 --------------------------------------------------------------------------------
 -- File       : eye_loopback_top.vhd
 -- Project    : deepskopion — PMOD eye-scan / BERT instrument (DS-P2.66, Phase 5b)

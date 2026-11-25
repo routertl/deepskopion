@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Capture the REAL silicon UART waveform to an edge-capture file for sim replay
 (DS-T2.30).
 

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Configure a SocketCAN CAN FD link and exchange frames, with the stdlib only.
 
 The DE25 Linux image ships neither iproute2 nor can-utils (DS-P2.227), and

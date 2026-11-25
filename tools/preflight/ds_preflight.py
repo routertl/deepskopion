@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DS-E0 (DS-P1.28) — the executable half of the supported-environment declaration.
 
 `tools/preflight/supported_environment.yml` declares what Deepskopion supports.

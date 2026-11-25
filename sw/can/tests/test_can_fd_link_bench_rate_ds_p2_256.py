@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.256: the CAN FD link helper defaults to, and documents, the nominal rate the
 datalogger can capture.
 

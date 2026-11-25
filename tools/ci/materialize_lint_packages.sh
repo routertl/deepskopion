@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# rr unknown-llm (AI-generated)
 # DS-P2.231: generate the build-time VHDL package `rr lint` reads but no hook
 # writes before it.
 #

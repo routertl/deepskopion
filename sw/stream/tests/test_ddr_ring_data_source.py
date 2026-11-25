@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Unit tests for DdrRingDataSource — Phase B of DS-P2.31 (DS-P3.27).
 
 Validates that the source:

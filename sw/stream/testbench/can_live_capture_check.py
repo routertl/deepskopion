@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DS-P1.56 — bind a live DE25 CAN capture to test_can_datalogger.py's baseline
 frame literal (ID=0x123, data=[0xAB,0xCD]), the same way
 capture_correctness.py binds UART/I2C/SPI to test_datalogger_to_ddr.py's

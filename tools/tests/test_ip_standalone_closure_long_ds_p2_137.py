@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.137 — the long ``rr sim run --ip`` checks: UART smoke and negative controls.
 
 Each of these runs longer than the test-power runner's 120 s per pytest run,

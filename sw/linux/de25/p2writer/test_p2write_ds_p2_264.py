@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.264: the DE25 P2 writer refuses unsafe writes and writes only P2.
 
 p2write.sh runs on the host against stubs: a file stands in for /dev/mmcblk0p2

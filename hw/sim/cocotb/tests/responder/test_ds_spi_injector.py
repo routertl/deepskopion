@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 test_spi_injector — cocotb regression for hw/rtl/responder/spi_injector.vhd
 (DS-P3.46; SPI side of DS-P2.51 Phase 3).

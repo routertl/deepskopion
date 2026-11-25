@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """glitch_filter unit test (DS-T3.5).
 
 Proves the input conditioner that fixes the uart_datalogger's silicon mis-decode:

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 test_stimulus_core_seam_i2c — DS-P2.100 landing-review (fourth pass)
 Finding 2: the core-seam suite only wrote UART/EDGE regbank slots

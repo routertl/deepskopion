@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.90 Phase 1: datalogger_lifecycle — symmetric ENABLED/DISABLED emitter.
 
 Verifies the always-on lifecycle component emits exactly one ENABLED frame on

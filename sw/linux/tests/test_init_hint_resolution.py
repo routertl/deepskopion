@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """DS-P3.162 regression guard: init-script hints must resolve on init PATH.
 

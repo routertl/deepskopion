@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Validate the DS-T2.49 FD CRC-17 VERDICT tap (the new REA instrumentation) in sim
 before trusting it on silicon. can_frame_fsm latches, at the S_FDCRC verdict,
 DbgCrcCap=Cap17 (captured wire CRC) and DbgCrcComp=CRC17_COMPUTED, and pulses

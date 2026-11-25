@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Ordered open-logic source closure for cocotb custom-library tests.
 
 RouteRTL's project/package resolver owns normal builds. Cocotb modules that

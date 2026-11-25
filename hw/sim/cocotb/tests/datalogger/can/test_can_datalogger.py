@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """can_datalogger integration test + adversarial CAN BFM (DS-P3.100, the top).
 
 Drives a RAW CAN RX line through the FULL four-block chain — can_bit_timing →

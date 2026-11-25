@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """
 Regression tests for Deepskopion CLI Configurator (DS-P2.114).

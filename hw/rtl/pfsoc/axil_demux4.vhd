@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -- SPDX-FileCopyrightText: 2026 Daniel J. Mazure
 -- SPDX-License-Identifier: CERN-OHL-W-2.0
 -- axil_demux4 — PolarFire CSR decoder (DS-P2.128). Derived from

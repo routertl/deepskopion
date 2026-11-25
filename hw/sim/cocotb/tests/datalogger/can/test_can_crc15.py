@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """can_crc15 unit test (DS-P3.100, Block 4).
 
 Validates the CAN CRC-15 serial engine (generator 0x4599) two ways:

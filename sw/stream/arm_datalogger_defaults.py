@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Boot-time datalogger config arming (DS-P2.77).
 
 WHY THIS EXISTS. Nothing configures the UART datalogger at power-on: config_control

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 UART Datalogger Test - Full Protocol Verification
 

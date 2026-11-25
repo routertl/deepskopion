@@ -1,4 +1,5 @@
 #!/bin/sh
+# rr unknown-llm (AI-generated)
 #
 # Busybox init script — launches the deepskopion wave_stream daemon on boot.
 # Lives at /etc/init.d/S99deepskopion-stream so the overlay's own /init

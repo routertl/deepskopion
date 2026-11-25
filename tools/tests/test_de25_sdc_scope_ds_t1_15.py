@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T1.15: the DE25 (Quartus) constraints dir must be Quartus-only.
 
 MEASURED 2026-09-07 building a from-head ``de25_datalogger`` bitstream for the

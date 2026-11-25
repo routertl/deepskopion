@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Adversarial test suite for zs_msg_framer (post-DS-P3.28).
 
 One test per ZSF-REQ in hw/rtl/datalogger/infra/zs_msg_framer/requirements.yml.

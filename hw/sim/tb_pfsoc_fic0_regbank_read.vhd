@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -- SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 -------------------------------------------------------------------------------
 -- File       : tb_pfsoc_fic0_regbank_read.vhd

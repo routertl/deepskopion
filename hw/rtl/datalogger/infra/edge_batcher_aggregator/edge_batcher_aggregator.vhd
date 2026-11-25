@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- File       : edge_batcher_aggregator.vhd
 -- Description: Many-channel edge-event aggregator for the EDGE_BATCH zs_msg

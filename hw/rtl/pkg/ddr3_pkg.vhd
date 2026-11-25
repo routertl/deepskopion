@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- File       : ddr3_pkg.vhd
 -- Description: Component declaration of the DDR3 memory interface core.

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Relink the built HSS objects for L2-LIM (0x08000000) instead of the L2 scratchpad.
 
 WHY THIS EXISTS (DS-P2.145 / PF-L0e)

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.138 — every EDGE_EVENTS word lies within reach of its frame's anchor.
 
 An EDGE_EVENT word carries only the low 16 bits of its microsecond time. The

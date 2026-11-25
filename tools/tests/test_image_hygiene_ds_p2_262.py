@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.262: the published Zybo canfd_demo uImage carried build-host data.
 
 public_artifact_hygiene found, among other lines, build-host home paths in

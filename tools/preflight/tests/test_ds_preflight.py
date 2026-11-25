@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-E0 (DS-P1.28) — proof that the preflight can FAIL, prerequisite by prerequisite.
 
 The defect this guards against is not "a check is wrong". It is the shape the

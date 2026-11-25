@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Production DE-C0 register and wire stimulus constants (DS-P1.58).
 
 Moved to ``sw.stream.stimulus_contract`` (DS-P2.136) because the daemon arms the

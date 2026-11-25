@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """DS-P2.342: DE25 desk tests stay green whatever ``rr target set`` chose in the checkout.
 

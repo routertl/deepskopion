@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- Title      : uart_datalogger.vhd
 -- Project    : deepskopion

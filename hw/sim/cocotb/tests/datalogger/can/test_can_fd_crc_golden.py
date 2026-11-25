@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """can_datalogger FD CRC verdict — silicon-anchored golden test (DS-T2.49).
 
 THE regression for the DS-T2.49 fix. The CAN datalogger computes the FD CRC over the

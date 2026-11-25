@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """PMOD eye-scan / BERT sweep orchestrator (DS-P2.66, Phase 3).
 
 The eye instrument is ACTIVE, not passive: the PL (eye_engine) measures the BER

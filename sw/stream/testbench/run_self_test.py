@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """PS-side self-test orchestrator (DS-P3.44).
 
 Runs every scenario registered in `scenarios.py`, emits a verdict JSON,

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Executable DE-L0/DS-P2.92 contract for the staged standalone aarch64
 cross-toolchain: staging is pinned + atomic, and the "which gcc does rr
 linux actually invoke" detector genuinely distinguishes the staged

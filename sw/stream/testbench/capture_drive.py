@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Stimulus-only driver: enable UART/I2C/SPI dataloggers + drive the EMIO buses in
 a loop. The wave_stream daemon does the ring drain; this only fills it."""
 import sys, time, random

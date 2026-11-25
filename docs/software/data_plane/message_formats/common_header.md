@@ -179,7 +179,7 @@ operator if they ever appear.
 The PS reads the regbank slots below to find the ring and walk it, and writes
 `RING_READ_PTR` to drain it. Slot addresses are stable per the regbank package
 (`hw/rtl/pkg/system_regbank_pkg.vhd`); the byte offsets below are the AXI-side
-addresses in `project_regbank.yml` (the `Regs` mirror is `sw/stream/regbank.py:422-429`).
+addresses in `project_regbank.yml` (the `Regs` mirror is `sw/stream/regbank.py:423-430`).
 
 | Slot              | AXI offset | Width | Access | Meaning |
 | :---------------- | :--------- | :---- | :----- | :------ |
@@ -196,7 +196,7 @@ addresses in `project_regbank.yml` (the `Regs` mirror is `sw/stream/regbank.py:4
 ### Walk recipe
 
 The walk is driven by `RING_COMMIT_PTR`, as `DdrRingDataSource.next_batch` does it
-(`sw/stream/data_source.py:1525-1552`):
+(`sw/stream/data_source.py:1526-1553`):
 
 ```
 commit       = RING_COMMIT_PTR mod RING_BYTES        # byte offset of the write head
@@ -211,11 +211,11 @@ is a multiple of `RING_BYTES`, as the default base `0x10000000` is for the defau
 
 `RING_WRITE_PTR` is not a walk input. It counts 32-bit words accepted by the DDR stream; four times that count
 differs from the committed byte offset because frames have variable length and the DMA commits
-whole DDR words, so a cursor seeded from it lands mid-frame (`sw/stream/data_source.py:1343-1349`).
-The daemon reads it for telemetry only (`sw/stream/data_source.py:1526`).
+whole DDR words, so a cursor seeded from it lands mid-frame (`sw/stream/data_source.py:1344-1350`).
+The daemon reads it for telemetry only (`sw/stream/data_source.py:1527`).
 
 One tick copies at most `_MAX_SPAN_BYTES_PER_TICK` (2 MiB) of the ring and stops decoding at a frame
-boundary after `_TICK_BUDGET_S` (0.25 s) (`sw/stream/data_source.py:1275`, `:1291`); the rest is read
+boundary after `_TICK_BUDGET_S` (0.25 s) (`sw/stream/data_source.py:1276`, `:1291`); the rest is read
 on the next tick.
 
 `RING_READ_PTR` is the ring drain pointer: `ddr_stream_axi`
@@ -291,15 +291,15 @@ the regbank feeds to its `csr_rd_ptr_addr_i` (`project_regbank.yml:408`); when t
 the DMA write side stops and the producers are backpressured. Unread bytes are never overwritten,
 so a large commit advance in one tick means the consumer was slow, not that data was lost. The
 daemon does not skip ahead or snap its read offset to the commit
-(`sw/stream/data_source.py:1562-1571`).
+(`sw/stream/data_source.py:1563-1572`).
 
 What is reported instead:
 
 | Quantity | Where |
 |---|---|
-| Ring fill, `(RING_COMMIT_PTR - RING_READ_PTR) mod RING_BYTES` | STATS `ring_used_bytes` (`sw/stream/data_source.py:693`, `:701`) |
-| Fill alarm: bits [30:0] count excursions at or above 75 %, bit 31 is the live alarm | `RING_ALARM_CNT` `0x016C`, STATS `ring_alarm` (`sw/stream/regbank.py:429`, `sw/stream/data_source.py:703`) |
-| Producer loss: ring-full backpressure cycles | `DDR_BACKPRESSURE_CNT` `0x0168` (`sw/stream/regbank.py:428`), polled every tick by `LossProvenanceWatcher` (`sw/stream/data_source.py:1157`) |
+| Ring fill, `(RING_COMMIT_PTR - RING_READ_PTR) mod RING_BYTES` | STATS `ring_used_bytes` (`sw/stream/data_source.py:694`, `:701`) |
+| Fill alarm: bits [30:0] count excursions at or above 75 %, bit 31 is the live alarm | `RING_ALARM_CNT` `0x016C`, STATS `ring_alarm` (`sw/stream/regbank.py:430`, `sw/stream/data_source.py:704`) |
+| Producer loss: ring-full backpressure cycles | `DDR_BACKPRESSURE_CNT` `0x0168` (`sw/stream/regbank.py:429`), polled every tick by `LossProvenanceWatcher` (`sw/stream/data_source.py:1158`) |
 
 `RING_READ_PTR` reads 0 after reset, so a ring that no consumer drains fills once and then holds
 every producer (`project_regbank.yml:408`).

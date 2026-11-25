@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.311: no edge word is lost when PL zero-pad words sit between EDGE_BATCH frames.
 
 DE25 C3 run 1 (2026-11-15): one edge word reached the wire where the stimulus

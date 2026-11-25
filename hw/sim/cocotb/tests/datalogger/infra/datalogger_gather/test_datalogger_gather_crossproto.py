@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Cross-protocol adversarial coverage for datalogger_gather (DS-P3.31).
 
 The pre-existing suites attack the gather one protocol-domain at a time:

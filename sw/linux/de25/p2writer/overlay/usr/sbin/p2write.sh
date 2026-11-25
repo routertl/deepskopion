@@ -1,4 +1,5 @@
 #!/bin/sh
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: MPL-2.0
 # DS-P2.264: write the DE25 SD rootfs partition (P2) from a TFTP-served image,
 # from a RAM-root (initramfs) boot, so P2 is never mounted while it is written.

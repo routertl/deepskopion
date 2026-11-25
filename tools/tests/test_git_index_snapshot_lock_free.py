@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """git_index_snapshot.index_tree reads the index tree while another process holds the live index.lock.
 

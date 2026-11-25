@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.90: the PS-side self-test bench hands the EMIO legs back to the PS.
 
 On the Zybo (deepskopion_top sets G_STIM_DRIVES_EMIO) the fabric stimulus

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.154: the built board dtb must realise the dt_nodes it was built from.
 
 DS-T2.71's crosscheck proves the CONFIGURATION is legal — every enabled

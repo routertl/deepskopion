@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Generate the DE25 contract's register map: project_regbank.yml as the HPS sees it.
 
 ``runtimes/hw.yml`` names the register map routertl's map-access preamble

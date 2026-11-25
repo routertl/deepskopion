@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Adversarial test suite for edge_batcher (DS-P2.47 Phase B1).
 
 One test per EBT-REQ in hw/rtl/datalogger/infra/edge_batcher/requirements.yml.

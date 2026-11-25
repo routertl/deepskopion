@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.110 — product-geometry write-path regression (acceptance gate for DS-T1.12).
 
 The sibling `test_datalogger_to_ddr.py` exercises the full datalogger→DDR path, but

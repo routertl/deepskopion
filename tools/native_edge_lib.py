@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Build, install and check libds_edge_drain.so in the Zynq and PolarFire images (DS-P1.87).
 
 The daemon's native edge path (sw/stream/native, DS-P1.74) runs only where

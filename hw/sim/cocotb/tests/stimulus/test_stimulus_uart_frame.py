@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 test_stimulus_uart_frame — DS-P2.100 / DS-D.38 option a fabric-side
 stimulus generator, UART TX generator coverage (STIM-REQ-1), proven against

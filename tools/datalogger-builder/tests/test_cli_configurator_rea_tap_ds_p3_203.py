@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.203 / DS-P3.204: a JTAG datalogger reads the REA tap, not header pins.
 
 board_pins.yml routes JTAG.TCK/TMS/TDI/TDO to the internal REA_* capture
@@ -49,8 +50,8 @@ def test_the_report_counts_header_pins(tmp_path, capsys):
 
 
 @pytest.mark.parametrize("board_id,top_line", [
-    ("de25-standard", "hw/rtl/de25/deepskopion_de25_top.vhd:822"),
-    ("polarfire-soc-discovery", "hw/rtl/pfsoc/deepskopion_pfsoc_fabric.vhd:793"),
+    ("de25-standard", "hw/rtl/de25/deepskopion_de25_top.vhd:823"),
+    ("polarfire-soc-discovery", "hw/rtl/pfsoc/deepskopion_pfsoc_fabric.vhd:794"),
 ])
 def test_a_jtag_datalogger_on_a_tied_tap_is_flagged(board_id, top_line):
     board = cfg.BOARDS[board_id]

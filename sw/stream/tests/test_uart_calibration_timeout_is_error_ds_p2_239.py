@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.239: the STATUS frame a failed UART autoSync calibration now emits
 (type 0b100, code 0x01 CALIBRATION_TIMEOUT) decodes as an error annotation.
 

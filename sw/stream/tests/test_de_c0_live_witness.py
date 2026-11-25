@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.59 — guard the daemon-live DE-C0 witness JUDGE (de_c0_live_witness).
 
 This suite guards the JUDGE, not silicon. It proves the judge has teeth: it

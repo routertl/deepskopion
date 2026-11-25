@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T2.97 — the datalogger follows the bus's sample points at the BRS switch.
 
 Measured on the Zybo-Z7-20 CTU cores after `can_fd_link setup` 250k/2M (2026-11-10,

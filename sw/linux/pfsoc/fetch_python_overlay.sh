@@ -1,4 +1,5 @@
 #!/bin/bash
+# rr unknown-llm (AI-generated)
 # DS-P2.141 — resolve the riscv64 PolarFire python_overlay for a fresh consumer.
 #
 # WHY THIS EXISTS — distribution PARITY, not footgun-prevention. Be precise about

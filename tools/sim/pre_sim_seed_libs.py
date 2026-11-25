@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DS-P3.55 pre_sim seed — work around the rr-sim per-top closure under-population.
 
 WHY THIS EXISTS (and why it is a WORKAROUND, not the real fix)

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Unit test for error_event_emitter (DS-P3.70 piece 3).
 
 Proves the coalescing in-band error reporter: one rate-limited zs_msg ERROR

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """EdgeReplaySource — drive a cocotb DUT pin from captured Edge Detector edges
 (DS-P2.60).
 

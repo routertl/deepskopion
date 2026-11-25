@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.284: the daemon writes RING_READ_PTR at its seed tick, not only after its first drain.
 
 Before the fix, the seed tick set the read head to RING_COMMIT_PTR and returned without touching the register,

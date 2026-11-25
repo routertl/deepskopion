@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.82: the wave_stream STATS telemetry heartbeat (producer side).
 
 The fan-out daemon broadcasts a periodic STATS frame (tag 11) carrying the

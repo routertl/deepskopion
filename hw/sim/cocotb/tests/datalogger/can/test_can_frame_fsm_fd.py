@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """can_frame_fsm CAN-FD fork test (DS-P2.64 step 4, CAN-REQ-12/13/15/16/18/22).
 
 Isolates the FD FRAME WALK exactly as test_can_frame_fsm isolates the classic walk:

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-FileCopyrightText: 2026 Daniel J. Mazure
 # SPDX-License-Identifier: MPL-2.0
 """DS-P2.276: a desk run collects no test that starts a vendor tool through a real rr.

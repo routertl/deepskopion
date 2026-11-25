@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-X1 (DS-P1.27) — the frozen-lock refresh must not re-import the bench.
 
 ``linux.lock.frozen`` records a project-root-relative

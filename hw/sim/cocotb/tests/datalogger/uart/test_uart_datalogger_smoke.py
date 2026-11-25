@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 UART Datalogger Smoke Test
 Single fast configuration to verify basic functionality.

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.74 (decision DS-D.49): the native EDGE_BATCH drain is byte-exact with Python.
 
 sw/stream/native/edge_drain.c walks a DDR ring span the way

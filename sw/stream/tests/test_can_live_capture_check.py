@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.56 — falsifiable tests for can_live_capture_check.py.
 
 Board-free by construction: builds synthetic ANNOTATIONS payloads shaped

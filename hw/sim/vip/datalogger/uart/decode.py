@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 from dataclasses import dataclass
 from typing import Optional, Tuple
 from .codes import MsgType, EventStatus

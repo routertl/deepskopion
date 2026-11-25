@@ -1,4 +1,5 @@
 #!/bin/sh
+# rr unknown-llm (AI-generated)
 # Install owner-supplied SSH public keys from the first-boot serial console.
 set -eu
 

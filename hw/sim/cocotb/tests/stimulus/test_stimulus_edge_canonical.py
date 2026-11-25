@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Finite canonical EDGE stimulus contract (DS-P1.58)."""
 from __future__ import annotations
 

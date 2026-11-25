@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.201: a Zynq-family rootfs cannot be built without the sshd binary.
 
 2026-11-05 (DS-P2.211): a canfd_demo rootfs was built without running

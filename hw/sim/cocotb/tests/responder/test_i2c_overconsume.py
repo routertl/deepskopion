@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T2.34 — reproduce the injector's FWFT empty-latency over-consume in sim.
 
 On silicon the i2c_injector intermittently OVER-CONSUMES its TX FIFO: a

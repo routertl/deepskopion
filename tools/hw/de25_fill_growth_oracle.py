@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Oracle of DS-DE25-DRAIN-001: the DE25 ring fill does not grow over a >= 60 s window.
 
 Why an oracle: the routertl hw contract cannot read two registers in one

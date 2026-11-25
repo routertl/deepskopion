@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.60 companion — PS CPU profiler for the ring drain.
 
 Answers "is another task stealing the cycles the DDR-ring drain needs?" using

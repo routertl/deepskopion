@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.167: DE25 targets must fail closed on unmatched constraints."""
 from __future__ import annotations
 

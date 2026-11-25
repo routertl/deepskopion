@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 UART Datalogger Pre-Commit Regression
 Expanded regression at 460.8K baud covering all word lengths (5-9)

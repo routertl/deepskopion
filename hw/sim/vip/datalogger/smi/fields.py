@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # tb/datalogger/fields.py
 
 # Bit positions (LSB = 0)

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T2.86 — the DE25 contract's map-access preamble walks the regbank, not low HPS memory.
 
 WHAT THIS GUARDS

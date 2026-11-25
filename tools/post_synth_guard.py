@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Run the DE25 post-synth guard tests against the build trees rr synth made.
 
 DS-P3.193.  Some guards read files that exist only after ``rr synth run`` of a

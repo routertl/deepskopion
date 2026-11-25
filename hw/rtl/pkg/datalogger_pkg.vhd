@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- File       : datalogger_pkg.vhd
 -- Description: Shared constants, subtypes and array types of the data loggers.

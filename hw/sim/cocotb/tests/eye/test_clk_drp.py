@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """clk_drp DRP-sequencer test (DS-P2.66 / DS-P3.115 / DS-P3.118).
 
 Proves the eye's FREQUENCY axis: the DRP reconfiguration sequencer drives the

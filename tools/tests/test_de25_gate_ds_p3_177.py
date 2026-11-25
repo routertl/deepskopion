@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """DS-P3.177: the gate runs both DE25 Linux suites under an unprivileged PATH.
 

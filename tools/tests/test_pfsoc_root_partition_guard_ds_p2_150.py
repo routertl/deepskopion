@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.150: the pfsoc bootargs root= must name the DEPLOYED card's ext4 rootfs
 (``/dev/mmcblk0p3``), and no comment in the target may claim a contradictory
 root= partition.

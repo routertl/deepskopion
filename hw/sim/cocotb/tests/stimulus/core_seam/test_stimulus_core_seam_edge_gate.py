@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 test_stimulus_core_seam_edge_gate — DS-P2.100 landing-review Finding B
 adversarial control: EMIO_MUX_SEL bit[7]=0 must gate the edge/pulse source

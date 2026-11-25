@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- Title      : ds_stimulus_gen
 -- Project    : deepskopion / datalogger self-validation (DS-P2.100, DS-D.38 option a)

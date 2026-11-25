@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Compose the PolarFire SoC deployment DTB — bake ds_ip into the image.
 
 PF-L0 (DS-P2.125). The land refusal named a real gap: ``tools/check_bench_ip.py

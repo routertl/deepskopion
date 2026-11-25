@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Unit tests for the boot-identity banner (DS-P3.85). No board needed."""
 
 import sys

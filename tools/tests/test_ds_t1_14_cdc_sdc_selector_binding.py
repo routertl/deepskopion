@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T1.14: the scoped rr_ddr_stream CDC constraint must still BIND to the RTL
 the de25_datalogger build compiles — a silently unconstrained cross-clock path
 is the exact silicon-only failure class this ticket investigated.

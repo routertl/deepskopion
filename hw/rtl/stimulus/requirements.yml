@@ -70,10 +70,10 @@ functional_contract:
       With CONTROL[0]=1 and UART_DATA written while idle, UART_TX_O emits
       a correct 8N1 LSB-first frame (start=0, 8 data bits matching the
       written byte, stop=1) at the configured BAUD_DIV bit period.
-      Observed at `SRC_UART_TX`: hw/sim/tb_stimulus_gen_loop.vhd:145 wires UART_TX_O to stim_uart_tx_w,
-      :182 feeds it to ds_emio_mux UART0_TX, and ds_emio_mux.vhd:149 gives
+      Observed at `SRC_UART_TX`: hw/sim/tb_stimulus_gen_loop.vhd:146 wires UART_TX_O to stim_uart_tx_w,
+      :182 feeds it to ds_emio_mux UART0_TX, and ds_emio_mux.vhd:150 gives
       SRC_UART_TX = UART0_TX when EMIO_MUX_SEL(1) = '1' (the tests set it,
-      _stim_common.py:80).
+      _stim_common.py:81).
 
   - id: STIM-REQ-13
     kind: behavioral
@@ -87,10 +87,10 @@ functional_contract:
       datalogger fails and reports CALIBRATION_TIMEOUT on silicon.
       Observed at the UART datalogger's `UART_IN` on the Zybo core seam
       (tb_stimulus_core_seam_zybo.vhd, G_STIM_DRIVES_EMIO true): UART_TX_O =>
-      stim_uart_tx_w (deepskopion_core.vhd:1782); emio_uart_tx_w = stim_uart_tx_w
+      stim_uart_tx_w (deepskopion_core.vhd:1783); emio_uart_tx_w = stim_uart_tx_w
       when STIM_UART_CONTROL(0) = '1' (:928, :931); uart0_tx_w = emio_uart_tx_w
       when EMIO_MUX_SEL(9) = '0' (:947); ds_emio_mux SRC_UART_TX = UART0_TX when
-      EMIO_MUX_SEL(1) = '1' (ds_emio_mux.vhd:149) => src_uart_tx_w (:1052);
+      EMIO_MUX_SEL(1) = '1' (ds_emio_mux.vhd:150) => src_uart_tx_w (:1052);
       board_pin(JB0) = src_uart_tx_w (:1081) = capture_pin(36) (:1157,
       datalogger_config_pkg.vhd:102); UART_IN = mappedUART(0), its glitch-filtered
       copy (datalogger_gather.vhd:372, :389).
@@ -100,8 +100,8 @@ functional_contract:
     desc: >-
       With CONTROL[0]=0 (disabled), UART_TX_O idles high regardless of any
       pending DATA write — the disabled generator never drives a frame.
-      Observed at `SRC_UART_TX`, the same path as STIM-REQ-1 (hw/sim/tb_stimulus_gen_loop.vhd:145,
-      :182; ds_emio_mux.vhd:149, EMIO_MUX_SEL(1) = '1').
+      Observed at `SRC_UART_TX`, the same path as STIM-REQ-1 (hw/sim/tb_stimulus_gen_loop.vhd:146,
+      :182; ds_emio_mux.vhd:150, EMIO_MUX_SEL(1) = '1').
 
   # ── I2C master generator ─────────────────────────────────────────────
   - id: STIM-REQ-3
@@ -114,8 +114,8 @@ functional_contract:
       complete, protocol-correct I2C write transaction on the open-drain
       bus.
       Observed on the open-drain bus `I2C0_BUS_SDA` / `I2C0_BUS_SCL`:
-      hw/sim/tb_stimulus_gen_loop.vhd:150-153 wire I2C_SCL_O/T and I2C_SDA_O/T to ds_emio_mux
-      I2C0_SCL_O/T and I2C0_SDA_O/T (:183-186); ds_emio_mux.vhd:120-124 drive
+      hw/sim/tb_stimulus_gen_loop.vhd:151-154 wire I2C_SCL_O/T and I2C_SDA_O/T to ds_emio_mux
+      I2C0_SCL_O/T and I2C0_SDA_O/T (:183-186); ds_emio_mux.vhd:121-125 drive
       the bus low iff a driver pulls low (T = '0' and O = '0'), else high, so
       the bus equals the generator's drive wherever the target does not pull
       SDA low (the ACK slots); no mux bit gates it.
@@ -154,8 +154,8 @@ functional_contract:
       SCLK_O rising edges (mode 0: CPOL=0/CPHA=0), then releases SS_O —
       a complete, protocol-correct SPI transfer frame.
       Observed at `SPI0_BUS_SCLK`, `SPI0_BUS_MOSI` and `SPI0_CS_GPIO`:
-      hw/sim/tb_stimulus_gen_loop.vhd:158-160 wire SPI_SCLK_O, SPI_MOSI_O and SPI_SS_O; ds_emio_mux.vhd:127-129
-      pass SCLK and MOSI to the bus unconditionally, and hw/sim/tb_stimulus_gen_loop.vhd:165 gives
+      hw/sim/tb_stimulus_gen_loop.vhd:159-161 wire SPI_SCLK_O, SPI_MOSI_O and SPI_SS_O; ds_emio_mux.vhd:128-130
+      pass SCLK and MOSI to the bus unconditionally, and hw/sim/tb_stimulus_gen_loop.vhd:166 gives
       SPI0_CS_GPIO = SPI_SS_O.
 
   - id: STIM-REQ-6
@@ -182,7 +182,7 @@ functional_contract:
       (10000 ns,1), (10200 ns,0), (10520 ns,1), (10800 ns,0), then holds
       low. Every transition is on the advertised sample-clock grid at both
       supported 50 MHz Intel and 100 MHz Xilinx clocks.
-      Observed at `CAPTURE_EDGE0`: hw/sim/tb_stimulus_gen_loop.vhd:162 wires EDGE_O to stim_edge_w and
+      Observed at `CAPTURE_EDGE0`: hw/sim/tb_stimulus_gen_loop.vhd:163 wires EDGE_O to stim_edge_w and
       :166 gives CAPTURE_EDGE0 = stim_edge_w when STIM_EDGE_SEL = '1' (the test
       sets it).
 
@@ -244,7 +244,7 @@ functional_contract:
       master -> DE25-top-mirrored loopback reaches deepskopion_core's
       `PROBE_CAPTURE_SPI_CS` tap (internal capture_pin(20)) via the REAL GPIO-CS decode chain
       (spi0_cs_gpio_w <= gpio_o_w(0) when gpio_t_w(0)='0' else '1',
-      deepskopion_core.vhd:981 — DS-T2.16/STIM-REQ-6's actual silicon CS
+      deepskopion_core.vhd:982 — DS-T2.16/STIM-REQ-6's actual silicon CS
       source), asserting for the duration of the transfer — not just the
       dead native SPI0_SS_O.
 

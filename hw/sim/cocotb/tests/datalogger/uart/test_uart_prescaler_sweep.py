@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 UART Datalogger Prescaler Sweep Test
 Validates the G_TICK_PRESCALER generic at different baud rates.

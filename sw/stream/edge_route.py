@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.123: route a protocol's lines onto the Edge Detector inputs, from the daemon.
 
 EMIO_MUX_SEL (regbank 0x24) has three groups of bits (hw/rtl/deepskopion_core.vhd):

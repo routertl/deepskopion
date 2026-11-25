@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- Title      : tb_stimulus_core_seam
 -- Project    : deepskopion / DS-P2.100 landing-review Finding B

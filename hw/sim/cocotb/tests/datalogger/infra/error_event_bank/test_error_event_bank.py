@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Unit test for error_event_bank (DS-T3.18 — per-channel loss provenance).
 
 Proves the N-channel bank: each EDGE channel's running loss count produces a

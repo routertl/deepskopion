@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-FileCopyrightText: 2026 Daniel J. Mazure
 # SPDX-License-Identifier: MPL-2.0
 """DS-P2.219: a target's pre_sim / pre_build hooks never modify a tracked file.

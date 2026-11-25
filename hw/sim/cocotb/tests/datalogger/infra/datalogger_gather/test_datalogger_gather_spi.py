@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.98 — protocol-level SPI traffic through the full datalogger_gather.
 
 A REAL SPI bus (cocotb SpiMaster BFM) is driven onto the gather's SPI0 datalogger

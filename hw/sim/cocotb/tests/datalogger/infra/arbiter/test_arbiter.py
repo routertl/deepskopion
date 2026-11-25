@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Adversarial test suite for the slim arbiter (post-D.4).
 
 One test per ARB-REQ in hw/rtl/datalogger/infra/arbiter/requirements.yml.

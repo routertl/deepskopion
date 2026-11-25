@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """
 Full payload comparison test at 460800 baud.
 """

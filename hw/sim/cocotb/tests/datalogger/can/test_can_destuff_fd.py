@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """can_destuff FIXED-mode + adjacency test (DS-P2.64 step 3, CAN-REQ-17).
 
 The CAN-FD stuff-count and CRC fields use FIXED stuffing: a stuff bit precedes the

@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- tb_regbank_datalogger_config_seam — DS-P3.73 contract bench.
 --

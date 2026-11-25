@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-FileCopyrightText: 2026 Daniel J. Mazure
 # SPDX-License-Identifier: MPL-2.0
 """DS-P3.245: no test reads a checkout path that git ignores, unless it first checks the file exists.

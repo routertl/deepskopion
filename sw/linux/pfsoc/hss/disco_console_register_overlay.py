@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 # SPDX-FileCopyrightText: 2026 Daniel J. Mazure
 """Surgically adopt the FACTORY diagnostic's proven console register values into

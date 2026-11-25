@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# rr unknown-llm (AI-generated)
 # build_dt.sh — DEPRECATED (retired 2026-05-25 by RTL-P3.592 + DS dt_nodes
 # migration).
 #

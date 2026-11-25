@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T1.17 — the Zybo build keeps the constraint evidence the timing audit needs.
 
 The DS-P1.72 audit had no Zybo constraint compile order, no ignored-exception

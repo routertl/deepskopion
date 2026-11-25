@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T1.13: the write-plane ARMING observability must reach the register a
 devmem caller actually reads, and its 32-bit packing must be exact.
 

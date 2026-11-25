@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """NET-6 (DS-P2.87) — netboot deploy contract: what the live validation caught.
 
 The first live bootsrc=net attempt (2026-08-11, UART-logged) failed in two

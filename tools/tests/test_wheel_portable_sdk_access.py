@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DS-X6 (DS-P1.37) — the build must not reach into the SDK by source path.
 
 On the first off-bench rehearsal (samsung-wsl, clean clone, `pip install

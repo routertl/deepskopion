@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Single-source the SW decoders' per-protocol message-type + event codes from
 the *_datalogger_protocol.yml contracts (DS-P3.59).
 

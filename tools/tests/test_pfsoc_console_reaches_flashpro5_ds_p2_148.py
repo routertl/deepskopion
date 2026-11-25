@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.148: the pfsoc kernel console must actually reach the FlashPro5 UART.
 
 Both defects guarded here were proven on silicon — the on-card image chained

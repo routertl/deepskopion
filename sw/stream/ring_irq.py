@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.60 — ring-fill watermark interrupt (UIO) helper + validation tool.
 
 The PL raises IRQ_F2P[0] when the DDR ring crosses the 75% HIGH watermark

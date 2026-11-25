@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.100 landing-review Finding 1 (fourth-pass revision): drift guard for
 the DE25-top stim-gen loopback that no simulation compile set can elaborate.
 

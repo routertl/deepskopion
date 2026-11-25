@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.196 regression guard: rr regenerates the DE25 HPS and its EMIF.
 
 The DE25 target ships no Intel or Altera generated file. ``ip.yml`` declares

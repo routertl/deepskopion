@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.257: arm_uart_breaks programs the UART datalogger for autoSync and the
 stimulus generator's break pattern, in that order, with hard-coded words."""
 import pytest

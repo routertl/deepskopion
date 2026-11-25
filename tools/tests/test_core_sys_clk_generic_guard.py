@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Regression guard for DS-T1.10: the datalogger-path clock-scaled generics must
 thread G_SYS_CLK_HZ, never a bare literal.
 

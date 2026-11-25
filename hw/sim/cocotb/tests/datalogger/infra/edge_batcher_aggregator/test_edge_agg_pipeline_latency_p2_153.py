@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.153 — PF-F0 timing closure: the aggregator's DECLARED input pipeline.
 
 The PolarFire MPFS095T -1 fabric misses 100 MHz by 5.5-6.2 ns on ONE path

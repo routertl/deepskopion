@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- can_frame_fsm.vhd  —  CAN / CAN-FD frame walker + message staging
 --                       (DS-P3.100 v0.1 classic, DS-P2.64 v0.2 FD fork)

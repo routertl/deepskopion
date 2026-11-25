@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DS-P1.13 Session Summary generator — a JSON-lines transaction log → markdown.
 
 The artefact a closed-architecture box can't produce: a cross-protocol summary

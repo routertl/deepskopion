@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """zs_msg_header_t parser — the common 20-byte header attached to every
 PL-emitted protocol event in the DDR ring buffer.
 

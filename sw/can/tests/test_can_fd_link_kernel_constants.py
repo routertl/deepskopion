@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T2.91: can_fd_link's kernel constants and struct layouts, checked against the real
 uapi headers by a C compiler, not against a hand transcription.
 

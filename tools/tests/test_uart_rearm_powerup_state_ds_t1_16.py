@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T1.16 — pytest gate: a UART datalogger re-arm clears power-up state.
 
 On the PolarFire kit the UART datalogger (id 12) never emitted a byte. A debug

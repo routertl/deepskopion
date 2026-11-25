@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Unit tests for RegbankDataSource against the FakeRegbank fixture.
 
 Phase A coverage of DS-P2.31. Validates that:

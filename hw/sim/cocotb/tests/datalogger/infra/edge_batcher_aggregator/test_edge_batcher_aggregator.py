@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Adversarial test suite for edge_batcher_aggregator (DS-P2.47 Phase B2 step 2).
 
 One test per EBA-REQ in

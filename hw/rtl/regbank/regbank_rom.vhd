@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- File       : regbank_rom.vhd
 -- Description: BRAM-init ROM loaded from a hex file at synthesis time.

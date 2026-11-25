@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DE-G0 (DS-P1.45) — a staged cross-toolchain must be able to LINK.
 
 Measured off-bench 2026-08-30 while building ARM Trusted Firmware for the DE25

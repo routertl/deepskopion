@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 test_stimulus_i2c_ack — DS-P2.100 / DS-D.38 option a fabric-side stimulus
 generator, I2C master generator coverage (STIM-REQ-3, STIM-REQ-4), proven

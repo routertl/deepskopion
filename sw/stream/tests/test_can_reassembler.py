@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """CanReassembler unit tests (DS-P3.104).
 
 Feed the per-message CAN zs_msg stream (the exact order can_frame_fsm emits:

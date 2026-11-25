@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.32 — protocol-level I2C traffic through the full datalogger_gather.
 
 A REAL I2C bus (cocotb I2cMasterDriver + a VHDL i2c_slave BFM that ACKs, wired

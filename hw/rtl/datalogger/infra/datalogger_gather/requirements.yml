@@ -205,8 +205,8 @@ functional_contract:
   # ZERO coverage. These REQs make the per-protocol tag/domain invariant
   # EXPLICIT and falsifiable for the non-EDGE protocols, and they pass GREEN:
   # every datalogger embeds its own device_id at its FINAL MSG_OUT stage
-  # (i2c_datalogger.vhd:421 `C_DEVICE_ID & ...`, uart_frame_gen.vhd:423
-  # `C_UART_DEV_ID_UNS & ...`, qspi_datalogger.vhd:335, edge_datalogger.vhd:209),
+  # (i2c_datalogger.vhd:422 `C_DEVICE_ID & ...`, uart_frame_gen.vhd:424
+  # `C_UART_DEV_ID_UNS & ...`, qspi_datalogger.vhd:336, edge_datalogger.vhd:210),
   # so the gather's <proto>Messages(i)(31:27) extraction is correct for all
   # four protocols.
   # HISTORY: DS-T2.19 alleged a tagging bug (i2c/uart not embedding device_id

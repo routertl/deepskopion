@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.187 — pytest gate: the rest of the DS-P2.139 contract audit.
 
 The 2026-09-10 audit (733cd8ce), re-measured on origin/main e2096d2d before

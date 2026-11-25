@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.74 stacked decoders, driven from real zs_msg frames in the DDR ring
 through DdrRingDataSource, and out through the wave_stream_v1 server and CLI."""
 from __future__ import annotations

@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- File       : edge_batcher.vhd
 -- Description: Per-channel batching FSM for the EDGE_BATCH zs_msg payload

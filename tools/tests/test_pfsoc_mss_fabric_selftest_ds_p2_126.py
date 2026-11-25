@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.126 — PolarFire MSS fabric peripherals are a selectable logger source.
 
 The frozen MSS already routes MMUART_1 / I2C_0 / SPI_0 / CAN_0 to the fabric.

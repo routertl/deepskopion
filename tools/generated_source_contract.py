@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DS-X2 generated-source reconstruction and drift contract.
 
 The normal RouteRTL hooks write into the checkout.  This checker instead runs

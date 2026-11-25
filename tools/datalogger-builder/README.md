@@ -92,8 +92,8 @@ EDGE datalogger asks for 15 header pins of 14 and is refused.
 
 A JTAG datalogger reads the REA tap. The `de25-standard` and
 `polarfire-soc-discovery` tops tie the tap inputs to constants
-(`hw/rtl/de25/deepskopion_de25_top.vhd:822`,
-`hw/rtl/pfsoc/deepskopion_pfsoc_fabric.vhd:793`), so on those boards a JTAG
+(`hw/rtl/de25/deepskopion_de25_top.vhd:823`,
+`hw/rtl/pfsoc/deepskopion_pfsoc_fabric.vhd:794`), so on those boards a JTAG
 datalogger records no live traffic and the configurator prints a warning.
 
 A config that needs more capture sources than the core has is refused, by the

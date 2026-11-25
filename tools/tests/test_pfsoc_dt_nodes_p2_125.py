@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """PF-L0 (DS-P2.125): the pfsoc DT deltas must REALISE the bootargs wiring.
 
 The land refusal was that ``targets/pfsoc_datalogger.yml`` shipped

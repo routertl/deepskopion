@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 test_stimulus_core_seam_zybo_i2c_ps — DS-P1.90, STIM-SEAM-REQ-6 (I2C).
 

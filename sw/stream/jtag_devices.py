@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """JTAG device profiles — chain-aware decode config (DS-P3.56 P3).
 
 The generic reassembler (:mod:`jtag_reassembler`) knows the TAP FSM and the

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Ad-hoc ring diagnostic (resync investigation).
 
 Reads the ring pointers + a window of raw ring bytes at the write head and tries

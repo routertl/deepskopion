@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """can_datalogger CAN-FD BRS dual-rate — ISO CRC-delimiter switch-back REPRO (DS-T2.48).
 
 Silicon (DS-P3.112, Zybo bit 0x80b87c20, real CTU CAN FD traffic) showed a BRS

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """PF-L0 (DS-P2.125): the pfsoc image path composes ds_ip, and the checker
 accepts what it produces — closing the "detector nobody can call" refusal.
 

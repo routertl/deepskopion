@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 UART Datalogger — explicit-config / disable-calibration latency path (DS-T3.9)
 

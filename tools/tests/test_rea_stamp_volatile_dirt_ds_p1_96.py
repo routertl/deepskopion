@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.96: build-metadata dirt does not make the REA design stamp dirty.
 
 THE DEFECT (DS-P2.164 run 4, 2026-11-07, clean clone at fa20aa5f, rr 5.3.0).

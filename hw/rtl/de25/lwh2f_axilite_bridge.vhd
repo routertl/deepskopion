@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -- =============================================================================
 -- Title      : lwh2f_axilite_bridge — AXI4-full (lwh2f master) → AXI4-Lite (CSR)
 -- Project    : rr-ddr-stream / de25_agilex5_ddr_validator

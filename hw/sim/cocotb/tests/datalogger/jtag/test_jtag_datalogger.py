@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Contract-first unit test for jtag_datalogger (DS-P3.56, JTAG P1).
 
 A cocotb TAP-master BFM drives TCK/TMS/TDI/TDO (the datalogger watches them

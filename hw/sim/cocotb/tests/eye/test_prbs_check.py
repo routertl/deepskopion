@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """prbs_check unit test (DS-P2.66, Phase 1).
 
 Proves the self-synchronising PRBS checker that measures BER for the PMOD

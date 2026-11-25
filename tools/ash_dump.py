@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: MPL-2.0
 # SPDX-FileCopyrightText: 2026 Daniel J. Mazure
 """DS-P3.341: the parse tree of a shell script, from the ash the DE25 image runs its init scripts with.

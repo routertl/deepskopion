@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """DS-P1.103: targets/ holds exactly the three shipped products; every other target lives in bench/targets/.
 

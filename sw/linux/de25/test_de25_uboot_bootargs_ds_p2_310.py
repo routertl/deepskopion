@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.310: U-Boot's default env bootargs is the composed deployment cmdline.
 
 U-Boot writes its environment ``bootargs`` into ``/chosen`` at ``booti``

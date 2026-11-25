@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: MPL-2.0
 """DS-P3.335: kernel_errors works with what the board images ship.
 

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Cheap contract guards for DE-R0 (DS-P1.39) — the expensive queued gate is
 DE25 core baseline runner (a bench script, not in this distribution); see ``test_xilinx_baseline_contract.py``
 for the sibling DS-X3 (xilinx) version this mirrors.

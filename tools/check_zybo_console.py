@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DS-P1.105: refuse a Zybo boot image whose console is not the board's USB UART.
 
 The Zybo-Z7 USB console is the PS UART1 at 0xE0001000 (MIO, through the

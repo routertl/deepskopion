@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 test_level_frames_per_change: one level change must produce exactly one level
 payload frame, whatever the arbiter's LEVEL_MSG_RDY pattern.

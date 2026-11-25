@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Unit tests for per-protocol payload decoders (DS-P1.12).
 
 Round-trip a hand-packed zs_msg payload through the decoder and assert

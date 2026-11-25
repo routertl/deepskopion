@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """DS-P2.360: the public export refuses tracked files under a package that rr fetches from its own repository.
 

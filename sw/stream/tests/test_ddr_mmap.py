@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Unit tests for FakeDdrMmap (the test-friendly half of ddr_mmap.py)."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DE-F0 / DE-G0 (DS-P1.45) — the vendor-mismatch hook must not read a STALE qsf.
 
 Measured off-bench on the DE-G0 rehearsal host, 2026-08-30 (Record E): project

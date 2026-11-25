@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 test_regbank_spi_inj_seam — DS-T12 / DS-T3.2 mirror for the SPI side.
 

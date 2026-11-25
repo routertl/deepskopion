@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T3.37: a named CI leg runs the DE25 toolchain stage tests unskipped.
 
 Three tests in sw/linux/de25/test_de25_toolchain_stage.py need the pinned

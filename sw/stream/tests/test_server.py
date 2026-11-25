@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.30: server smoke test — spin up serve_one() against a real Unix socket
 and verify a fake consumer can complete the HELO handshake and receive a few
 SAMPLES + ANNOTATIONS frames before clean EOF.

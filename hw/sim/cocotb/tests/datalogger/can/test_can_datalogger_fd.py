@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """can_datalogger CAN-FD full-chain integration test (DS-P2.64 step 5).
 
 Drives a RAW, STUFFED CAN-FD frame through the FULL chain — can_bit_timing →

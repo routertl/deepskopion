@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 UART Datalogger Simplified Integration Test - 1Mbps 8N1
 Verifies: Calibration lock + UART_MSG_VLD activity without full reassembly.

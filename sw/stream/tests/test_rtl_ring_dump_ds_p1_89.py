@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.89: the dumps for cost figures model the RTL edge pipeline.
 
 ring_dump.edge_dump and interleaved_dump give each channel its own tick, so the

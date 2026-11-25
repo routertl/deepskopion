@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 UART Datalogger Integration Test - 921600 baud 8N1
 Fast integration test at recommended high-speed baud rate.

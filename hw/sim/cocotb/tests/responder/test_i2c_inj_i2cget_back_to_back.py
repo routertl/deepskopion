@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.217 — back-to-back `i2cget`-shaped reads against i2c_injector in the
 configuration `CONTROL stim i2c` leaves on the board.
 

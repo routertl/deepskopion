@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # tests/datalogger/i2c/test_i2c_datalogger.py
 """
 Cocotb testbench for i2c_datalogger

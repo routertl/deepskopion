@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.322: the test-only JTAG gather fixture stays equal to the generator and to the product mix.
 
 The DS-P1.104 default mix has no JTAG logger, so test_datalogger_gather_jtag (DS-P3.99) compiles a test-only

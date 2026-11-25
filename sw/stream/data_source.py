@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Abstract data source + concrete implementations for the wave_stream_v1 daemon.
 
 The daemon is intentionally decoupled from the PL-side data path: any source

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Per-protocol payload decoders for zs_msg frames (DS-P1.12).
 
 A decoder turns the raw payload bytes of one zs_msg frame into the

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 UART Datalogger — adversarial CONFIG-path coverage (DS-T3.9 hardening).
 

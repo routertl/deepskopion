@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.71 integration repro — does piece-3's in-band loss frame survive the
 emitter → 3:1 mux → zs_msg_framer path under the SILICON condition?
 

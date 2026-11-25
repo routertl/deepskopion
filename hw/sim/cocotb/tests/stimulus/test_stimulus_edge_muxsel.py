@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 test_stimulus_edge_muxsel — DS-P2.100 / DS-D.38 option a fabric-side
 stimulus generator, edge/pulse source + tb-local EMIO_MUX_SEL bit[7] mux

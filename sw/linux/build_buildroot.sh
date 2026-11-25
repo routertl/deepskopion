@@ -1,4 +1,5 @@
 #!/bin/bash
+# rr unknown-llm (AI-generated)
 # DS-P2.49 — Buildroot python_overlay build script (runs inside routertl-buildroot container).
 #
 # Produces:
@@ -12,6 +13,33 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 HERE="$(pwd)"
+
+# DS-P2.350 / DS-P2.351: Buildroot's own dependency check stops the 1-3 h build
+# only after the clone and defconfig, with a message that names one problem at a
+# time. This check runs first and names every missing host program at once.
+# The set is the one support/dependencies/dependencies.sh of Buildroot 2024.11.4
+# requires on the host (bison, flex, dtc, pkg-config and OpenSSL are built by
+# Buildroot itself).
+case "$PATH" in
+    *[[:space:]]*)
+        echo "ERROR: PATH contains whitespace (WSL appends Windows entries such as" >&2
+        echo "       '/mnt/c/Program Files/...'), and Buildroot refuses to build with it." >&2
+        echo "       Remove those entries for this shell, as in the README section" >&2
+        echo "       'Host requirements of step 4, on Ubuntu and Debian':" >&2
+        echo "         export PATH=\"\$(printf '%s' \"\$PATH\" | tr ':' '\\n' | grep -v '[[:space:]]' | paste -sd:)\"" >&2
+        exit 2
+        ;;
+esac
+MISSING=""
+for prog in bash bc cmp cpio file find g++ gcc git make patch perl rsync sed tar unzip wget which xargs; do
+    command -v "$prog" >/dev/null 2>&1 || MISSING="$MISSING $prog"
+done
+if [ -n "$MISSING" ]; then
+    echo "ERROR: host programs missing for the Buildroot build:$MISSING" >&2
+    echo "       On Ubuntu and Debian, the README section 'Host requirements of step 4'" >&2
+    echo "       lists the apt-get line that installs them." >&2
+    exit 2
+fi
 
 # The Buildroot release is a tag, never a branch: a branch tip moves with each
 # point release and silently changes the compiler that builds this overlay and

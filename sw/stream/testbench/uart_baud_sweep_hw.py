@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """On-silicon UART baud sweep (DS-T2.30).
 
 Drives the EMIO UART0 line at several baud rates and reports whether the

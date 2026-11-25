@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DS-P2.262: keep build-host data out of the Zynq python overlay.
 
   clean_python_overlay.py --check <overlay>

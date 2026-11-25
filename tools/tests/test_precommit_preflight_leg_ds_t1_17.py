@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T1.17 — the pre-commit gate runs the golden-path preflight suite, fail-closed.
 
 DS-P2.121 removed CAN datalogger id 20 from datalogger_config.yml while

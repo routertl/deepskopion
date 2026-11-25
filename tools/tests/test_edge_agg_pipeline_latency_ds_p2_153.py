@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.153 — pytest gate over the aggregator input-pipeline cocotb suite.
 
 PF-F0's measured 100 MHz miss (WNS -5.5..-6.2 ns, Synplify fmax 79.5 MHz —

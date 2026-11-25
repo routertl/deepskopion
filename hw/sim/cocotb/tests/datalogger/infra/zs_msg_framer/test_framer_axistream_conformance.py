@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """EPIC RTL-P2.719 / ticket RTL-P3.851 — point the routertl-native
 AxiStreamMonitor at deepskopion's REAL wave_stream egress port (the
 ``zs_msg_framer`` OUT_* bus) and get AMBA AXI4-Stream conformance + corner-case

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Regression guards for DS-X2 deterministic generated-source reconstruction."""
 
 from __future__ import annotations

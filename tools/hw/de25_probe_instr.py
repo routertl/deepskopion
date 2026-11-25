@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DE25 ring-pointer instrument: RING_READ_PTR and RING_COMMIT_PTR read in ONE console line.
 
 The instrument of DS-DE25-DRAIN-001 (runtimes/hw.yml). The ring fill is

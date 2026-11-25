@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.74 (decision DS-D.49): the daemon's wire bytes are the same on the native edge path.
 
 With DdrRingDataSource(native_edge_drain=...), runs of EDGE_BATCH frames are

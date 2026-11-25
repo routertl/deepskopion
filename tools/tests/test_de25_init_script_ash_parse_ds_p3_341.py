@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: MPL-2.0
 # SPDX-FileCopyrightText: 2026 Daniel J. Mazure
 """DS-P3.341 part 2: the init-script scan reads each script's parse tree from the image's own BusyBox ash.

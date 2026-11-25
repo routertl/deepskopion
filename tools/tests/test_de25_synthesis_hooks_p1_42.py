@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DE-F0 (DS-P1.42) regression guard.
 
 The queued bitstream build (rr 4.8.1) never threads ``tcl_hooks.gen_project``

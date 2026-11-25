@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.101 — regression guard for `entity work.<tich-unit>` library
 mismatches that silently blocked every de25_datalogger Quartus bitstream build.
 

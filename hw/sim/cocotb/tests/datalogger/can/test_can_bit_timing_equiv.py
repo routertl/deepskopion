@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """can_bit_timing B2-refactor EQUIVALENCE test (DS-P2.64 step 1, CAN-REQ-23).
 
 The v0.1 TQ bit-timing block was validated on silicon (Zybo Z7-20,

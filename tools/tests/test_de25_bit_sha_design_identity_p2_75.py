@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T2.75 regression guard: the de25_datalogger ``rr_rea_build_id`` pre_build
 hook must stamp the commit+target DESIGN IDENTITY into the REA BUILD_ID
 register, NOT the REA source-hash — so ``rr hw bit-sha`` can reach CONFIRMED on

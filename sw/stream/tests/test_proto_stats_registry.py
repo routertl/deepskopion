@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """LT-P3.250 / DS-P3.120: the STATS per-protocol map is single-sourced.
 
 The wave_stream STATS frame's `proto_stats` map MUST be keyed by exactly the

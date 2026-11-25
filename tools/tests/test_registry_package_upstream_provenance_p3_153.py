@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.153: registry packages may not hide edits behind lock hashes.
 
 INPUT DOMAIN: an ``ip.lock`` entry with a Git URL is a registry package whose

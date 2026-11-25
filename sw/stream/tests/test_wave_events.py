@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.50: wave_events_v1, the agent-facing NDJSON lane of the daemon.
 
 Consumers here are what the ticket's acceptance names: a plain TCP client reading

@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -- SPDX-FileCopyrightText: 2026 Daniel J. Mazure
 -- SPDX-License-Identifier: CERN-OHL-W-2.0
 -- DE-H0 Agilex 5 / DE25 platform shell. Platform Designer generation is

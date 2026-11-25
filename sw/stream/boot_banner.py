@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Boot-time SW + bitstream identity banner (DS-P3.85).
 
 A stale daemon (e.g. a pre-DS-T3.8 decoders.py) once silently masked all UART

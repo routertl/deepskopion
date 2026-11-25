@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.107 — two independent I2C buses through the full datalogger_gather.
 
 The DE25 stereo-vision capture use-case: the Zybo Z7-20 (VmodCAM) configures

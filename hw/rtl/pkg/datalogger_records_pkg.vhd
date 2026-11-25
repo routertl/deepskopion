@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- Standard   : VHDL-2008
 -- SPDX-License-Identifier: CERN-OHL-W-2.0

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.32 (final arm) — protocol-level multi-channel EDGE traffic through the
 full datalogger_gather.
 

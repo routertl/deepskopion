@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 --------------------------------------------------------------------------------
 -- glitch_filter — async-input conditioning for datalogger lines (DS-T3.5)
 --

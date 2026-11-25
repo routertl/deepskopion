@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """can_crc17 unit test (DS-P2.64 step 2, CAN-REQ-19) — CAN-FD CRC-17 (<=16 B).
 
 LAYER-0 GOLDEN ANCHOR (the circular-green keystone). The CRC-17 polynomial, bit

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-X1 (DS-P1.27) — no tracked file may depend on THIS bench.
 
 The golden path is clone-and-build. That contract dies the moment a tracked

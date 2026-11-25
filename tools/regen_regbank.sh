@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# rr unknown-llm (AI-generated)
 # Regenerate the regbank artifacts deepskopion's build depends on.
 #
 # Runs the three routertl-side generators in dependency order with the

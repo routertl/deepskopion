@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """DS-P1.103: the CTU CAN FD core is a bench-only package; no product reaches it.
 

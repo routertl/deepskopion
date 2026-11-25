@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Assemble and inspect PolarFire SoC Discovery Kit boot media (DS-P2.147).
 
 WHY THIS EXISTS

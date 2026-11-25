@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Retarget the HSS Discovery-Kit E51 debug console from MMUART1 to MMUART4.
 
 WHY THIS EXISTS (DS-P2.145 / DS-P3.160)

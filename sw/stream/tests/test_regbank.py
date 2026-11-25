@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Unit tests for sw.stream.regbank (FakeRegbank + Regs offset map)."""
 
 from __future__ import annotations

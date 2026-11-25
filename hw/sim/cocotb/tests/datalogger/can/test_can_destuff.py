@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """can_destuff unit test (DS-P3.100, Block 2).
 
 Drives the (stuffed) on-wire bit stream and asserts the de-stuffed output equals

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """REA BUILD_ID (0xD4) design-identity readback — DS-T2.75 RTL guard.
 
 Proves the on-chip mechanism `rr hw bit-sha` depends on: rr_rea_regbank must

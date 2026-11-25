@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.23 — qspi_datalogger 2-data-pin (SPI/Dual) payload-format coverage.
 
 test_qspi_capture exercises the QUAD build (G_QSPI_PINS=6). This file runs the

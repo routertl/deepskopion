@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.196: the write-plane debug CS crossing launches from a clk_ddr flop.
 
 Since rr_ddr_stream 0.3.4 (d1c8d53, DDR-T2.17) the IP drives

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: MPL-2.0
 """DS-P2.264: refuse a built de25_p2writer rootfs that lacks a command the
 writer or its /init runs, before any board step.

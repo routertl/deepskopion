@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # tb/datalogger/i2c - I2C Datalogger Testbench Components
 from .decoder import I2cMsgDecoder, I2cEvent
 from .config import I2cDataloggerCfg, pack_config

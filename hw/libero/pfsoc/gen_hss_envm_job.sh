@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 # SPDX-FileCopyrightText: 2026 Daniel J. Mazure
 #

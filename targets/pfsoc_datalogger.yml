@@ -163,7 +163,7 @@ sources:
   sdc:
   - hw/sdc/pfsoc/pfsoc_timing.sdc # DS-T10 CDC set_max_delay re-derived for Libero SDC
   libraries:
-    # deepskopion_core.vhd:16 references `library ctu_can_fd_rtl` unconditionally
+    # deepskopion_core.vhd:17 references `library ctu_can_fd_rtl` unconditionally
     # (the CTU CAN FD cores live inside the core). pfsoc_datalogger is CAN-free by
     # default (no ctu-fee/ctucanfd_ip_core package), so the library is satisfied
     # by the same lightweight stub top the CAN-free DE25 leg uses — otherwise the

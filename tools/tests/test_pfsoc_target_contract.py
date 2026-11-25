@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """PF-H0 (DS-P2.124): contract guards for targets/pfsoc_datalogger.yml.
 
 Mirrors tools/tests/test_de25_core_baseline_contract.py for the third silicon.

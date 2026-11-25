@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-FileCopyrightText: 2026 Daniel J. Mazure
 # SPDX-License-Identifier: MPL-2.0
 """DS-P2.274: a console shell call returns the command's whole output when the board's 80-column

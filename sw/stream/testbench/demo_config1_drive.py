@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DS-P1.13 demo config #1 traffic driver — SUSTAINED per-protocol EMIO injection.
 
 Board-side stimulus for the daemon-client live-capture demo (captured

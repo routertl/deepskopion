@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- File       : system_regbank_wrapper.vhd
 -- Description: Wraps the auto-generated AXI-Lite system_regbank with two

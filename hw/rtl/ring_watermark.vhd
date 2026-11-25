@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- ring_watermark.vhd — DS-P3.60 ring-fill watermark alarm with hysteresis.
 --

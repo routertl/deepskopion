@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """can_bit_timing DUAL-RATE / forced-resync test (DS-P2.64 step 1, CAN-REQ-14/-13).
 
 Exercises the NEW B2 capability directly on the production can_bit_timing entity:

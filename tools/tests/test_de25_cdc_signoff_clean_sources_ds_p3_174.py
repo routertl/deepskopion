@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 # SPDX-FileCopyrightText: 2026 Daniel J. Mazure
 """DS-P3.174 — Guards clean source roots for DE25 CDC signoff.

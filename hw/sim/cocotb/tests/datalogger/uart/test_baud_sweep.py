@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 UART Datalogger Baud Rate Sweep Test
 Finds the working baud rate upper limit.

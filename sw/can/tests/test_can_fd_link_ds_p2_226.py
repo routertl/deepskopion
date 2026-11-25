@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.226: the stdlib CAN FD link helper encodes exactly what the kernel reads.
 
 The DE25 Linux image carries neither iproute2 nor can-utils (DS-P2.227), so

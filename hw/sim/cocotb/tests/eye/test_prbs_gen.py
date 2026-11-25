@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """prbs_gen unit test (DS-P2.66, Phase 2 quick-win).
 
 Confirms the RTL PRBS generator emits EXACTLY the Python golden sequence the

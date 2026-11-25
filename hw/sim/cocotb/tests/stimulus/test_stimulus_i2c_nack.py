@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 test_stimulus_i2c_nack — DS-P2.100 / DS-D.38 option a fabric-side stimulus
 generator, I2C master generator adversarial coverage (STIM-REQ-3), proven

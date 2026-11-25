@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Scoped autodiscovery of a sim DUT's compile set — kills hand-curated lists.
 
 A cocotb test must NOT carry a hand-curated `custom_libraries`/`hdl_sources`

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 DS-T3.5 reproduction — uart_datalogger must NOT emit spurious parity_error (0x02)
 status events on a clean 8N1 (no-parity) stream.

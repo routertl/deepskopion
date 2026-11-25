@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T1.19 — DE25 board and JTAG clock contract evidence and regression guards.
 
 Audit (DS-P1.72):

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T3.6 drift-gate: the I2C VIP decoder's hardcoded TYPE constants must match
 the single-sourced protocol_codes.I2C_TYPES (generated from
 i2c_datalogger_protocol.yml, the same table the RTL i2c_datalogger.vhd and the daemon

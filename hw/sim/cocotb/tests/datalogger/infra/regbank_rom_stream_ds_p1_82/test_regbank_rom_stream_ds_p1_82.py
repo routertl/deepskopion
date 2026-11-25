@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 test_regbank_rom_stream_ds_p1_82 — DS-P1.82: the regbank streaming ROM ports
 deliver every word, in order, to a compliant AXI-Lite master.

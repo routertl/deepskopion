@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Unit tests for sw.stream.testbench.provenance.
 
 Covers the PS-side provenance + ABI-contract helpers behind RTL-P3.636

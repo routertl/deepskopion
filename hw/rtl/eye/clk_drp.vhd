@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 --------------------------------------------------------------------------------
 -- File       : clk_drp.vhd
 -- Project    : deepskopion — eye-scan / BERT instrument (DS-P2.66, DS-P3.118/119)

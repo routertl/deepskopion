@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """SW-C0 (DS-P1.46) — the executable half of the Linux deployment contract.
 
 `sw/linux/deployment_contract.yml` declares how deepskopion software reaches a

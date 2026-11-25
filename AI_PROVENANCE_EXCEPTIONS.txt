@@ -1,0 +1,95 @@
+# SPDX-License-Identifier: MPL-2.0
+# Source files that do not carry the "rr <model> (AI-generated)" header line, by reason.
+# Every other tracked .py .vhd .vhdl .c .h .v .sv file carries it (checked by
+# tools/tests/test_ai_provenance_header_ds_p1_125.py; stamped by tools/ai_provenance_stamp.py).
+# One path or glob per line; "#" starts a comment.
+
+[vendored]
+# RouteRTL library sources, package content pinned by ip.lock and targets/*.ip.lock.
+libs/routertl/**
+# rr-ddr-stream vendor stubs, package content pinned by ip.lock and targets/*.ip.lock.
+tools/sim/vendor_stubs/rr_ddr_stream_intel/*
+# The wave_stream_v1 contract directory: copied identically into every repo that implements the protocol
+# (contracts/wave_stream_v1/README.md, "Who owns it"); a repo must not edit its local copy.
+contracts/wave_stream_v1/**
+# smbus2 0.6.1, staged into the rootfs overlay (see docs/REDISTRIBUTION.md). Its package directory only.
+sw/linux/rootfs_overlay/usr/lib/python3.12/site-packages/smbus2/*
+
+[generated]
+# Written by tools/datalogger-builder/datalogger_gather_gen.py.
+hw/rtl/datalogger/infra/datalogger_gather.vhd
+hw/rtl/datalogger/infra/datalogger_gather/datalogger_gather.vhd
+hw/rtl/pkg/datalogger_config_pkg.vhd
+tools/sim/fixtures/gather_jtag/datalogger_config_pkg.vhd
+tools/sim/fixtures/gather_jtag/datalogger_gather.vhd
+tools/tests/datalogger_mix/fixtures/*/datalogger_config_pkg.vhd
+tools/tests/datalogger_mix/fixtures/*/datalogger_gather.vhd
+# Written by the regbank-utils tool.
+hw/rtl/pkg/system_regbank_pkg.vhd
+hw/rtl/regbank/system_regbank.vhd
+# Written by tools/datalogger-builder/datalogger_registry_gen.py and protocol_codes_gen.py.
+sw/stream/datalogger_registry.py
+sw/stream/protocol_codes.py
+# Synthesis-generated ROM package kept as witness data.
+tools/tests/data/ds_p1_79_witness/*build/rom_info_pkg.synth.vhd
+
+[frozen-evidence]
+# Each file's own sha256 (or, for edge_drain.c/.h, the hash over the two) is quoted by its pinned-by record, on a line
+# that names the file. "./NAME" is the record NAME in the file's own directory (each run's own harness manifest).
+tools/tests/data/ds_p1_79_witness/*harness/*         # pinned-by: ./HARNESS_SHA256
+tools/tests/data/ds_p2_165_witness/harness/*         # pinned-by: ./HARNESS_SHA256
+tools/tests/data/ds_p2_190_witness/harness/*         # pinned-by: ./HARNESS_SHA256
+tools/tests/data/ds_t1_23_witness/harness/*          # pinned-by: ./HARNESS_SHA256
+docs/evidence/pf-l0/DS-P1.60/ctty_repro.py           # pinned-by: docs/evidence/pf-l0/DS-P1.60/SHA256SUMS
+# sw/stream/native/README.md records native_edge_source_sha256, a hash over these two sources, beside the sha256
+# of the library each Buildroot toolchain builds from them (guarded by
+# tools/tests/test_native_edge_lib_ds_p1_87.py). Owner decision 2026-11-25: they stay unstamped until the next
+# library rebuild for any reason; stamp them then, and drop this exception.
+# TODO(DS-P3.359): edge_drain.c/.h unstamped until the native library rebuild — verify-diff accepts them only
+# through this exception.
+sw/stream/native/edge_drain.c                        # pinned-by: sw/stream/native/README.md
+sw/stream/native/edge_drain.h                        # pinned-by: sw/stream/native/README.md
+
+[human-written]
+# None listed.
+
+[no-sentinel]
+# VHDL directories whose subtree holds an excluded VHDL file, so the .routertl-ai-generated sentinel would make
+# RouteRTL's V-019 rule flag that file. Their AI-written VHDL files carry the header all the same.
+# Filled from tools/ai_provenance_stamp.py's sentinel_dirs(); the guard test checks this list is exact.
+hw/rtl                                           # holds hw/rtl/datalogger/infra/datalogger_gather.vhd and 4 more
+hw/rtl/datalogger/infra                          # holds hw/rtl/datalogger/infra/datalogger_gather.vhd and 1 more
+hw/rtl/datalogger/infra/datalogger_gather        # holds hw/rtl/datalogger/infra/datalogger_gather/datalogger_gather.vhd
+hw/rtl/pkg                                       # holds hw/rtl/pkg/datalogger_config_pkg.vhd and 1 more
+hw/rtl/regbank                                   # holds hw/rtl/regbank/system_regbank.vhd
+libs/routertl/edge_counter                       # holds libs/routertl/edge_counter/edge_counter.vhd
+libs/routertl/edge_detector                      # holds libs/routertl/edge_detector/edge_detector.vhd
+libs/routertl/infilter                           # holds libs/routertl/infilter/infilter.vhd
+libs/routertl/infilter_array                     # holds libs/routertl/infilter_array/infilter_array.vhd
+libs/routertl/lfsr                               # holds libs/routertl/lfsr/lfsr.vhd
+libs/routertl/phase_accumulator                  # holds libs/routertl/phase_accumulator/phase_accumulator.vhd
+libs/routertl/ram_dual_port                      # holds libs/routertl/ram_dual_port/ram_dual_port.vhd
+libs/routertl/ram_lut                            # holds libs/routertl/ram_lut/ram_lut.vhd
+tools/sim/fixtures/gather_jtag                   # holds tools/sim/fixtures/gather_jtag/datalogger_config_pkg.vhd and 1 more
+tools/sim/vendor_stubs/rr_ddr_stream_intel       # holds tools/sim/vendor_stubs/rr_ddr_stream_intel/rr_fifo_async_mixed_xpm_body_stub.vhd and 2 more
+tools/tests/data/ds_p1_79_witness/build          # holds tools/tests/data/ds_p1_79_witness/build/rom_info_pkg.synth.vhd
+tools/tests/data/ds_p1_79_witness/run2/build     # holds tools/tests/data/ds_p1_79_witness/run2/build/rom_info_pkg.synth.vhd
+tools/tests/data/ds_p1_79_witness/run5/build     # holds tools/tests/data/ds_p1_79_witness/run5/build/rom_info_pkg.synth.vhd
+tools/tests/datalogger_mix                       # holds tools/tests/datalogger_mix/fixtures/edge_only/datalogger_config_pkg.vhd and 4 more
+tools/tests/datalogger_mix/fixtures/edge_only    # holds tools/tests/datalogger_mix/fixtures/edge_only/datalogger_config_pkg.vhd and 1 more
+tools/tests/datalogger_mix/fixtures/pinmap_readme # holds tools/tests/datalogger_mix/fixtures/pinmap_readme/datalogger_config_pkg.vhd
+tools/tests/datalogger_mix/fixtures/zero_edge    # holds tools/tests/datalogger_mix/fixtures/zero_edge/datalogger_config_pkg.vhd and 1 more
+
+[shell]
+# Shell sources listed by path, literal paths only: sourced fragments without a #! line, and every shipped
+# extensionless shell script, so removing a script's #! line cannot take it out of scope (the guard checks that
+# every tracked extensionless file with a sh/bash/dash shebang is listed here).
+hooks/pre-commit.local
+sw/linux/de25/p2writer/overlay/init
+sw/linux/rootfs_overlay/etc/init.d/S01hostname
+sw/linux/rootfs_overlay/etc/init.d/S40network
+sw/linux/rootfs_overlay/etc/init.d/S49dropbear
+sw/linux/rootfs_overlay/etc/init.d/S99deepskopion-stream
+sw/linux/rootfs_overlay/init
+sw/linux/rootfs_overlay/usr/local/bin/deepskopion-authorize-key
+sw/linux/rootfs_overlay/usr/local/bin/deepskopion-self-test

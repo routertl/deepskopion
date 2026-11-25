@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Accept or refuse a Linux image by the bench identity it actually carries.
 
 Boards: de25 (default), pfsoc (DS-P2.125) and zybo (DS-P2.216).

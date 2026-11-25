@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.16 — Stream-RLE edge words reach EDGE_EVENTS as ordinary edges.
 
 An edge_datalogger in Stream-RLE mode sends one DOMAIN_EDGE/EVT_EDGE_RLE

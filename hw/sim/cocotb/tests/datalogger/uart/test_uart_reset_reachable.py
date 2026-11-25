@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T2.31: a UART-datalogger reset must be reachable from SW (via the per-device
 ENABLE bit) and must clear ALL stale state so a reconfiguration recalibrates
 cleanly.

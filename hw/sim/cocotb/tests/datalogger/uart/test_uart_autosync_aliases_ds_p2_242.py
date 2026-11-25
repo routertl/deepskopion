@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.242: autoSync on the word-length aliases.
 
 On the wire, an n-bit frame with its top data bit 1 and one stop bit is the

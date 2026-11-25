@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.236: uart_playback replays each recorded interval for exactly its
 distance.
 

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.161 — the DE25 silicon claims as a tracked rr.hw.contract/v1 contract.
 
 WHAT THIS GUARDS

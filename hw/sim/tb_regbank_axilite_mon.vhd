@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- Title      : tb_regbank_axilite_mon
 -- Project    : deepskopion / RTL-P3.851 AXI-Lite conformance hunt (EPIC P2.719)

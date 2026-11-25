@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: MPL-2.0
 """DS-P2.371: every README command block runs as pasted on RouteRTL 5.7.0.
 

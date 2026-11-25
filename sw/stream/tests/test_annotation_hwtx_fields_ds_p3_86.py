@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.86: the daemon puts the two HWTX fields on every annotation it sends.
 
 The HWTX transcript (routertl RTL-P3.707/708) reads a decoded annotation as a

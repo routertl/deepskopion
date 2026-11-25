@@ -3,10 +3,10 @@
   "accept": [
     {
       "script": "S99deepskopion-stream",
-      "line": 140,
+      "line": 141,
       "construct": ". (a sourced file is not judged)",
       "text": ". \"${EXPECT_FILE}\"",
-      "reason": "Sources /etc/deepskopion-expect only when an operator has dropped that file; it is not in the image, and it sets DS_EXPECTED_GIT_HASH / DS_EXPECTED_DAEMON_VERSION, which the script only exports. It runs no program."
+      "reason": "Sources /etc/deepskopion-expect only when an operator has dropped that file; it is not in the image, and it sets DS_EXPECTED_GIT_HASH / DS_EXPECTED_DAEMON_VERSION, which the script only exports. It runs no program. Re-reviewed 2026-11-24: line moved 140→141 by the AI-provenance header added on line 2; text unchanged."
     }
   ]
 }

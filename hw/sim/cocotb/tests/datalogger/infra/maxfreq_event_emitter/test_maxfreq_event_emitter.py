@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Unit test for maxfreq_event_emitter (DS-P3.117).
 
 Proves the IN-BAND per-line max-frequency reporter: on a MAX_NEW pulse (a new,

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.120: vendored cores under libs/ carry their UPSTREAM licences.
 
 libs/ was dropped from the CERN-OHL-W "hw/**" annotation because it stamped

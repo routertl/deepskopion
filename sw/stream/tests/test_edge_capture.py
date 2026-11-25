@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Unit tests for the edge-capture codec (DS-P2.60). No simulator needed."""
 
 import os

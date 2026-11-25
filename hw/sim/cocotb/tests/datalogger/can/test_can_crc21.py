@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """can_crc21 unit test (DS-P2.64 step 2, CAN-REQ-20) — CAN-FD CRC-21 (>16 B).
 
 LAYER-0 GOLDEN ANCHOR (the circular-green keystone). Same discipline as

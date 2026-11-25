@@ -1,4 +1,5 @@
 #!/bin/bash
+# rr unknown-llm (AI-generated)
 # Stage the OpenSSH `scp` client binary from the Buildroot target tree into
 # rootfs_overlay/ so `rr linux rootfs` rsyncs it into the deployed initramfs.
 #

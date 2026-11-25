@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T2.31 — measure the UART datalogger's usable-baud ceiling (product spec).
 
 The timebase counts prescaled ticks (G_TICK_PRESCALER=8), so the measured bit

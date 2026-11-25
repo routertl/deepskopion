@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Regression guards for the DS-R0 portable FIFO boundary."""
 
 from pathlib import Path

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.88 — every target that builds the regbank ROMs declares their hex files.
 
 deepskopion_core instantiates system_regbank_wrapper, whose two ROMs are sized

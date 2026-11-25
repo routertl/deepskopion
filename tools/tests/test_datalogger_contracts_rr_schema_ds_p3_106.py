@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.106: every datalogger requirements.yml is in the rr functional_contract schema.
 
 rr's loader (sdk.cli.requirements.load_requirements) is the reader that

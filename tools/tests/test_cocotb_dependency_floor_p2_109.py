@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.109 — regression guard for the cocotb dependency-floor ping-pong.
 
 MEASURED DEFECT (2026-09-03): deepskopion ``requirements.txt`` pinned

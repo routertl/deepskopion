@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T2.30: replay the REAL silicon UART waveform into uart_datalogger (cocotb).
 
 Reads uart_silicon_capture.jsonl (recorded on the board by

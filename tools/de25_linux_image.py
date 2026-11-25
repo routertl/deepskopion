@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Prepare and verify the declarative DE25 Linux image inputs (DE-L0).
 
 ``rr linux rootfs`` calls ``stage`` through

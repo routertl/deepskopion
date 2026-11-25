@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 --------------------------------------------------------------------------------
 -- File       : idelay_scan.vhd  (entity + architectures `model` and `xilinx`)
 -- Project    : deepskopion — eye-scan / BERT instrument (DS-P2.66)

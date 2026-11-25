@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """eye_engine point-measure handshake test (DS-P2.66, DS-P3.118 dual-clock).
 
 Proves the one-point BERT engine that fills each cell of the bathtub/eye, now

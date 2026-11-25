@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.335 (replaces the DS-P2.207 rule): no documented command rewrites a committed lock.
 
 DS-P2.207 made every documented `rr target set` follow with `rr lock --update`,

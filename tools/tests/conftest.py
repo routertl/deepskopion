@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Shared pytest configuration for tools/tests.
 
 DS-P2.223: the tests that drive a simulator through ``rr`` share this

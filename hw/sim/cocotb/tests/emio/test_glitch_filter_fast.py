@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """glitch_filter FAST-line case (DS-T3.5 system-wide conditioning).
 
 The window is sized from the datalogger's MAX FREQUENCY. On a fast line (e.g. an

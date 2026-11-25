@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.105: the Zybo console must resolve to the USB UART in every boot stage.
 
 Measured 2026-11-14 on the zybo-z7-20: the BOOT.bin built at 3d925cc6 reached

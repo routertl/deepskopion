@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.59 — guard the SHARED production armer (de_c0_production_armer).
 
 The DS-P2.101 live witness failed to retire `i2c_write` because the on-board

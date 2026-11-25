@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """PS-side AXI-Lite regbank access — abstract interface + /dev/mem + fake backends.
 
 Used by RegbankDataSource (data_source.py) to drain telemetry counters from the

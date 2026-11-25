@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.117 — edge_datalogger max-frequency CONFIRMATION gate (EDGE-REQ-64).
 
 The glitch floor (EDGE-REQ-54) rejects an interval shorter than

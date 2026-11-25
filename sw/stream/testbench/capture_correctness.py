@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DE-C0 (DS-P1.44) — real-bus capture-correctness harness.
 
 The DE-C0 done-conditions are:

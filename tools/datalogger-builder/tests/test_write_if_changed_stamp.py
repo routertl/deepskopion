@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Regression guard for DS-P3.141: a no-op regen must not rewrite generated
 VHDL just because today's date differs from the date baked into the file's
 last run.

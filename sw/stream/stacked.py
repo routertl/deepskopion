@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Stacked decoders (DS-P2.74): protocols carried over another decoded stream.
 
 A datalogger is a flat PL block: raw pins -> one decoded-event shape. This layer

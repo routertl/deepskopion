@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 DS-P2.179 — UART-REQ-14 witness: 8E1 and 8O1 streams through the full uart_datalogger
 with autoSync must be detected as has-parity (parity_enable / latched verdict), and

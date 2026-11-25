@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T3.12 regression guard: pack_config must set the autoSync bit.
 
 The bug: DataloggerCfg/pack_config never packed CONFIG bit 1 (autoSync), so every

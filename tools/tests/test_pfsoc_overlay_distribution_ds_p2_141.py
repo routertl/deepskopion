@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.141 (PF-L0b): the riscv64 PolarFire python_overlay must be OBTAINABLE by
 a fresh consumer without the 1-3 h Buildroot rebuild — distribution PARITY with
 the armhf overlay — and the deployment contract must describe the overlay path

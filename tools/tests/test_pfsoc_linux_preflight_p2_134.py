@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.125 / PF-L0: the ``rr linux`` pfsoc build_env board-pinout gate is OPEN.
 
 ## History: what this file used to guard, and why it changed polarity

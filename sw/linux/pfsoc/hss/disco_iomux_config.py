@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 # SPDX-FileCopyrightText: 2026 Daniel J. Mazure
 """Point the HSS Discovery-Kit build at the AUTHORITATIVE MSS design XML so the

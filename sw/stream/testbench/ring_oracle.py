@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Ring-based oracle for the PS-side EMIO self-test (DS-P3.44).
 
 The self-test verifies Layer 1 by directly walking the DDR ring +

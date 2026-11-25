@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.167 — Write-plane debug instrumentation crossings synchronization.
 
 Vivado report_cdc on Zybo datalogger identified three CDC violations in the

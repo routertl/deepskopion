@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.139 — pytest gate: requirement contracts match the HDL and their tests.
 
 The demo health sweep found contracts that no longer described their RTL and

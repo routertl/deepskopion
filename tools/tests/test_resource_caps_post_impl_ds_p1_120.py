@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: MPL-2.0
 """DS-P1.120: the resource ceilings are a post-implementation check.
 

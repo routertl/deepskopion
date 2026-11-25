@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """DS-P2.332: a configurator-written mix puts CAN RX on an external header pin, never on the internal CAN_BUS tap.
 

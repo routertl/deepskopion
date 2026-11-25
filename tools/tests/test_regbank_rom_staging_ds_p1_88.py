@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.88: every target that builds the regbank ROMs gets its hex files into the tool's run directory.
 
 system_regbank_wrapper reads hw/rtl/regbank/regbank_schema.hex and

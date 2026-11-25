@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Edge-capture codec + file format (DS-P2.60).
 
 Turns the wave_stream EDGE_EVENTS word stream (raw Edge Detector edges produced

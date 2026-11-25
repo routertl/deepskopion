@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.150: package install and target switch leave a clean checkout.
 
 INPUT DOMAIN: every ``targets/*.yml`` file is a supported committed default,

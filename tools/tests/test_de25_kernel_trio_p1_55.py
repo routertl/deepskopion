@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.55 regression guards: the DE25 kernel trio (Image + dtb + bootargs)
 must be the silicon-proven set, and the builder must actually run the step
 that patches the dtb.

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Adversarial behavioral cocotb test for commit-address clock domain crossing (DS-T1.21).
 
 Verifies the toggle req/ack handshake between clk_ddr and clk_sys:

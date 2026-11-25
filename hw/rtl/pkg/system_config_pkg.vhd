@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- File       : system_config_pkg.vhd
 -- Description: Number of address spaces of the system configuration.

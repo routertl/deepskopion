@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Dry-run tests for the ACTIVE eye-scan daemon source (DS-P2.66 Phase 5).
 
 EyeSweepDataSource is the producer glue that turns the eye_sweep library into a

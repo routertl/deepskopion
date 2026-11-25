@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.63 — replay a REAL silicon SDA/SCL edge capture as the sim stimulus.
 
 "Dogfood a captured real signal" (edge_capture.py / DS-P2.60): instead of a

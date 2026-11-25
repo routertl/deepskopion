@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """PS-side self-test scenarios — one per PS-LOOP-REQ-N (DS-P3.44).
 
 Each scenario is a small function taking a SelfTestBench + RingOracle

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 UART Datalogger — a re-arm must clear power-up calibration state (DS-T1.16)
 

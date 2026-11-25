@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 UART Datalogger Payload Verification Sweep
 Verifies correct payload capture for all UART configurations at 460.8k baud.

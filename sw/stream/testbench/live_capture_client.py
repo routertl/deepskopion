@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DS-P2.101 — host-side TCP client for a LIVE DE25 capture-correctness
 witness against a running ``python3 -m sw.stream`` daemon (DS-P2.99/.102).
 

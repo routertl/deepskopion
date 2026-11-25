@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 # SPDX-FileCopyrightText: 2026 Daniel J. Mazure
 """DS-P2.193 — routertl/rea is the 1.12.3 release, with no local REA patch left.

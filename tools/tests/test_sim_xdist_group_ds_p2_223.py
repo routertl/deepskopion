@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.223: sim-driving tools/tests run as one xdist group, one at a time.
 
 Measured 2026-11-06 on origin/main 16443b1f, tools/tests at -n 8: 10 tests

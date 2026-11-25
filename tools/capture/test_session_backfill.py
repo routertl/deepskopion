@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.80 — the Session Summary must report THIS session, not replayed history.
 
 The daemon replays a bounded backfill ring to every new subscriber before the

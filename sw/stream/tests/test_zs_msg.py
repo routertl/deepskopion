@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Unit tests for zs_msg_header_t parse/pack + bit-slicing helpers."""
 
 from __future__ import annotations

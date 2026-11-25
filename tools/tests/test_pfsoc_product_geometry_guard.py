@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """PF-H0 (DS-P2.124): PolarFire SoC product-geometry write-path guards.
 
 The DS-P2.110 pattern extended to the PolarFire SoC MSS-FIC backend. Its two

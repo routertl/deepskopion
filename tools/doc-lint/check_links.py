@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Scan markdown files for broken relative links.
 
 Walks docs/, hw/rtl/datalogger/, and the root README.md, extracts every

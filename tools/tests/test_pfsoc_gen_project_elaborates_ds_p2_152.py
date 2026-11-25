@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.152 (PF-H0): the PFSoC reference-design baseline must ELABORATE.
 
 This is the test-power guard the ticket demands: it exercises the ACTUAL

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: MPL-2.0
 """DS-P3.348: a WARN of the DE25 init-script scan passes only from a reviewed accept list.
 
@@ -74,14 +75,14 @@ def _both_entry_points(tmp_path: Path, tree: Path) -> tuple[int, str, str | None
 
 
 def test_the_committed_acceptance_passes_both_entry_points(tmp_path):
-    """The real committed entry on the real shipped script (S99deepskopion-stream:140 sources the
+    """The real committed entry on the real shipped script (S99deepskopion-stream:141 sources the
     operator's expectation file), no monkeypatch."""
     rc, err, refusal = _both_entry_points(tmp_path, _shipped_tree(tmp_path))
     assert (rc, refusal) == (0, None), err + str(refusal)
-    assert f"WARN S99deepskopion-stream:140: {SOURCED} (accepted: " in err
+    assert f"WARN S99deepskopion-stream:141: {SOURCED} (accepted: " in err
 
 
-@pytest.mark.parametrize("script,line", [("S99deepskopion-stream", 141), ("S50x", 140)])
+@pytest.mark.parametrize("script,line", [("S99deepskopion-stream", 142), ("S50x", 141)])
 def test_the_same_construct_elsewhere_is_refused_by_both_entry_points(tmp_path, script, line):
     """The entry accepts one script, one line and one construct: the same construct one line
     lower, or at the same line of another script, is refused by check-rootfs and by the gate."""
@@ -93,18 +94,18 @@ def test_the_same_construct_elsewhere_is_refused_by_both_entry_points(tmp_path, 
 
 @pytest.mark.parametrize("text,want", [
     ('. "/etc/none"', "is accepted for the line"),                       # same construct, other operation
-    ('eval "$X"', "S99deepskopion-stream:140: eval is not on the reviewed accept list"),  # other construct
+    ('eval "$X"', "S99deepskopion-stream:141: eval is not on the reviewed accept list"),  # other construct
 ])
 def test_another_operation_on_the_accepted_line_is_refused_by_both_entry_points(tmp_path, text, want):
     """Script and line held fixed: a different sourced file, or a different construct, is refused."""
-    rc, err, refusal = _both_entry_points(tmp_path, _sourcing_tree(tmp_path, "S99deepskopion-stream", 140, text=text))
+    rc, err, refusal = _both_entry_points(tmp_path, _sourcing_tree(tmp_path, "S99deepskopion-stream", 141, text=text))
     assert rc != 0 and want in err, err
     assert refusal is not None and want in refusal, refusal
 
 
 def test_a_second_occurrence_on_the_accepted_line_is_refused(tmp_path):
-    rc, err, refusal = _both_entry_points(tmp_path, _sourcing_tree(tmp_path, "S99deepskopion-stream", 140, times=2))
-    want = f"WARN S99deepskopion-stream:140: {SOURCED} occurs 2 times"
+    rc, err, refusal = _both_entry_points(tmp_path, _sourcing_tree(tmp_path, "S99deepskopion-stream", 141, times=2))
+    want = f"WARN S99deepskopion-stream:141: {SOURCED} occurs 2 times"
     assert rc != 0 and want in err, err
     assert refusal is not None and want in refusal, refusal
 

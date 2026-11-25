@@ -1,4 +1,5 @@
 #!/bin/bash
+# rr unknown-llm (AI-generated)
 # PF-L0 (DS-P2.125) — build the riscv64 python_overlay for the PolarFire SoC kit.
 # Runs DIRECTLY ON THE HOST: it clones Buildroot 2024.11.4 and `make`s it here,
 # the same way sw/linux/build_buildroot.sh (armhf) does — there is no

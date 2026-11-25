@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Run the DS-X3 active-target simulation baseline and reject every SKIP.
 
 ``rr sim run`` correctly makes a failed cocotb test fail the tag, but cocotb

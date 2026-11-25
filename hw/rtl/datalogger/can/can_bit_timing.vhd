@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- can_bit_timing.vhd  —  CAN / CAN-FD bit-clock recovery (DS-P3.100 v0.1,
 --                        DS-P2.64 v0.2 → B2 unified direct-count dual-rate sampler)

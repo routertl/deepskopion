@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Stateful JTAG IR/DR reassembler + IDCODE parser (DS-P3.56 P2).
 
 The 1:1 :func:`decoders.decode_jtag` annotates each individual TDI/TDO byte

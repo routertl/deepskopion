@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Build a flattened-devicetree blob that REALISES a target's ``dt_nodes``.
 
 Shared by every test that drives ``tools/de25_linux_image.py``'s build with

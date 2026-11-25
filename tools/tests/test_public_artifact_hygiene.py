@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-C1: public artifacts carry neither bench identity nor access state.
 
 The failure fixtures are assembled from fragments so the tracked test module

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 test_stimulus_core_seam_uart — DS-P2.100 landing-review Finding B:
 C_INDEX_STIM_UART_* unpack AND the stim_uart_tx_o -> emio_uart_tx_i

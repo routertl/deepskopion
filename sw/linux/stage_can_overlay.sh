@@ -1,4 +1,5 @@
 #!/bin/bash
+# rr unknown-llm (AI-generated)
 # Stage the can-utils + iproute2 binaries from the Buildroot target tree into
 # rootfs_overlay/ so `rr linux rootfs` rsyncs them into the deployed initramfs.
 #

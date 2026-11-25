@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """can_frame_fsm unit test (DS-P3.100, Block 3).
 
 Isolates the FRAME WALK: drives the DE-STUFFED field-bit stream directly (plus the

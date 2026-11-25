@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Contract-first NON-EDGE tag coverage for datalogger_gather (SGA-REQ-11/12/13).
 
 The pre-existing suite (test_datalogger_gather.py) drives EDGE only, so the

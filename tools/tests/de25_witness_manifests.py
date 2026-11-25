@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """The registered DE25 silicon-witness manifests beside DS-P2.165's.
 
 runtimes/hw.yml may declare a requirement only when a silicon receipt for it

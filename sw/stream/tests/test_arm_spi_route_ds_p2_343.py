@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """DS-P2.343: arm_spi arms the on-chip SPI responder and, with a route, owns the whole EMIO_MUX_SEL.
 

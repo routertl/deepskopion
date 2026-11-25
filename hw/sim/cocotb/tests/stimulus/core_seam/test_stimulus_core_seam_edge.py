@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 test_stimulus_core_seam_edge — DS-P2.100 landing-review Finding B: the
 core-side bit[7] tap (capture_pin(42) chain, core.vhd:874-880), proven

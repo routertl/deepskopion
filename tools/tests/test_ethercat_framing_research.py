@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Executable guard for the DS-P2.1 EtherCAT wire-format research.
 
 These tests intentionally stop at the research artifact.  There is no EtherCAT

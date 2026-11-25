@@ -523,6 +523,7 @@ Contributions are welcome. [`CONTRIBUTING.md`](CONTRIBUTING.md) has the full wor
 * Commits carry a `Signed-off-by:` line under the Developer Certificate of Origin.
 * A pull request that changes RTL, the daemon, a device tree or a target needs a clean simulation regression and, on the DE25, a record from `rr hw run <REQ_ID> --probe juart --write`. The hardware runs in [`runtimes/hw.yml`](runtimes/hw.yml) are declared for the DE25 only.
 * New board targets and new protocol dataloggers are welcome, for example an Efinix Ti60 port with the Sapphire RISC-V SoC, a Zynq UltraScale+ port, or an EtherCAT datalogger.
+* Every `.py`, `.vhd`, `.c`, `.h`, `.v` and `.sv` file and every shell script written with AI carries an `rr <model> (AI-generated)` comment as its first line after any `#!` line and Python encoding line (`unknown-llm` where the model is not recorded); vendored files, tool-generated files, frozen evidence records whose hashes are quoted, and the exceptions listed in [`AI_PROVENANCE_EXCEPTIONS.txt`](AI_PROVENANCE_EXCEPTIONS.txt) do not. `tools/ai_provenance_stamp.py --write` adds it to a new file.
 
 ---
 

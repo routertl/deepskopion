@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.23 — qspi_datalogger real-coverage (adversarial) data-path tests.
 
 The pre-existing test_qspi_datalogger covers only reset/lifecycle (QSPI-REQ-50/51).

@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -- SPDX-FileCopyrightText: 2026 Daniel J. Mazure
 -- SPDX-License-Identifier: CERN-OHL-W-2.0
 -- DE-H0 portable assembly. Platform clocks, buses, pins and debug transports

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.99 — protocol-level JTAG traffic through the full datalogger_gather.
 
 A REAL IEEE-1149.1 TAP sequence (cocotb TapMaster driving TCK/TMS/TDI/TDO) is

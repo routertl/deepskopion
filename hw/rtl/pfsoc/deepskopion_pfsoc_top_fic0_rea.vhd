@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -- SPDX-FileCopyrightText: 2026 Daniel J. Mazure
 -- SPDX-License-Identifier: CERN-OHL-W-2.0
 -- DS-P2.326: bench top for the PolarFire FIC0 read-path capture. Not a product top;

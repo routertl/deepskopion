@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.209: public CI runs the desk checks on exactly the declared RouteRTL floor.
 
 Measured 2026-11-04 (DS-P1.85): the tree declared ``routertl>=5.2.0``, but its

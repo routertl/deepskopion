@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.117 end-to-end — gather → maxfreq_event_bank live datapath.
 
 Drives REAL edge pulse trains onto the datalogger_gather's EDGE pins and proves the

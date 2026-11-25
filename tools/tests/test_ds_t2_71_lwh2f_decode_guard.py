@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T2.71: the build must refuse a dt_node the fabric does not decode.
 
 Boot7/boot8 (2026-08-23) is the configuration under test.  Two CTU CAN-FD

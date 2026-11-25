@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 test_regbank_i2c_inj_seam — D.11 prime-suspect diagnostic.
 

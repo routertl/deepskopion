@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.242: autoSync locks the line's word length when the calibration buffer
 ends inside a frame.
 

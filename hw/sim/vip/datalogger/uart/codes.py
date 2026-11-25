@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # tb/datalogger/codes.py
 from enum import IntEnum, IntFlag, auto
 

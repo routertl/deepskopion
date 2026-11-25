@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """Sum a Libero compile-netlist hierarchy CSV under a hierarchy prefix, refusing a prefix that matches nothing.
 

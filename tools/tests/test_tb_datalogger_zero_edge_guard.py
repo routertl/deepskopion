@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.173: keep the zero-edge DDR bench independent of EDGE0.
 
 The zero-edge fixture deliberately has no ``C_EDGE0_LINE`` declaration.  The

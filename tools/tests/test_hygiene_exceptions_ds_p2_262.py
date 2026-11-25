@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.262 class F: the reviewed exact-match exception list of public_artifact_hygiene.
 
 Owner ruling 2026-11-11: an exception names one archive member and one exact string.

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T2.94: at 9600 8N1 the 5-bit stop-finder instance loses frame alignment
 and still collects G_MIN_MATCHES matches by re-syncing on in-frame edges.
 

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Adversarial unit test for ring_watermark (DS-P3.60).
 
 The watermark FSM is the load-bearing, subtle part of the interrupt-driven

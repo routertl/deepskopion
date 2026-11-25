@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- Title      : tb_i2c_injector
 -- Project    : deepskopion (DS-P3.43 — DS-P2.51 cocotb regression)

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # tests/datalogger/i2c/test_i2c_stuck_low_ds_p2_309.py
 """DS-P2.309: what the I2C datalogger reports when its input lines sit LOW.
 

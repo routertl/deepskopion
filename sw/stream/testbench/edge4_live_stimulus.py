@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DS-P1.71 — drive ALL FOUR EDGE dataloggers with a known stimulus, ON the board.
 
 Why this exists. LT-P1.24 fixed RouteWave's edge decoding (65.536 ms phantom

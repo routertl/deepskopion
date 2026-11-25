@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """can_datalogger CAN-FD BACK-TO-BACK adversarial test (CAN-REQ-25 / DS-T2.49).
 
 The FD analog of CAN-REQ-10 ("no field bleeds across the frame_end/frame_begin

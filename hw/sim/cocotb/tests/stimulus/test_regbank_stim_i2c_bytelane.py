@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 test_regbank_stim_i2c_bytelane — DS-T2.82 sim reproduction at the pfsoc clock.
 

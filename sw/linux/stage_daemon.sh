@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# rr unknown-llm (AI-generated)
 # Stage sw/stream/ into rootfs_overlay/usr/local/share/deepskopion/ so
 # `rr linux rootfs` bakes the daemon into the image, and check the overlay
 # against the deployment contract (docs/DEPLOYMENT_CONTRACT.md) before it does.

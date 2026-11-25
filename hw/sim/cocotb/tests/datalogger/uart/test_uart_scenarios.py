@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T2.31 — comprehensive UART scenario campaign.
 
 Demonstrates, in ONE sim, that the UART datalogger:

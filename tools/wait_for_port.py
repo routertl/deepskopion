@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: MPL-2.0
 """Wait until a TCP port accepts a connection, for at most --timeout seconds.
 

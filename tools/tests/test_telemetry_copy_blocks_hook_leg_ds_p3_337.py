@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: MPL-2.0
 """DS-P3.337: the pre-commit leg runs the copy-block guard on the STAGED telemetry doc.
 

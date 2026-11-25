@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T2.30 repro: does a long initial idle before the cal burst corrupt the
 uart_datalogger auto-baud (baudRateMin)?
 

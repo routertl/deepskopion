@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.89: the per-frame timestamp base in edge_drain.c is exact.
 
 walk() computes each frame's anchor in ns, whole us and ns remainder once,

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.89: ring_dump --stages also splits the guard stage into the session's
 first frame (checked word by word) and frames 1..N (checked by header), so a
 short benchmark dump is not read as steady-state cost.

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """TFTP layout contract — declared layout must be the layout actually served.
 
 DS-P2.84. For three weeks (2026-07-21 → 2026-08-10) runtimes/hw.yml declared

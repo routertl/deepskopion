@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.242: autoSync format detection locks the true word length when the
 first G_MIN_MATCHES calibration frames all have their top data bit set.
 

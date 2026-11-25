@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.190 — the vendored rr_ddr_stream is a published release and carries the
 DDR-P2.29 RR-CDC-005 waivers.
 

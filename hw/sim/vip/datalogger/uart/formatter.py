@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # Protocol datalogger formatters
 from .codes import MsgType, EventStatus
 from .decode import DecodedMsg, decode_uart_msg, decode_config_msg

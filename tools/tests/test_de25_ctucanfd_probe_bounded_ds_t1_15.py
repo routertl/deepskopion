@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T1.15: an enabled ctucanfd node in the DE25 dtb is allowed ONLY when the
 fabric BOUNDS a wedged CTU probe — the axil_demux3 completion watchdog armed in
 deepskopion_de25_top (``wd_cycles_g /= 0``).

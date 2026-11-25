@@ -166,13 +166,13 @@ Facts in this section, the FSM diagram and the calibration tables verified
 against `dce1f3d0` on 2026-11-09.
 
 The edge buffer closes when the line is idle for 16 bit-times
-(`relativeDistCnt_r >= baudRateMin_r & "0000"`, `uart_datalogger.vhd:589`) or
-when the FIFO holds `2**(C_FIFO_DEPTH-3)-1` = 127 edges (`uart_datalogger.vhd:597`,
-`C_FIFO_DEPTH` = 10 in `uart_pkg.vhd:59`). A burst longer than 127 edges is
+(`relativeDistCnt_r >= baudRateMin_r & "0000"`, `uart_datalogger.vhd:590`) or
+when the FIFO holds `2**(C_FIFO_DEPTH-3)-1` = 127 edges (`uart_datalogger.vhd:598`,
+`C_FIFO_DEPTH` = 10 in `uart_pkg.vhd:60`). A burst longer than 127 edges is
 therefore cut inside a frame. Calibration then runs:
 
 1. `uart_playback` replays the buffered edges as a waveform, one recorded
-   distance tick per clock cycle (`PB_CLK => '1'`, `uart_datalogger.vhd:815`).
+   distance tick per clock cycle (`PB_CLK => '1'`, `uart_datalogger.vhd:816`).
    The distances are counted in prescaled ticks, so one replayed bit lasts
    `baudRateMin_r` clock cycles and the replay runs faster than the line by the
    prescaler factor. Measured at 9600 baud, 100 MHz: adjacent stop-finder
@@ -182,21 +182,21 @@ therefore cut inside a frame. Calibration then runs:
 2. Five `uart_stop_finder` instances, one per word length 5 to 9, check every
    replayed frame: start bit, data bits, stop bit, parity consistency.
 3. An instance reports `MATCH` when it has seen `G_MIN_MATCHES` = 7 frames
-   with a valid stop bit (`uart_datalogger.vhd:836`) and no frame has refuted
-   it (`uart_stop_finder.vhd:232`).
+   with a valid stop bit (`uart_datalogger.vhd:837`) and no frame has refuted
+   it (`uart_stop_finder.vhd:233`).
 4. A refutation counts only while the replay still plays recorded edges
-   (`JUDGE = not pbEmpty`, `uart_datalogger.vhd:827`). After the replay has
+   (`JUDGE = not pbEmpty`, `uart_datalogger.vhd:828`). After the replay has
    drained, the playback holds its last level; a frame read from that level
    can neither refute an instance nor clear its stop-bit result
-   (`uart_stop_finder.vhd:140`, `:174`, `:206`).
+   (`uart_stop_finder.vhd:141`, `:174`, `:206`).
 5. The format is decided after the replay has drained, plus two bit-times
-   (`settleCnt_r >= baudRateMin_r & '0'`, `uart_datalogger.vhd:727`), not on
+   (`settleCnt_r >= baudRateMin_r & '0'`, `uart_datalogger.vhd:728`), not on
    the first instance to match.
 6. Of the instances that report `MATCH`, the shortest word is taken
-   (`pick_format`, `uart_datalogger.vhd:132`). No instance matching is a
-   calibration failure (`uart_datalogger.vhd:733`).
+   (`pick_format`, `uart_datalogger.vhd:133`). No instance matching is a
+   calibration failure (`uart_datalogger.vhd:734`).
 7. The chosen instance's word length, parity and stop bits are latched
-   (`uart_datalogger.vhd:747`) and one Config Message is emitted.
+   (`uart_datalogger.vhd:748`) and one Config Message is emitted.
 
 Word-length aliases. On the wire, an n-bit frame with its top data bit 1 and
 one stop bit is the same waveform as an (n-1)-bit frame with two stop bits,
@@ -224,7 +224,7 @@ After a successful lock:
 
 ### Internal FSM Architecture
 
-Calibration FSM states (`t_fsm_calibrate_uart`, `uart_datalogger.vhd:157`):
+Calibration FSM states (`t_fsm_calibrate_uart`, `uart_datalogger.vhd:158`):
 
 ```text
 ┌─────────────┐  buffer closed   ┌───────────────────┐
@@ -245,7 +245,7 @@ Calibration FSM states (`t_fsm_calibrate_uart`, `uart_datalogger.vhd:157`):
 
 The type also declares `IDLE` and `DETECT_BAUDRATE`; the baud rate
 (`baudRateMin_r`, the shortest edge distance) is measured while the buffer
-fills, in the buffer FSM (`uart_datalogger.vhd:579`).
+fills, in the buffer FSM (`uart_datalogger.vhd:580`).
 
 ---
 
@@ -449,18 +449,18 @@ parameters are auto-discovered — only enable/disable is software-controlled.
 
 | Parameter | Value | Source |
 | :--- | :---: | :--- |
-| `G_MIN_MATCHES` | 7 | valid frames per instance before `MATCH`; `uart_datalogger.vhd:836` (the `uart_stop_finder` generic default, 16, is overridden) |
-| Buffer threshold | 127 edges | `2**(C_FIFO_DEPTH-3)-1`, `uart_datalogger.vhd:597`; `C_FIFO_DEPTH` = 10, `uart_pkg.vhd:59` |
-| Buffer idle timeout | 16 bit-times | `baudRateMin_r & "0000"`, `uart_datalogger.vhd:589` |
-| Format settle | 2 bit-times after the replay drains | `uart_datalogger.vhd:727` |
-| `C_BUFFER_TIMEOUT_LIMIT` | not used | dead code (`uart_datalogger.vhd:584-590`); only a NOTE assert reads it (`:327`) |
+| `G_MIN_MATCHES` | 7 | valid frames per instance before `MATCH`; `uart_datalogger.vhd:837` (the `uart_stop_finder` generic default, 16, is overridden) |
+| Buffer threshold | 127 edges | `2**(C_FIFO_DEPTH-3)-1`, `uart_datalogger.vhd:598`; `C_FIFO_DEPTH` = 10, `uart_pkg.vhd:60` |
+| Buffer idle timeout | 16 bit-times | `baudRateMin_r & "0000"`, `uart_datalogger.vhd:590` |
+| Format settle | 2 bit-times after the replay drains | `uart_datalogger.vhd:728` |
+| `C_BUFFER_TIMEOUT_LIMIT` | not used | dead code (`uart_datalogger.vhd:585-591`); only a NOTE assert reads it (`:327`) |
 
 
 ### Calibration data limits
 
 An instance with parity checking reads the bit after its data bits as a parity
 bit. Its parity check records only a change of parity between replayed frames
-(`parityFail_r`, `uart_stop_finder.vhd:192`; `PARITY(0) <= not parityFail_r`,
+(`parityFail_r`, `uart_stop_finder.vhd:193`; `PARITY(0) <= not parityFail_r`,
 `:218`). On an 8N1 line the 8-sample instance can therefore read d0..d6 as data
 and d7 as parity.
 
@@ -481,7 +481,7 @@ meets this condition. Explicit configuration (`autoSync` = 0) avoids it.
 | Edge → MSG_OUT latency | not characterized | see Items to confirm |
 | Buffer closed → format locked | 7.27 ms at 9600 baud, 30-byte burst | simulation trace on `df1d12c4`, `test_uart_initial_idle_repro`, seed 1794154559 (bufferFinish 29.5635 ms, calibrationDone 36.8335 ms); one replayed bit lasts `baudRateMin_r` clock cycles, so this scales with the bit time and the buffer length |
 | Replay drained → format locked | 52 cycles at 1 Mbaud (bound 2 × baudRateMin_r + 3) | `test_uart_autosync_msb_race_ds_p2_242.py` |
-| Post-calibration idle flush | 16 bit-times of line idle | `pr_timeout_idle`, `relativeDistCnt_r >= baudRateMin_r & "0000"`, `uart_datalogger.vhd:476` |
+| Post-calibration idle flush | 16 bit-times of line idle | `pr_timeout_idle`, `relativeDistCnt_r >= baudRateMin_r & "0000"`, `uart_datalogger.vhd:477` |
 | Line end → last byte decoded | 1.50–5.46 ms at 9600 baud, 36-byte burst, 20 seeds | `test_integration_9600_8N1.py` on `822b36ac`, seeds 201–220; the test bounds it by max(lock + E/R + 10/R, E) + 16 + 10 bit-times, with E the line length in bit-times from the first start bit and R = 4 |
 
 ### Items to confirm
@@ -577,7 +577,7 @@ Reconstructs the compressed edge sequence into a continuous waveform.
 
 | Port | Dir | Description |
 | :--- | :---: | :--- |
-| `PB_CLK` | in | Distance tick; tied to `'1'` (one tick per clock cycle) at `uart_datalogger.vhd:815` and `:868` |
+| `PB_CLK` | in | Distance tick; tied to `'1'` (one tick per clock cycle) at `uart_datalogger.vhd:816` and `:868` |
 | `LEVEL` / `DISTANCE` | in | Edge data from FIFO/BRAM |
 | `WAVE` | out | Reconstructed `t_wave` record |
 | `EMPTY` / `FULL` | out | FIFO status |

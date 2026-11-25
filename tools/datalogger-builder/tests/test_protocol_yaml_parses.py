@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Structural guard: every *_datalogger_protocol.yml must be valid YAML (DS-P3.104).
 
 Regression guard for the class of bug found while wiring CAN into the daemon

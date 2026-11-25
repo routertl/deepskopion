@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -- SPDX-License-Identifier: MIT
 -- Stub for CTU CAN FD can_top_apb entity when CTU CAN FD core is omitted (DS-P2.121).
 library ieee;

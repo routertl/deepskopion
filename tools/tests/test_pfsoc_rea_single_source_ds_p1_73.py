@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.73: pfsoc_datalogger takes its REA from ONE source, routertl/rea.
 
 History: DS-P2.128 vendored upstream rr-rea 1.2.0 under hw/vendor/rr_rea_upstream

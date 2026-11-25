@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """docs/hardware/DEFAULT_MIX_PINS.md stays equal to the build it describes.
 

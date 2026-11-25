@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 test_emio_loop — EMIO self-validation loop reproduced in simulation against
 the REAL fabric RTL (DS-T2.11 / DS-T7).

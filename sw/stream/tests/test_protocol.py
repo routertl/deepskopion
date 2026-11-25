@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.30: protocol-level round-trip tests for wave_stream_v1.
 
 Mirrors the wire spec — frame tags, HELO shape, msgpack layout. Catches

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.86: requirements.txt never pins a package outside what routertl requires.
 
 Measured 2026-11-04: requirements.txt pinned ``cocotb-test==0.2.6`` while

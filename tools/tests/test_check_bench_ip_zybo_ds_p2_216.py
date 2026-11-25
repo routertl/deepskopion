@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.216: the Zybo-Z7-20 image must carry the ds_ip its deployment declares.
 
 Measured 2026-11-05 (DS-P2.211): a current Zybo rootfs booted with the

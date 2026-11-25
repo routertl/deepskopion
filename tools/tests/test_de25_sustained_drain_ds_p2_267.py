@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.267 — DS-DE25-DRAIN-001: the DE25 ring fill does not grow over >= 60 s.
 
 DS-DE25-TPUT-001 judges a 2 s RING_READ_PTR rate against a 14.4e6 B/s floor.

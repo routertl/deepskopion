@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.16 — pytest entry points for the cocotb guards of edge Stream-RLE mode.
 
 The guards are cocotb tests; this module runs each one through ``rr sim run``

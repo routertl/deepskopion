@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: MPL-2.0
 """DS-P1.74: generated DDR ring dumps and the Python oracle for the native drain.
 

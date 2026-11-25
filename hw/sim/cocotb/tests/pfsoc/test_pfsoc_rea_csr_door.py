@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.128 — the PolarFire REA MMIO door, integrated below the FIC0 CSR plane.
 
 The upstream rr_rea_axi4lite bridge is sim-proven in rr-rea itself

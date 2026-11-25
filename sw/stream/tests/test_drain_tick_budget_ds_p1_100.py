@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.100: a drain tick stops at the byte or time budget, not at a frame count.
 
 DE25 silicon (DS-P1.74 run 3) measured the host drain at exactly 4096 frames of

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T2.84 — an edge lifecycle frame is an annotation, never an EDGE_EVENTS word.
 
 On silicon (DS-P1.71, deepskopion 28da400) the DS-T2.43 ENABLED/DISABLED frame

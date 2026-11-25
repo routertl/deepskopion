@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 test_core_seam_ring_write_ptr_backpressure: RING_WRITE_PTR must not advance on
 a cycle where the framer's OUT_READY (ddr_s_axis_ready) is low.

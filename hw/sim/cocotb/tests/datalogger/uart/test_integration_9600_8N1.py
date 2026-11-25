@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 UART Datalogger Integration Test - 9600 8N1 (low-end bound of the 9600..1M range)
 

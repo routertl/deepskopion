@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 --------------------------------------------------------------------------------
 -- File       : clk_mmcm_xilinx.vhd  (silicon frequency + sample-phase axis)
 -- Project    : deepskopion — eye-scan / BERT instrument (DS-P2.66, DS-P3.118)

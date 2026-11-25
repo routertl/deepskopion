@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 DS-P3.53 regression — a SPARSE-traffic last byte must flush.
 

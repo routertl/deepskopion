@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.168 — the REA build-id package lands in the library REA compiles into.
 
 routertl/rea's ip.yml places its generated rr_rea_build_id_pkg.vhd in library

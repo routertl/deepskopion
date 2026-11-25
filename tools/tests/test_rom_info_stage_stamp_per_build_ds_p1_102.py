@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.102: the rom_info stage stamp belongs to the build, not to the queue job.
 
 routertl >= 5.4.0 (RTL-P1.310) stops `rr bitstream run` on Quartus when a pre_build hook output's bytes differ

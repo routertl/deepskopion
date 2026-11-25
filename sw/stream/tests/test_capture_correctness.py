@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DE-C0 (DS-P1.44) — falsifiable tests for the capture-correctness harness.
 
 These bind the four DE-C0 done-conditions to executable checks. Every test that

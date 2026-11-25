@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """PS-side library for driving the deepskopion EMIO injector loop.
 
 Composes four units:

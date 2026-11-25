@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.16 — edge_datalogger Stream-RLE (differential) mode.
 
 CONFIG[4:3] = "10" switches a capture from one 32-bit word per edge to

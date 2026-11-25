@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DE-B0 (DS-P2.91) regression guard.
 
 The DE25 target used to subscribe an explicit `hardware.pins` list that had

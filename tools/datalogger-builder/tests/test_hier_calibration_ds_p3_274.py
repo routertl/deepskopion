@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """DS-P3.274: a calibration prefix that matches no row of a hierarchy CSV is an error, never zero resources.
 

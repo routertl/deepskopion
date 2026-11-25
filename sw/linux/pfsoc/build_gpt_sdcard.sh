@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# rr unknown-llm (AI-generated)
 # DS-P2.149 — deterministic build job: rebuild the DS-P2.146 payload onto the
 # DEPLOYED GPT layout as a single flashable sdcard.img.
 #

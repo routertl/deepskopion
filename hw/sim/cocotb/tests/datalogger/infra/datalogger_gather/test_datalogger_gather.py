@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Adversarial test suite for datalogger_gather (post-D.4, single-tier).
 
 The gather is the integration node: it instantiates one entity per

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """DS-P1.107: the README quick-start gives the first-boot steps a fresh board needs, in order, and they match the image.
 

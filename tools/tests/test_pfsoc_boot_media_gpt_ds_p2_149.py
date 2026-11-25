@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.149 — the in-tree pfsoc assembler must build onto the DEPLOYED GPT layout.
 
 WHY THIS GUARD EXISTS (the defect it catches). DS-P2.148/150 proved the kit

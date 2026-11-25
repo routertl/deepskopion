@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-C1 first boot creates access state; the repository does not ship it."""
 from __future__ import annotations
 

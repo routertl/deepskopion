@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- Title      : tb_regbank_spi_inj_seam
 -- Project    : deepskopion / DS-T12 PS<->fabric seam diagnostic

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.60 — the PolarFire MSS configuration IS the reference board fact, plus declared deltas.
 
 The first ``disco_mss.cfg`` was hand-written. On silicon (2026-09-23) the fabric

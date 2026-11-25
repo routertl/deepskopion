@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Dry-run tests for the eye-scan sweep orchestrator (DS-P2.66, Phase 3).
 
 Exercises the full host vertical slice with NO hardware: a MockEyeRegbank models

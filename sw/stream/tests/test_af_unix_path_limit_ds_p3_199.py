@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.199: an AF_UNIX socket path over the sun_path limit is refused by name.
 
 Linux sun_path holds 107 bytes plus the terminating NUL. bind() past that fails

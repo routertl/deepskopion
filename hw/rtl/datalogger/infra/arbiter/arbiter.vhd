@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- File       : arbiter.vhd
 -- Standard   : VHDL 2008

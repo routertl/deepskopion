@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.136 — the DAEMON drives the on-board stimulus generator.
 
 DS-T2.78 mirrored the 10 ``STIM_*`` registers into ``Regs`` but nothing in the

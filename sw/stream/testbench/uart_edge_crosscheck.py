@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """UART-vs-EDGE cross-check on silicon (DS-P2.10 follow-up; REQ-5 diagnosis).
 
 Drives the EMIO UART0 line and captures BOTH:

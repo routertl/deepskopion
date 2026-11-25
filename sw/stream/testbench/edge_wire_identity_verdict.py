@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DS-T2.84 — judge a LIVE EDGE wire capture: is every S=1 word a true readback?
 
 On DE25 silicon (DS-P1.71, deepskopion 28da400) three kinds of word reached

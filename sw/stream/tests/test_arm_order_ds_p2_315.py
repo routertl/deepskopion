@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """DS-P2.315: arm_uart, arm_i2c and arm_spi switch EMIO_MUX_SEL before they reset and enable their data logger.
 

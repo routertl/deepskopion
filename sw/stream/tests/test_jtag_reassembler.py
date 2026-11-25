@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Unit tests for the stateful JTAG IR/DR reassembler (DS-P3.56 P2).
 
 Feed a hand-built JTAG frame sequence (the exact wire shape the gather emits)

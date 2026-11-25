@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.253: arming the stimulus generator on a Zynq-7000 image is reported as
 taking the PS EMIO legs, and a PS I2C transfer that cannot reach the bus is
 refused instead of failing with EAGAIN.

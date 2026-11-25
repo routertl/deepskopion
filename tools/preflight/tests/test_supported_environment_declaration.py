@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-E0 (DS-P1.28) — the declaration itself, and the wiring that gives it teeth.
 
 `test_ds_preflight.py` proves the CHECK can fail. This file guards the three

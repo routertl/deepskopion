@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Reject bench identity and credentials from public artifacts (DS-C1).
 
 The public boundary is wider than source code.  A clean target file is not

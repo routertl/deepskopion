@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # tests/datalogger/infra/regbank_seam/test_demo_axilite_bfm_conformance.py
 """DEMONSTRATION (EPIC RTL-P2.719 / ticket RTL-P3.851) — point the routertl-native
 AxiLiteMonitor at deepskopion's REAL AXI4-Lite *slave* port (the system_regbank)

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Single-source the daemon's per-protocol STATS identity set from the canonical
 datalogger registry (LT-P3.250 / DS-P3.120).
 

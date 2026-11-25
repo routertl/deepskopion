@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Live UART/I2C/SPI capturing session — drive EMIO stimulus, decode the ring."""
 import sys, time, random
 sys.path.insert(0, "/usr/local/share/deepskopion")

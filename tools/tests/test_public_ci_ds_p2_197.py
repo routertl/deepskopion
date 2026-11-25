@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """DS-P2.197: the public CI workflow, and what it leaves out, stay honest."""
 from __future__ import annotations

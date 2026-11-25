@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.194 — EDGE_EVENTS labels the clock used for sub-us encoding."""
 
 from __future__ import annotations

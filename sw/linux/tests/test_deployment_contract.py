@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """SW-C0 (DS-P1.46) — the deployment contract, and proof its check can go RED.
 
 The defect this guards is not "a doc got out of date". It is that the repo

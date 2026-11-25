@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """The staged board tree must be able to START the daemon (DS-X5, DS-P1.36).
 
 WHAT ESCAPED. ``sw/linux/stage_daemon.sh`` staged ``sw/stream/`` and nothing

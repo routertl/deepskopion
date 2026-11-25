@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.193: tools/post_synth_guard.py runs the build-tree guards on DE25 builds.
 
 The runner must (1) pick the DE25 build directories the queue produced,

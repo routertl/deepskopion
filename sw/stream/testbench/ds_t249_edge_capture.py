@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DS-T2.49 ground-truth capture — runs ON the board.
 
 Drives a KNOWN CAN-FD frame, captures the EDGE datalogger (raw bus transitions =

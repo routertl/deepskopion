@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """PF-H0 (DS-P2.124) — PolarFire SoC FIC product-geometry write-path guard.
 
 This is the DS-P2.110 product-geometry gate extended to the PolarFire SoC MSS-FIC

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.75 — the sims tools/tests drives compile the units the project locks.
 
 ip.lock pins the RouteRTL single-file units (routertl/edge_detector, ...) to

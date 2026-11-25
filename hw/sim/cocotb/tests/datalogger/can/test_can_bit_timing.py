@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """can_bit_timing unit test (DS-P3.100, Block 1).
 
 Drives a known raw CAN-bit sequence onto RX at a configured prescaler and asserts

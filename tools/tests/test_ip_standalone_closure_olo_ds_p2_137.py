@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.137 — the ``rr sim run --ip`` closures that reach the open-logic FIFO.
 
 These two need libs/open-logic (gitignored), so each runs ``rr workspace

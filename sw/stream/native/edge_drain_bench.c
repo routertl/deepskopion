@@ -1,3 +1,4 @@
+// rr unknown-llm (AI-generated)
 /* SPDX-License-Identifier: MPL-2.0
  *
  * edge_drain_bench <dump> <sample_clk_hz> [--out records.bin] [--repeat N]

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.302: an error storm's end on an idle bus, and what a late joiner receives of it.
 
 1. RingDataSource.next_batch() returned before the storm flush on a tick that drained no ring data, so on an idle

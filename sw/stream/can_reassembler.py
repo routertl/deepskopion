@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Stateful CAN frame reassembler (DS-P3.104).
 
 The 1:1 :func:`decoders.decode_can` annotates each individual ID / control /

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.210: the daemon finds an installed native edge library and says which path runs.
 
 The DE25 image installs libds_edge_drain.so at edge_frames.SYSTEM_LIB

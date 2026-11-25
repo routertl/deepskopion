@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 _core_seam_common — shared helpers for the DS-P2.100 landing-review
 Finding B suite (test_stimulus_core_seam_edge.py,

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """ZSF-REQ-50 / 51 / 52 — runtime PAYLOAD_WORDS_LIVE selects, defaults and
 clamps the per-frame payload length (DS-P2.47 Phase B2).
 

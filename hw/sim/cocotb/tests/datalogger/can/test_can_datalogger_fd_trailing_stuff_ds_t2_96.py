@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T2.96 — CAN-FD frames whose dynamic region ends on a run of five equal bits.
 
 ISO 11898-1:2015 paragraph 10.5 "Frame coding", as quoted verbatim in the Linux

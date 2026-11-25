@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.74: arbitrate the two writers of a datalogger's ``enable`` bit.
 
 Two control sources can set a datalogger's ``enable`` (payload bit 0 of the

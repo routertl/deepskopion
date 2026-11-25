@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """UART datalogger decodes a REPLAYED edge capture (DS-P2.60).
 
 The dogfood loop end-to-end, in sim:

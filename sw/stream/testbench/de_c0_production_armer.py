@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DS-P1.59 — the SHARED production armer for the DE-C0 live-silicon witness.
 
 Arms DS-P2.100's fabric stimulus generator (``hw/rtl/stimulus/ds_stimulus_gen.vhd``)

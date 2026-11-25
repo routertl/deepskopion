@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.309: every header input of the three products has a weak pull-up.
 
 An undriven board input with no pull resistor reads low. DE25 C3 run 1

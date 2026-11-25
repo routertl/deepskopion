@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DS-P1.59 — judge a LIVE DE25 daemon capture against the DE-C0 oracle.
 
 This is the daemon-live counterpart to the board-free

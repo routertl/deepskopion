@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T1.21: Multi-bit words crossing clock domains must use a coherent protocol
 or a documented, constraint-bounded quasi-static multicycle path. Plain 2-FF chains
 with ASYNC_REG do not make multi-bit words coherent.

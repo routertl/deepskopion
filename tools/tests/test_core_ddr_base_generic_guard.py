@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Regression guard for DS-T3.32's full-width DDR base-address path."""
 
 from pathlib import Path

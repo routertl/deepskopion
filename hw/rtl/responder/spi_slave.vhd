@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- Title      : spi_slave
 -- Project    : deepskopion / datalogger self-validation (DS-P2.51 Phase 2)

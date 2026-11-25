@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 test_stimulus_core_seam_spi — DS-P2.100 landing-review (fourth pass)
 Finding 2 + Finding 3 (STIM-REQ-6 / DS-T2.16 GPIO-CS decode), proven

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """PS-side provenance + ABI-contract helpers for the self-test harness.
 
 Covers three field-feedback tickets that all bear on "can an archived

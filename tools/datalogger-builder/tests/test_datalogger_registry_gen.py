@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Drift-guard for the single-sourced STATS protocol registry (LT-P3.250 /
 DS-P3.120).
 

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 UART Datalogger Integration Test - 1Mbps 8N1
 Verifies full integration: UART input -> Datalogger calibration -> FrameGen -> Reassembled payload.

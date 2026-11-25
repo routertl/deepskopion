@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: MPL-2.0
 """DS-P3.316: the DE25 image ships no SSH files, and no init script that names a
 program the image does not hold.
@@ -254,7 +255,7 @@ def test_the_shipped_scripts_warn_only_where_s99_sources_its_expectation_file():
     for script in sorted((SHARED / "etc/init.d").glob("S*")):
         found += tool._scan_script(script.read_text(encoding="utf-8"), script.name)[1]
     # Pinned exactly: an edit that brings an unjudged construct into a shipped script turns this red.
-    assert found == ["S99deepskopion-stream:140: . (a sourced file is not judged)"], found
+    assert found == ["S99deepskopion-stream:141: . (a sourced file is not judged)"], found
 
 
 def test_check_rootfs_prints_a_warn_and_refuses_it_unless_accepted(tmp_path, capsys):

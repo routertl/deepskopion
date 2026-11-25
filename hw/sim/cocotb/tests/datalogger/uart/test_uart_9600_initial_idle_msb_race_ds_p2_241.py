@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.241: at 9600 8N1, after a 3 ms initial idle, the 7-bit stop-finder
 instance matches seven frame-aligned frames because their top data bit is 1.
 

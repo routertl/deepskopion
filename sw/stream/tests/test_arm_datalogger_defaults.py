@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.77 — boot-time datalogger arming.
 
 Regression guard for the framing default. Nothing configures the UART datalogger at

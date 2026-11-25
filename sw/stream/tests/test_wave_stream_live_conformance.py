@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-WS1 (DS-P2.89) — producer conformance of a LIVE capture session.
 
 WS-C0 (DS-P1.29) bound the producer's STATIC surface (constants, the channel

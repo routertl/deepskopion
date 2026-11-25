@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Shared fixtures for the sw/stream tests."""
 from __future__ import annotations
 

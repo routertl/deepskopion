@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.323: every cocotb file that names the regbank schema hex runs in both
 nightly baseline tags, or is excluded by name with a reason.
 

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T3.39: a named CI leg runs the PolarFire fit e2e guard unskipped.
 
 tools/tests/test_pfsoc_fit_e2e_ds_p2_151.py needs DS_P2_151_E2E_IMPL=1,

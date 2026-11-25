@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.255 — can_datalogger CAN-FD decode at the bench rates (250 kbit/s nominal,
 2 Mbit/s data) on golden frames.
 

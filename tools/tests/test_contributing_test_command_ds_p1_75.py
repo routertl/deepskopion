@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.75 — the CONTRIBUTING test command must stage the locked packages first.
 
 libs/open-logic/ and libs/enclustra/ are git-ignored and only exist after

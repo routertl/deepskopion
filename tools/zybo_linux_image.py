@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Compose the Zybo-Z7-20 deployment DTB: bake ds_ip into /chosen/bootargs.
 
 DS-P2.216. The Zybo rootfs's S40network reads ``ds_ip=<addr>/<prefix>`` from the

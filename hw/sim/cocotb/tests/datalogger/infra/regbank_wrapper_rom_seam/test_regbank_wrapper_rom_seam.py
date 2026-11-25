@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """test_regbank_wrapper_rom_seam — DS-T4.1 contract.
 
 system_regbank_wrapper's two BRAM-init ROMs (regbank manifest + build-config)

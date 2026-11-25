@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Regression guard for id_gen.py — the system_ids.yml drift-check (DS-P3.57).
 
 Proves the canonical id-registry stays the single source of truth: the live

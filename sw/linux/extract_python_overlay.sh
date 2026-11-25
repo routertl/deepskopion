@@ -1,4 +1,5 @@
 #!/bin/bash
+# rr unknown-llm (AI-generated)
 # DS-P2.49 — extract python_overlay tree from Buildroot output/target/.
 #
 # rr linux rootfs's --python-overlay convention (RTL-P2.603) wants a

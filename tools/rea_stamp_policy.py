@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.96: build-metadata dirt does not make the REA design stamp dirty.
 
 regbank-regen rewrites the tracked ``hw/rtl/pkg/rom_info_pkg.vhd`` on every

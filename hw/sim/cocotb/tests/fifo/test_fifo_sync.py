@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """fifo_sync boundary: words written come out in order (DS-P2.137).
 
 Runs the portable FIFO boundary on its own under ``rr sim run --ip hw/rtl/fifo``.

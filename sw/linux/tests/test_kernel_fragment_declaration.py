@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Kernel config fragments must be DECLARED, not merely shipped (DS-X5).
 
 WHAT ESCAPED. ``sw/linux/kernel_emio.config-fragment`` (CONFIG_SPI_SPIDEV=y)

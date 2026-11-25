@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: MIT
 """DS-T2.65 — structural guard for the DS-T2.60 AXI3 write-burst cap.
 

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.253: does arming the stimulus generator take the PS EMIO legs off the bus?
 
 On the Zybo the fabric top (hw/rtl/deepskopion_top.vhd) sets G_STIM_DRIVES_EMIO

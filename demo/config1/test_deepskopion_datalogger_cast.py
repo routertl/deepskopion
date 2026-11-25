@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Regression guard for the public demo cast's vocabulary.
 
 WHY THIS EXISTS

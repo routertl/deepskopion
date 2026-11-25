@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.71 — the four-channel live EDGE judge must be able to fail.
 
 The judge (``sw/stream/testbench/edge4_live_verdict.py``) decides whether the

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Executable DE-L0 image contract at the CLI/configuration surfaces."""
 from __future__ import annotations
 

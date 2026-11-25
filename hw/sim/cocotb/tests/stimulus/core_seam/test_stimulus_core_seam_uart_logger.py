@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 test_stimulus_core_seam_uart_logger — DS-T1.16: the PolarFire kit's UART arm,
 end to end through the REAL deepskopion_core at clk_sys = 100 MHz.

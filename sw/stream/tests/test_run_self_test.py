@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Regression tests for the PS self-test orchestrator's process verdict."""
 
 from __future__ import annotations

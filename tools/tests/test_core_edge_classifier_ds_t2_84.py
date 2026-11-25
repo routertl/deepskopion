@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T2.84 — deepskopion_core routes gather words with the shared classifier.
 
 The behaviour (a lifecycle frame bypasses the edge aggregator and lands in DDR

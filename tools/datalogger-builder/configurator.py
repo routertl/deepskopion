@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """
 CLI Configurator for Deepskopion Datalogger System (DS-P2.114).
@@ -315,7 +316,7 @@ BOARDS: Dict[str, BoardProfile] = {
         base_logic=26010,
         base_ff=43516,
         base_bram=54.0,
-        rea_tap_tied="hw/rtl/de25/deepskopion_de25_top.vhd:822",
+        rea_tap_tied="hw/rtl/de25/deepskopion_de25_top.vhd:823",
         calibration_provenance="Calibrated from Quartus Prime Pro 25.3.1 Fitter report (de25_datalogger build 2026-09-03, A5ED013BB32AE4SCS)",
     ),
     # DS-P3.156 / DS-P2.331. Capacities: "Resource Usage" Total column of the Libero
@@ -350,7 +351,7 @@ BOARDS: Dict[str, BoardProfile] = {
             "cost is from the 2026-11-05 build (JTAG is not in the default mix)"
         ),
         unwired_core_pins=("JB6", "JB7"),
-        rea_tap_tied="hw/rtl/pfsoc/deepskopion_pfsoc_fabric.vhd:793",
+        rea_tap_tied="hw/rtl/pfsoc/deepskopion_pfsoc_fabric.vhd:794",
     ),
 }
 

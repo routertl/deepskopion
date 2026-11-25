@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.48 Phase C — EDGE_BATCH end-to-end overhead measurement.
 
 Phase A (spec + Python codec, DS-P2.47), Phase B1 (per-channel batcher

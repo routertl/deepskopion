@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Full datalogger data-path integration test — I2C / UART / SPI → DDR.
 
 Drives real protocol traffic onto the scalar datalogger pins of

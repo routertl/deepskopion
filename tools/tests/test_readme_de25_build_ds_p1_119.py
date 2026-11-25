@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: MPL-2.0
 """DS-P1.119: the README builds and runs the DE25 from a fresh clone.
 

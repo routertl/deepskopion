@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Shared, importable CAN bus BFM for deepskopion cocotb tests (DS-P3.100).
 
 The FIRST promoted datalogger BFM: the i2c/uart/spi/jtag BFMs each live inline in

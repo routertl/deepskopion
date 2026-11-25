@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Run one DE25 hardware-contract REQ over the HPS Linux ``devmem`` path.
 
 DS-T2.88. Every DE25 REQ in ``runtimes/hw.yml`` declares the capture chain

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 UART Datalogger — short-burst flush regression (DS-T2.27)
 

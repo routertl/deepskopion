@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """DS-P1.100: the per-tick byte budget leaves real headroom over the TPUT-001 ring write.
 

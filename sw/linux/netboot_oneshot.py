@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DS-P2.87 NET-6: drive the Z7-20 through a one-shot bootsrc=net TFTP boot.
 
 Opens the UART for capture, reboots the board from its console shell,

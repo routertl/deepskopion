@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """PS-side DDR window access for the rr-ddr-stream ring buffer.
 
 DdrRingDataSource (data_source.py) mmaps a contiguous slab of PS DDR

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Cheap static guards for DS-P2.110's testbench-side DDR base-address fix.
 
 The sibling ``tools/tests/test_core_ddr_base_generic_guard.py`` forbids an

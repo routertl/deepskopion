@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """id_gen.py — generate / drift-check the deepskopion id-space from the
 canonical registry (system_ids.yml).  DS-P3.57.
 

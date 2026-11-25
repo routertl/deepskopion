@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.89: ring_dump --stages splits the daemon edge path into cumulative
 stages (walk, pack, guard, full) so a silicon run can name the step that costs."""
 from __future__ import annotations

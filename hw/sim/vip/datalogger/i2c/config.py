@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # tb/datalogger/i2c/config.py
 """
 I2C Datalogger Configuration Helpers

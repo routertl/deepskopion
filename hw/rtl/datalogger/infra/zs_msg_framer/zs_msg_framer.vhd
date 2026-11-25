@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- File       : zs_msg_framer.vhd
 -- Description: Wraps an incoming datalogger message into a zs_msg_header_t

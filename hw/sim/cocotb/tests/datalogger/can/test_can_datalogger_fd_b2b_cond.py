@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """can_datalogger CAN-FD back-to-back, WITH the silicon RX conditioning in the loop
 (CAN-REQ-25 / DS-T2.49). Identical adversarial intent to test_can_datalogger_fd_b2b,
 but the DUT is tb_can_datalogger_cond = glitch_filter (2-FF synchroniser + de-glitcher)

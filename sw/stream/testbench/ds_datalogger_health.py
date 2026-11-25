@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """On-board datalogger health soak (runs ON the Zynq board) — DS-T2.24.
 
   python3 ds_datalogger_health.py <uart|i2c|spi|uart_i2c|all> [minutes]

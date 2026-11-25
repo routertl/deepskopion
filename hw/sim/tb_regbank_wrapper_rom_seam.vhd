@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- Title      : tb_regbank_wrapper_rom_seam
 -- Project    : deepskopion / DS-T4.1 out-of-tree ROM-path seam

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """PF-H0 (DS-P2.124): mutation-resistant guards for deepskopion_pfsoc_top.
 
 The first delivery's target-contract tests only checked that the top FILE

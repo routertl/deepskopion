@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.90 Phase 1 — UART uniform lifecycle (UART-REQ-18).
 
 The UART datalogger emits a symmetric pair of status frames via the shared

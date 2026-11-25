@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.209: the master's NACK that ends an I2C read is not an error.
 
 Measured 2026-11-06 on the Zybo (canfd_demo from 97303610): 200 i2cget reads,

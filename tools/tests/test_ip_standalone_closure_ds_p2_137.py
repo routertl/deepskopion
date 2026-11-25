@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.137 — datalogger IP simulations are self-contained under ``rr sim run --ip``.
 
 The gates that need no ``rr workspace sync`` (see ip_standalone_closure.py for

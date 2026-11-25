@@ -201,7 +201,7 @@ simulation:
     # guard MUST live in a tag so it runs as a batch, not only as a hand-typed
     # `rr sim run`. It is DELIBERATELY its own DE25-specific tag and NOT a
     # member of de25_baseline: that tag is equality-pinned to canfd_demo's
-    # xilinx_baseline (tools/tests/test_de25_core_baseline_contract.py:79), and
+    # xilinx_baseline (tools/tests/test_de25_core_baseline_contract.py:80), and
     # this test is DE25-only (256-bit f2sdram, base 0xA0000000) so it does not
     # belong in the shared Xilinx set. tools/tests/test_tb_datalogger_ddr_base_
     # generic_guard.py pins this membership so the guard cannot silently drift

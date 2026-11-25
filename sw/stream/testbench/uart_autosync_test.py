@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DS-T2.30 root-cause confirmation: UART decodes when autoSync=1.
 
 Hypothesis: REQ-5 garbles because enable_datalogger(12) sets config payload 0x01 =

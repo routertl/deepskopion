@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """DS-P1.65 — one isolated `rr sim sweep` bench per arbitrary-mix mechanism.
 

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Production DE-C0 register and wire stimulus constants (DS-P1.58).
 
 Production code: the daemon arms ds_stimulus_gen from these (DS-P2.136), and the

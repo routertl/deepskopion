@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Overlay-drift guard (DS-P3.112), rebased on the DS-P2.81 staging model.
 
 The board-deployed daemon is a COPY of ``sw/stream/`` baked into

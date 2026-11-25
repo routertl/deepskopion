@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: MPL-2.0
 """DS-P3.345: the broker of the telemetry copy-block fixture.
 
@@ -17,8 +18,16 @@ thin client that sends ``{"op": "sudo", "argv": [...]}`` over a UNIX socket.
   after staging, the broker opens that name again through the parent, binds onto that descriptor,
   then reopens the name and requires the view's root (dev, inode). On any failure from the staging
   to the registration it detaches what it mounted (MNT_DETACH), removes the copy and the view on a
-  best-effort basis, and refuses. If a detach itself fails, the error escapes the service loop with
-  no reply and ends the run.
+  best-effort basis, and refuses. Right after the bind it takes a rename barrier on the parent
+  (``_barrier``: mkdir on the mount point's own name), so a rename that raced the bind has finished
+  before that check.
+- A failure inside the broker's own work (a detach or unmount that fails, a rollback step that fails)
+  leaves the mount state unknown, so the broker fails closed: the request that hit it is refused with
+  the error named, the broker is poisoned, every later request is refused as "broker poisoned by
+  <first error>", all of these replies carry exit code 70 (never the ordinary refusal's 2), whatever
+  it could not undo stays recorded for the final cleanup (a recipe-side bind by a descriptor, a
+  staging bind by its path), and the run ends with exit code 70 and that first error on stderr.
+  Nothing runs against a leaked mount.
 - ``sudo umount <mount point>`` (exactly one): refused, busy, while the caller's working directory
   is inside it. Otherwise the copy is written back to the partition only if it changed.
 - ``sudo <any other command>``: run in a second sandbox with the same isolation that sees no
@@ -103,6 +112,39 @@ def _detach(path: str) -> None:
     if _LIBC.umount2(path.encode(), _MNT_DETACH) != 0:
         err = ctypes.get_errno()
         raise OSError(err, f"umount2 {path}: {os.strerror(err)}")
+
+
+class NameMoved(FileNotFoundError):
+    """The mount point's name no longer names what the broker bound: the race the recipe may run."""
+
+
+class BarrierFault(OSError):
+    """An unexpected error from the rename barrier: the broker's own work failed, so it poisons."""
+
+
+def _barrier(parent: int, name: str) -> bool:
+    """Return only after every rename running in the directory *parent* has finished; True while
+    *name* still exists there.
+
+    A rename takes its parent directory's lock before the kernel checks that the entry is not a mount
+    point, and holds it until the entry is moved. A rename that passed that check just before a bind
+    attached can therefore still move the new mount to another name after the bind returns (measured,
+    DS-P2.394: sudo mount rc 0 with the card on the swapped sibling; the mechanism is held as a
+    hypothesis). mkdir takes the same lock before it looks the name up, so it waits for such a rename;
+    any rename that starts later sees the mount point and fails with EBUSY. On the mount point's own
+    name the mkdir normally fails with EEXIST and creates nothing, so there is no entry the recipe
+    could swap. If the name is gone (a racing rename took it away), mkdir leaves an empty directory
+    there and False tells the caller to refuse."""
+    try:
+        os.mkdir(name, 0o700, dir_fd=parent)
+    except FileExistsError:
+        return True
+    except OSError as err:
+        raise BarrierFault(err.errno, f"rename barrier: {err.strerror}") from err
+    return False
+
+
+POISONED_RC = 70                   # exit code of every reply from a poisoned broker, and of its run
 SNAPSHOT_LIMIT = 64 << 20          # bytes a sudo command's working-directory snapshot may hold
 
 
@@ -199,6 +241,9 @@ class Broker:
         # (a socket above all) is ever reachable from the recipe.
         self.mounts: dict[str, tuple[Path, Path, Path, int, int, str, Path]] = {}
         self.count = 0
+        self.poisoned: str | None = None     # the first failure inside the broker's own work
+        # mounts the broker could not undo: ("bind", descriptor of the recipe's directory) or ("ro", path)
+        self.leftovers: list[tuple[str, int | Path]] = []
 
     def note(self, event: str, **fields) -> None:
         """One JSON record per event: an argument holding a newline cannot forge a second event."""
@@ -217,14 +262,39 @@ class Broker:
             data += chunk
             if len(data) > 1 << 20:
                 break
-        try:
-            msg = json.loads(data)
-        except ValueError:
-            reply = self.refuse("a message that is not JSON")
+        if self.poisoned is not None:          # fail closed for every request, parsed or not
+            reply = self.poisoned_reply(f"refused: broker poisoned by {self.poisoned}")
         else:
-            reply = self.handle(msg, pid)
-        conn.sendall(json.dumps(reply).encode())
-        conn.close()
+            try:
+                msg = json.loads(data)
+            except ValueError:
+                reply = self.refuse("a message that is not JSON")
+            else:
+                reply = self._answer(msg, pid)
+        try:
+            conn.sendall(json.dumps(reply).encode())
+        except OSError:                        # the caller hung up; the broker keeps serving
+            pass
+        finally:
+            conn.close()
+
+    def poisoned_reply(self, why: str) -> dict:
+        """A refusal with its own exit code (70, never the ordinary refusal's 2), so a recipe or a test
+        that accepts a refusal still sees that the broker failed."""
+        self.note("poisoned", why=why)
+        return {"rc": POISONED_RC, "stdout": "", "stderr": f"broker: {why}\n"}
+
+    def _answer(self, msg, pid: int) -> dict:
+        """Fail closed: once the broker's own work has failed, the mount state is unknown, so every
+        later request is refused naming that first failure."""
+        if self.poisoned is not None:
+            return self.poisoned_reply(f"refused: broker poisoned by {self.poisoned}")
+        try:
+            return self.handle(msg, pid)
+        except (OSError, subprocess.CalledProcessError) as exc:
+            argv = msg.get("argv") if isinstance(msg, dict) else msg
+            self.poisoned = f"{argv!r}: {exc}"
+            return self.poisoned_reply(f"{argv!r} failed in the broker ({exc}); the broker is poisoned")
 
     def handle(self, msg, pid: int) -> dict:
         if not isinstance(msg, dict) or set(msg) - {"op", "argv", "cwd"} or msg.get("op") != "sudo":
@@ -265,7 +335,7 @@ class Broker:
         # Everything from here to the registration is undone on any failure: the recipe may move or
         # remove the mount point at any moment (a mount point itself cannot be renamed, EBUSY).
         target = root = None
-        ro_mounted = opening = placed = False
+        ro_mounted = opening = placed = kept = made = False
         try:
             _sh("cp", "-a", str(part), str(copy))
             _sh("cp", "-a", str(part), str(view))
@@ -278,30 +348,58 @@ class Broker:
             subprocess.run(["mount", "--no-canonicalize", "--bind", str(ro), f"/proc/self/fd/{target}"],
                            check=True, capture_output=True, pass_fds=(target,))
             placed = True
+            made = not _barrier(parent, name)  # a rename that raced the bind has finished by now
+            if made:
+                raise NameMoved(f"{args[1]} no longer names the mount")
             # The name holds the mount now exactly when it names the read-only view's root (measured).
-            root = os.open(name, _DIR, dir_fd=parent)
+            try:                                # the recipe's own name: gone or not a directory = moved
+                root = os.open(name, _DIR, dir_fd=parent)
+            except (FileNotFoundError, NotADirectoryError) as err:
+                raise NameMoved(f"{args[1]} no longer names the mount") from err
             got, want = os.fstat(root), os.stat(ro)
             if (got.st_dev, got.st_ino) != (want.st_dev, want.st_ino):
-                raise FileNotFoundError(f"{args[1]} no longer names the mount")
+                raise NameMoved(f"{args[1]} no longer names the mount")
         except (OSError, subprocess.CalledProcessError) as exc:
             # MNT_DETACH: a reference into the mount (a recipe's descriptor or working directory)
             # must not stop the rollback; the mount leaves the mount table at once either way.
             if root is not None:
                 os.close(root)
+            failed: list[OSError] = []
             if placed:
-                _detach(f"/proc/self/fd/{target}")
+                try:
+                    _detach(f"/proc/self/fd/{target}")
+                except OSError as err:     # the bind on the recipe's directory: kept by its descriptor
+                    failed.append(err)
+                    self.leftovers.append(("bind", target))
+                    kept = True
             if ro_mounted:
-                _detach(str(ro))
+                try:
+                    _detach(str(ro))
+                except OSError as err:
+                    failed.append(err)
+                    self.leftovers.append(("ro", ro))
+            if failed:                    # the mount state is unknown: kept for cleanup, then poison
+                os.close(parent)
+                raise failed[0]
+            if made:                      # the empty directory the barrier made where the name was gone
+                try:
+                    os.rmdir(name, dir_fd=parent)
+                except OSError:
+                    pass
             if ro.is_dir():
                 ro.rmdir()
             shutil.rmtree(copy, ignore_errors=True)
             shutil.rmtree(view, ignore_errors=True)
             os.close(parent)
+            # Once the bind is placed, only the recipe's race (the name moved) is an ordinary refusal;
+            # any other failure is the broker's own (EIO on its staging path, the barrier): poison.
+            if placed and not isinstance(exc, NameMoved):
+                raise exc
             if placed or (opening and target is None):   # the name moved: before the open or after the bind
                 return self.refuse(f"mount onto {args[1]}, which was replaced while it was being mounted")
             return self.refuse(f"mount onto {args[1]} failed ({exc})")
         finally:
-            if target is not None:
+            if target is not None and not kept:
                 os.close(target)
         self.mounts[mnt] = (part, copy, ro, parent, root, name, view)
         self.note("mount", path=mnt)
@@ -315,8 +413,18 @@ class Broker:
             return {"rc": 32, "stdout": "", "stderr": f"umount: {args[0]}: not mounted.\n"}
         if _inside(cwd_fd, self.mounts[mnt][4]):
             return {"rc": 32, "stdout": "", "stderr": f"umount: {args[0]}: target is busy.\n"}
-        part, copy, ro, parent, root, name, view = self.mounts.pop(mnt)
-        self._unmount(ro, parent, root, name)
+        part, copy, ro, parent, root, name, view = self.mounts[mnt]
+        try:
+            self._unmount_name(parent, root, name)
+        except OSError:
+            self.mounts[mnt] = (part, copy, ro, parent, -1, name, view)   # still ours to clean up
+            raise
+        del self.mounts[mnt]
+        try:
+            _sh("umount", str(ro))
+        except (OSError, subprocess.CalledProcessError):
+            self.leftovers.append(("ro", ro))                             # the staging bind is left
+            raise
         shutil.rmtree(view)
         changed = _state(copy) != _state(part) or subprocess.run(
             ["diff", "-r", "-q", "--no-dereference", str(copy), str(part)], capture_output=True).returncode != 0
@@ -373,28 +481,42 @@ class Broker:
             os.close(src)
 
     @staticmethod
-    def _unmount(ro: Path, parent: int, root: int, name: str) -> None:
-        """Unmount by the pinned parent directory and the name, never by a path the recipe could
-        swap: a directory cannot be renamed or replaced while something is mounted on it, and
-        UMOUNT_NOFOLLOW refuses a symlink. The broker's own descriptor on the mount root is closed
-        first, so only the recipe's use makes the unmount busy."""
-        os.close(root)
-        try:
-            if _LIBC.umount2(f"/proc/self/fd/{parent}/{name}".encode(), _UMOUNT_NOFOLLOW) != 0:
-                err = ctypes.get_errno()
-                raise OSError(err, f"umount2: {os.strerror(err)}")
-        finally:
-            os.close(parent)
-        _sh("umount", str(ro))
+    def _unmount_name(parent: int, root: int, name: str) -> None:
+        """Unmount the recipe-side mount by the pinned parent directory and the name, never by a path
+        the recipe could swap: a directory cannot be renamed or replaced while something is mounted on
+        it, and UMOUNT_NOFOLLOW refuses a symlink. The broker's own descriptor on the mount root is
+        closed first (root < 0: already closed), so only the recipe's use makes the unmount busy. On
+        failure the parent descriptor stays open for the cleanup; on success it is closed."""
+        if root >= 0:
+            os.close(root)
+        if _LIBC.umount2(f"/proc/self/fd/{parent}/{name}".encode(), _UMOUNT_NOFOLLOW) != 0:
+            err = ctypes.get_errno()
+            raise OSError(err, f"umount2: {os.strerror(err)}")
+        os.close(parent)
 
-    def cleanup(self) -> None:
+    def cleanup(self) -> bool:
+        """Undo every recorded mount; False when any of them could not be undone."""
+        undone = True
         for _mnt, (_part, copy, ro, parent, root, name, view) in list(self.mounts.items()):
             try:
-                self._unmount(ro, parent, root, name)
-            except (OSError, subprocess.CalledProcessError):
-                pass
+                self._unmount_name(parent, root, name)
+            except OSError:
+                undone = False
+                os.close(parent)
+            self.leftovers.append(("ro", ro))
             shutil.rmtree(copy, ignore_errors=True)
             shutil.rmtree(view, ignore_errors=True)
+        self.mounts.clear()
+        for kind, ref in self.leftovers:
+            try:
+                _detach(f"/proc/self/fd/{ref}" if kind == "bind" else str(ref))
+            except OSError:
+                undone = False
+            finally:
+                if kind == "bind":
+                    os.close(ref)
+        self.leftovers.clear()
+        return undone
 
 
 def main() -> int:
@@ -423,11 +545,17 @@ def main() -> int:
             for _key, _ev in sel.select(timeout=0.05):
                 conn, _ = srv.accept()
                 broker.serve(conn)
-        return recipe.returncode
     finally:
         srv.close()
         os.unlink(path)
-        broker.cleanup()
+        undone = broker.cleanup()
+    if broker.poisoned is not None:
+        print(f"broker: poisoned by {broker.poisoned}", file=sys.stderr)
+        return POISONED_RC
+    if not undone:
+        print("broker: the final cleanup could not undo a mount it recorded", file=sys.stderr)
+        return POISONED_RC
+    return recipe.returncode
 
 
 if __name__ == "__main__":

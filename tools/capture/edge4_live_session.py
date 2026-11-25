@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DS-P1.71 — one LIVE four-channel EDGE session: board stimulus -> daemon ->
 RouteWave, recorded at the wire and judged as RouteWave drew it.
 

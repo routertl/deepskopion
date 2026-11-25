@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 --------------------------------------------------------------------------------
 -- File       : classic_eye_top.vhd
 -- Project    : deepskopion — PMOD eye-scan / BERT instrument (DS-P3.115)

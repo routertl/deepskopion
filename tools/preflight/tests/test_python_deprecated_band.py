@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """Python 3.10 is outside the supported envelope but still builds: the build preflight warns, it does not fail.
 

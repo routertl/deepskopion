@@ -1,4 +1,5 @@
 #!/bin/sh
+# rr unknown-llm (AI-generated)
 # deepskopion-self-test — convenience launcher for the DS-P3.44 PS-side
 # self-test harness. Forwards all args to the orchestrator module.
 #

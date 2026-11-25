@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-X4: the checked-in inputs must describe a clean, queued Zybo rebuild.
 
 The long Vivado job is acceptance evidence, not a useful commit-time test.  These

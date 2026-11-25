@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# rr unknown-llm (AI-generated)
 # The desk tests public CI runs: no vendor tool, no hardware.
 # Lightweight unit sims in the desk suite (test_edge_rle_sim_ds_p2_16,
 # test_isolated_unit_sim_fresh_tree_p2_138) shell out to `rr sim run` under nvc;

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: MPL-2.0
 """DS-P3.326: the architecture diagram draws ONE arrow from the datalogger bus into
 "Arbiter and framer".

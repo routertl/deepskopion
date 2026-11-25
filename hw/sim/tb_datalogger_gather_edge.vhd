@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- tb_datalogger_gather_edge.vhd  —  DS-P3.32 protocol-level EDGE pulse-gen harness
 -------------------------------------------------------------------------------

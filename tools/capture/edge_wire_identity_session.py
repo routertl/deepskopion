@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DS-T2.84 — one LIVE EDGE wire-identity session: board stimulus -> daemon ->
 this consumer, recorded at the wire and judged by edge_wire_identity_verdict.
 

@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.281: the native edge walk stops at PL zero pad, so the pad rule applies on both walks.
 
 DS-P2.280 put the PL zero-pad rule (pad to the DDR-word boundary is pad, not

@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- Title      : tb_regbank_stim_i2c_bytelane
 -- Project    : deepskopion / DS-T2.82 PolarFire I2C self-test data bytes

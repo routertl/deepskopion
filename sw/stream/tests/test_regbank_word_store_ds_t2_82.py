@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-T2.82 — MmioRegbank must reach the bus as ONE 32-bit access on riscv64.
 
 PolarFire silicon (DS-P2.126 evidence, 2026-09-23): the DE-C0 I2C self-test

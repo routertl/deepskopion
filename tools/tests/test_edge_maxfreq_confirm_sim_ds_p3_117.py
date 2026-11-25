@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.117 — pytest entry point for the edge_datalogger max-frequency
 confirmation gate (EDGE-REQ-64).
 

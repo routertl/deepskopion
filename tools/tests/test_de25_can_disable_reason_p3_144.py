@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Guard the evidence recorded beside the DE25 CAN DT nodes.
 
 DS-P3.144 exists because an earlier comment converted a real boot7/boot8 NoC

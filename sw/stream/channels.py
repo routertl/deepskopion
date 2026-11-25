@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Deepskopion channel topology — descriptors that go into the HELO frame.
 
 The PL exposes several datalogger types (see hw/rtl/datalogger/):

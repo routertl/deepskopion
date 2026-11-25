@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Headless wave_stream client — record the daemon's decoded stream to JSON-lines.
 
 Connects to the deepskopion daemon (:7475), reads the self-describing HELO

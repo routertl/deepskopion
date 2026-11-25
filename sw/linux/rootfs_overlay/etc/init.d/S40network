@@ -1,4 +1,5 @@
 #!/bin/sh
+# rr unknown-llm (AI-generated)
 # Bring up eth0 without baking a lab subnet into the public image (DS-C1).
 #
 # Default: request a DHCP lease. A user who needs a static point-to-point link

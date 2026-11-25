@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 library ieee;
 use ieee.std_logic_1164.all;
 use std.env.all;

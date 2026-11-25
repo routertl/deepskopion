@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 -------------------------------------------------------------------------------
 -- SPDX-License-Identifier: CERN-OHL-W-2.0
 -- File       : arbiter_pkg.vhd

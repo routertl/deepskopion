@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """The CI leg that runs the DE25 toolchain stage tests with their archive (DS-T3.37).
 
 Three tests in sw/linux/de25/test_de25_toolchain_stage.py need the pinned

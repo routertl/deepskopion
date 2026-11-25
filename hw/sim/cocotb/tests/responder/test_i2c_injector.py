@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 test_i2c_injector — cocotb regression for hw/rtl/responder/i2c_injector.vhd
 (DS-P3.43; closes part of DS-P2.51 Phase 3).

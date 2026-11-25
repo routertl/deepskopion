@@ -4,7 +4,7 @@
 # in gitignored runtimes/hw.local.yml. Every live replay must first record the
 # Altera REA build ID (`rea-jtag-build-id-32`) with `rr hw bit-sha`; the target
 # stamps C_REA_BUILD_ID through targets/de25_datalogger.yml:328-346 and the
-# DE25 top connects it to u_rea at hw/rtl/de25/deepskopion_de25_top.vhd:826-828.
+# DE25 top connects it to u_rea at hw/rtl/de25/deepskopion_de25_top.vhd:827-829.
 #
 # Scope is the shipped DE25 capture path. “Trigger” below means the implemented
 # edge-datalogger software read-trigger (CONFIG payload 0b11), not the planned
@@ -29,9 +29,9 @@ requirements:
     description: >-
       The DE25 sample/timestamp clock is 100 MHz (10 ns/tick). CLOCK2_50 is
       multiplied by two by the fabric IOPLL
-      (hw/rtl/de25/deepskopion_de25_top.vhd:344-361,463-468), the core generic
+      (hw/rtl/de25/deepskopion_de25_top.vhd:345-362,463-468), the core generic
       is G_SYS_CLK_HZ=100_000_000 (:774), and HEARTBEAT_CNT increments every
-      clk_sys cycle (hw/rtl/deepskopion_core.vhd:1641-1650).
+      clk_sys cycle (hw/rtl/deepskopion_core.vhd:1642-1651).
     expected_outcome: "pass"
     falsifier: "DS-DE25-CLK-001-RED"
     target: {board: "de25-standard"}
@@ -86,7 +86,7 @@ requirements:
       is proven by a nonzero RING_WRITE_PTR delta measured inside the recipe;
       prior boot traffic and sticky bvalid therefore cannot satisfy the REQ.
       The source is STIM_EDGE_CONTROL half-period 25 at 100 MHz
-      (hw/rtl/stimulus/ds_stimulus_gen.vhd:515-523), routed by
+      (hw/rtl/stimulus/ds_stimulus_gen.vhd:516-524), routed by
       project_regbank.yml EMIO_MUX_SEL[7].
     expected_outcome: "pass"
     falsifier: "DS-DE25-INTEG-001-RED"
@@ -160,7 +160,7 @@ requirements:
       The implemented EDGE0 software read-trigger emits a fresh capture while
       capture remains disabled. The edge-datalogger CONFIG payload 0b11 is
       C_ENABLE_READ_TRIGGER_OFF_CODE and makes triggerRead pulse
-      (hw/rtl/datalogger/nonstd/edge_datalogger/edge_datalogger.vhd:91-92,
+      (hw/rtl/datalogger/nonstd/edge_datalogger/edge_datalogger.vhd:92-93,
       171-228). Starting from an empty ring, one trigger yields at least the
       five-word ZS header plus one edge payload word. This is not a claim that
       the planned semantic TRIG_MATCH engine is implemented.
@@ -221,9 +221,9 @@ requirements:
       enough to drain the design-derived stream while DDR_BACKPRESSURE_CNT stays
       zero. project_regbank.yml:323-340 defines RING_READ_PTR as the software
       DRAIN pointer; README.md:104-106 specifies that the daemon drains DDR and
-      streams records over TCP. sw/stream/data_source.py:1436-1456 advances it
+      streams records over TCP. sw/stream/data_source.py:1437-1457 advances it
       only after parsing consumed frames; sustained socket backpressure stops
-      subsequent drain calls in sw/stream/server.py:356-399.
+      subsequent drain calls in sw/stream/server.py:357-400.
     expected_outcome: "pass"
     falsifier: "DS-DE25-TPUT-001-RED"
     target: {board: "de25-standard"}

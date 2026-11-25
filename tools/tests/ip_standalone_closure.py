@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Shared harness for the DS-P2.137 ``rr sim run --ip`` closure gates.
 
 ``rr sim run <test> --ip <ip-dir>`` does NOT run the cocotb file's ``main()``.

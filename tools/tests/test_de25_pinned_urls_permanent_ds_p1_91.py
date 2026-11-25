@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.91: the DE25 clean-machine stage fetches its pinned inputs from URLs that last.
 
 tools/de25_toolchain_stage.py fetched the OpenSSL 3.0.13-0ubuntu3.15 debs from

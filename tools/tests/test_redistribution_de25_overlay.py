@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """docs/REDISTRIBUTION.md lists every ELF file the DE25 image's Python overlay ships.
 
 tools/de25_linux_image.py stage writes the overlay from pinned downloads, so a

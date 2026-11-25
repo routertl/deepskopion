@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.236: edge-dense frames decode at 1 Mbaud, inside the declared range.
 
 uart_pkg.vhd declares C_UART_MAX_BAUDRATE = 1 Mbps ("validated range 9600..1M

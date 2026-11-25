@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.115 — Regression guard for public README rewrite, CONTRIBUTING.md,
 ATTRIBUTIONS.md, and .github templates.
 

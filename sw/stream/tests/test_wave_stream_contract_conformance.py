@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """WS-C0 (DS-P1.29) — bind the deepskopion producer to the vendored contract.
 
 `contracts/wave_stream_v1/` is the seam, and it is deliberately not owned by

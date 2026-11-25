@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """wave_stream_v1 protocol primitives — encoder, frame tags, HELO helpers.
 
 Wire spec is defined in routertl/docs/protocol/wave_stream_v1.md (D.62 + D.64).

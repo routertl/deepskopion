@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.59 / DS-P2.136 — the production armer for DS-P2.100's fabric stimulus
 generator (``hw/rtl/stimulus/ds_stimulus_gen.vhd``).
 

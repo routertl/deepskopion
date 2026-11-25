@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.123: a consumer routes a signal set onto the Edge Detector inputs.
 
 The 2026-06-22 live I2C edge demo needed a host shell: ``devmem`` EMIO_MUX_SEL

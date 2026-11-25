@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P1.57 boot-time regression guard: S99deepskopion-stream must refuse to
 start (loudly) when python3 cannot execute at all.
 

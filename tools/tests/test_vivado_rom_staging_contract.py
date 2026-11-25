@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Contract for clone-portable regbank ROM paths in Vivado synthesis."""
 
 import subprocess

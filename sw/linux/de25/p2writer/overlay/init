@@ -1,4 +1,5 @@
 #!/bin/sh
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: MPL-2.0
 # DS-P2.264: /init of the de25_p2writer TOOL image (initramfs root, root=/dev/ram0).
 # Brings up proc/sys/dev and eth0 from ds_ip= on the kernel command line, runs

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# rr unknown-llm (AI-generated)
 # PolarFire staging. sw/linux/stage_daemon.sh runs this before it stages the
 # daemon. It lives here because the public export drops sw/linux/pfsoc/.
 set -euo pipefail

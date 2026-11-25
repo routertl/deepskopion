@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P3.97 — protocol-level UART traffic through the full datalogger_gather.
 
 A REAL serial UART line (cocotb UartSource) is driven onto the gather's UART0

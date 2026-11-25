@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """Refresh / diff ``linux.lock.frozen`` without importing this bench.
 
 Why this exists (DS-P1.27 / DS-X1)

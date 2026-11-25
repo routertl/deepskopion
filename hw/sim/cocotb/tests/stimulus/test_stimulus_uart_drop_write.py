@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 test_stimulus_uart_drop_write — DS-P2.100 / DS-D.38 option a fabric-side
 stimulus generator, write-strobe idiom invariant (STIM-REQ-8), proven

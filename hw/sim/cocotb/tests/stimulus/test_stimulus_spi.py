@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """
 test_stimulus_spi — DS-P2.100 / DS-D.38 option a fabric-side stimulus
 generator, SPI master generator coverage (STIM-REQ-5, STIM-REQ-6), proven

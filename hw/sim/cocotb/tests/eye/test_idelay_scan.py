@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """idelay_scan tap-delay test — REAL IDELAYE2 under nvc (DS-P3.114).
 
 Proves the eye's HORIZONTAL (timing) axis on the *silicon* architecture. Since

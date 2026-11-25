@@ -1,3 +1,4 @@
+-- rr unknown-llm (AI-generated)
 --------------------------------------------------------------------------------
 -- File       : prbs_gen.vhd
 -- Project    : deepskopion — eye-scan / BERT instrument (DS-P2.66)

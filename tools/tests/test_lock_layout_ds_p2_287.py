@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 # SPDX-License-Identifier: LicenseRef-RouteRTL-1.0
 """DS-P2.287: every target has a tracked targets/<t>.routertl.lock, except the targets rr cannot lock with
 their own HDL covered.

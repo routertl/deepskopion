@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.126 — every PolarFire target declares the MEASURED device IDCODE.
 
 pfsoc_datalogger.yml carried the PF-B0 placeholder 0x0F8271CF long after

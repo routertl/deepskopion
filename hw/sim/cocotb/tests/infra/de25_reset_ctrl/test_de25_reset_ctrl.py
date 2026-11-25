@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Adversarial cocotb test for the DE25 fabric reset (DS-P1.80).
 
 de25_reset_ctrl synchronises ninit_done and pll_locked into clk_i on separate

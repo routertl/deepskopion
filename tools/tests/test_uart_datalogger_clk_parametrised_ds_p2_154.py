@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Regression guard for DS-P2.154: the UART datalogger's clock-derived math must
 follow the instance's real system clock, not uart_pkg's hard-coded 100 MHz.
 

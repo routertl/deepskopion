@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """DS-P2.244: autoSync must not report 7 data bits + parity for an 8N1 line
 because the first calibration frames happen to share one parity.
 

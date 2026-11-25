@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """On-board JTAG-datalogger validation (DS-P3.56 P3 HW bring-up).
 
 Reads the DDR ring and decodes any DOMAIN_JTAG frames with the deployed

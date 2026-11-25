@@ -1,3 +1,4 @@
+# rr unknown-llm (AI-generated)
 """Executable DE-H0 contracts; NVC's exit status is the behavioral surface."""
 from pathlib import Path
 import hashlib

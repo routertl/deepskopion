@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# rr unknown-llm (AI-generated)
 """DS-P2.189 — RR-CDC-002 gate with deepskopion-side waivers that survive a re-vendor.
 
 THE DEFECT. DS-T1.21 (31761198) waived the REA quasi-static MCP in
