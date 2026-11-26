@@ -62,6 +62,7 @@ def _ok_probe() -> P.Probe:
         jtag_cables=["FAKESERIAL01"],
         uart_devices=["/dev/serial/by-id/usb-fake-if01-port0"],
         host_ipv4=["192.0.2.1"],
+        host_programs={n: True for n in d["linux_host"]["buildroot_programs"]},
     )
 
 
@@ -128,6 +129,8 @@ HOST_REMOVALS = [
     ("jtag.cable", "jtag_cables", []),
     ("network.host_ipv4", "host_ipv4", []),
     ("console.uart", "uart_devices", []),
+    ("linux.buildroot_programs", "host_programs", None),
+    ("linux.buildroot_programs", "host_programs", {}),
 ]
 
 

@@ -53,8 +53,10 @@ rr linux tools install &&
 
 # 8. Put the card in the kit (J17), power it on, then attach RouteWave.
 #    BOARD_IP is the address the kit takes at first boot (see First boot).
+#    RW is RouteWave as the README unpacks it (README, RouteWave).
 BOARD_IP=board-ip
-routewave -c "stream attach $BOARD_IP:7475"
+RW=~/routewave-2.7.0-linux-x86_64/routewave
+"$RW" -c "stream attach $BOARD_IP:7475"
 ```
 
 The fabric stays programmed across power cycles; step 4 is repeated only for a new FPGA build. The card holds the

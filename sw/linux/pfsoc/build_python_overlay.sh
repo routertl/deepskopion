@@ -30,6 +30,12 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
+
+# DS-P2.401: name every Buildroot host program this host lacks, at once, before
+# Buildroot's own check stops on the first one. The fix it names:
+# `rr linux tools install`. The path is relative to this script, not found with
+# git: git is one of the programs the check reports.
+python3 ../../../tools/preflight/ds_preflight.py --stage linux
 HERE="$(pwd)"
 
 # The Buildroot release is a tag, never a branch: a branch tip moves with each

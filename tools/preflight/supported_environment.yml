@@ -159,6 +159,43 @@ network:
   static_bootarg: ds_ip=<address>/<prefix>
   severity: fail
 
+# ── Linux build host programs (DS-P2.401) ────────────────────────────────────
+# The programs Buildroot checks for before it builds anything, from the
+# release sw/linux/build_buildroot.sh pins (2024.11.4,
+# support/dependencies/dependencies.sh). Buildroot stops on the FIRST missing
+# one, so without this check a newcomer finds them one failed build at a time.
+# "a|b" means either program. grep is run by that check itself; gzip and
+# bzcat extract the .tar.gz and .tar.bz2 sources these configurations fetch
+# (package/pkg-utils.mk, extractor-system-dependency; xz is built by Buildroot).
+# git is listed because the scripts clone Buildroot with it; programs Buildroot
+# asks for only for other configurations (svn, java) are not listed.
+linux_host:
+  buildroot_programs:
+    - which
+    - sed
+    - /usr/bin/file
+    - make
+    - gcc|cc
+    - g++|c++
+    - bash
+    - perl
+    - tar
+    - wget
+    - cpio
+    - unzip
+    - rsync
+    - bc
+    - cmp
+    - find
+    - xargs
+    - patch
+    - grep
+    - gzip
+    - bzcat
+    - git
+  fix: rr linux tools install
+  severity: fail
+
 # ── Power ────────────────────────────────────────────────────────────────────
 power:
   method: USB micro-B from the host (the PROG/UART port), board power-select

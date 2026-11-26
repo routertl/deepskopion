@@ -246,6 +246,7 @@ no `build` block is refused by name.
 ```sh
 python3 tools/preflight/ds_preflight.py --stage build   # clone → bitstream
 python3 tools/preflight/ds_preflight.py --stage bench   # board, link, console
+python3 tools/preflight/ds_preflight.py --stage linux   # Buildroot host programs (PolarFire image)
 python3 tools/preflight/ds_preflight.py --stage all --json
 ```
 
@@ -254,6 +255,11 @@ target, and `pre_build` hooks are fatal, so a missing prerequisite aborts the
 build in seconds rather than surfacing as an OOM kill an hour later. `bench`
 never runs there: nothing about a cable or a network link is needed to produce
 a bitstream, and a build must not fail on a machine with no board attached.
+
+`linux` checks the host programs Buildroot needs, declared under `linux_host` in
+`tools/preflight/supported_environment.yml`, and names every missing one at once
+with its fix (`rr linux tools install`). `sw/linux/pfsoc/build_python_overlay.sh`
+runs it before it starts Buildroot. `all` runs `build` and `bench`, not `linux`.
 
 A failing run looks like this — the point is *required vs found*, not "check
 failed":

@@ -12,6 +12,8 @@ Two stages, because they gate different things:
 
     --stage build   everything needed to get from `git clone` to a bitstream.
                     This is what the pre_build hook runs.
+    --stage linux   the host programs the Linux image build (Buildroot) needs,
+                    all named at once; run before the board guides' Linux steps.
     --stage bench   everything needed to get that bitstream onto a board and
                     see traffic: a JTAG cable, the point-to-point link, a
                     console. Nothing here is needed to synthesise, so it must
@@ -79,7 +81,7 @@ from active_target import load_active_target  # noqa: E402
 
 DECLARATION = Path(__file__).resolve().parent / "supported_environment.yml"
 
-STAGES = ("build", "bench", "all")
+STAGES = ("build", "linux", "bench", "all")
 
 # Where a cable serial would be a bench identity leak if it appeared.
 _SERIAL_RE = re.compile(r"\b[0-9A-F]{12}\b")
@@ -124,6 +126,18 @@ class Probe:
     jtag_cables: list[str] = field(default_factory=list)
     uart_devices: list[str] = field(default_factory=list)
     host_ipv4: list[str] = field(default_factory=list)
+    #: Each declared Linux-build host program ("a|b" = either) -> found on PATH.
+    #: None when it could not be determined: judged as a failure, never a pass.
+    host_programs: dict[str, bool] | None = None
+
+
+def _linux_programs(declaration: dict) -> list[str]:
+    return list((declaration.get("linux_host") or {}).get("buildroot_programs") or [])
+
+
+def _host_programs(names: list[str]) -> dict[str, bool]:
+    """Each declared program, an absolute path or a PATH name, "a|b" meaning either, -> found."""
+    return {name: any(shutil.which(alt) for alt in name.split("|")) for name in names}
 
 
 def _os_release() -> tuple[str | None, str | None]:
@@ -265,7 +279,7 @@ def _host_ipv4() -> list[str]:
     return re.findall(r"inet (\d+\.\d+\.\d+\.\d+)/", out.stdout)
 
 
-def probe_system(root: Path) -> Probe:
+def probe_system(root: Path, declaration: dict | None = None) -> Probe:
     """Take the one snapshot every check is judged against."""
     os_id, os_version = _os_release()
     cables, uarts = _usb_cables_and_uarts()
@@ -284,6 +298,8 @@ def probe_system(root: Path) -> Probe:
         jtag_cables=cables,
         uart_devices=uarts,
         host_ipv4=_host_ipv4(),
+        host_programs=_host_programs(
+            _linux_programs(declaration if declaration is not None else load_declaration())),
     )
 
 
@@ -722,6 +738,26 @@ def _check_traffic_source_dataloggers(p: Probe, d: dict, root: Path) -> Result:
     )
 
 
+def _check_buildroot_host_programs(p: Probe, d: dict, root: Path) -> Result:
+    """DS-P2.401: every program Buildroot checks for, so a newcomer learns them all in one run."""
+    spec = d.get("linux_host") or {}
+    names = list(spec.get("buildroot_programs") or [])
+    fix = str(spec.get("fix") or "rr linux tools install")
+    if not names:
+        return Result("linux.buildroot_programs", "linux", False, "fail",
+                      "linux_host.buildroot_programs declared",
+                      "no linux_host.buildroot_programs in supported_environment.yml", "")
+    required = "Buildroot host programs: " + ", ".join(names)
+    if p.host_programs is None:
+        return Result("linux.buildroot_programs", "linux", False, "fail", required, "could not determine",
+                      f"Run `{fix}`.")
+    missing = [n for n in names if not p.host_programs.get(n)]
+    found = f"all {len(names)} present" if not missing else "missing " + ", ".join(missing)
+    return Result("linux.buildroot_programs", "linux", not missing, str(spec.get("severity", "fail")),
+                  required, found,
+                  f"Run `{fix}`: it installs the Linux build host tools (it uses sudo apt-get).")
+
+
 def _check_jtag_cable(p: Probe, d: dict, root: Path) -> Result:
     spec = d["jtag"]
     ok = bool(p.jtag_cables)
@@ -814,6 +850,7 @@ CHECKS = (
     _check_target_network,
     _check_traffic_source_dt,
     _check_traffic_source_dataloggers,
+    _check_buildroot_host_programs,
     _check_jtag_cable,
     _check_jtag_unambiguous,
     _check_network_host,
@@ -821,12 +858,21 @@ CHECKS = (
 )
 
 
+#: The linux stage runs ONLY these, against a probe of only the host's programs: a Buildroot script calls it, and the
+#: missing-program report must print even where an unrelated check would fail (a bench descriptor) or write (the
+#: build's per-job disk marker).
+LINUX_CHECKS = (_check_buildroot_host_programs,)
+
+
 def run_checks(stage: str = "build", probe: Probe | None = None,
                declaration: dict | None = None, root: Path | None = None) -> list[Result]:
     """Judge every prerequisite in *stage* against *probe*."""
     root = Path(root or ROOT)
     d = declaration or load_declaration()
-    p = probe if probe is not None else probe_system(root)
+    if stage == "linux":
+        p = probe if probe is not None else Probe(host_programs=_host_programs(_linux_programs(d)))
+        return [fn(p, d, root) for fn in LINUX_CHECKS]
+    p = probe if probe is not None else probe_system(root, d)
     results = [fn(p, d, root) for fn in CHECKS]
     if stage != "all":
         results = [r for r in results if r.stage == stage]
@@ -876,7 +922,8 @@ def main(argv: list[str] | None = None, probe: Probe | None = None,
          declaration: dict | None = None, root: Path | None = None) -> int:
     ap = argparse.ArgumentParser(description="Check the DS-E0 supported environment")
     ap.add_argument("--stage", choices=STAGES, default="build",
-                    help="build = clone->bitstream; bench = board, link, console")
+                    help="build = clone->bitstream; linux = Linux build host programs; "
+                         "bench = board, link, console")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     # --declaration exists so the guard tests can judge a synthetic host
     # against a real declaration (and vice versa). The pre_build hook never

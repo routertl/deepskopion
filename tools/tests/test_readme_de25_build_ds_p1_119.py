@@ -56,8 +56,9 @@ EXPECTED = (
     (
         "( set -e",
         "BOARD_IP=board-ip",
+        "RW=~/routewave-2.7.0-linux-x86_64/routewave",  # DS-P3.384: RouteWave as the README unpacks it
         'python3 tools/wait_for_port.py "$BOARD_IP" 7475 --timeout 180',
-        'routewave -c "stream attach $BOARD_IP:7475" )',
+        '"$RW" -c "stream attach $BOARD_IP:7475" )',
     ),
 )
 # Directions given as prose between the blocks, which a command list cannot hold.
@@ -643,6 +644,11 @@ def _run_block(tmp_path: Path, block: str, fail_on: str) -> tuple[int, list[str]
             f'case "{name} $*" in "{fail_on}"*) exit 1;; esac\n'
             "exit 0\n", encoding="utf-8")
         stub.chmod(0o755)
+    # DS-P3.384: the attach block calls RouteWave by the README's path under HOME, not on PATH.
+    rw = tmp_path / "routewave-2.7.0-linux-x86_64" / "routewave"
+    rw.parent.mkdir(exist_ok=True)
+    rw.write_text((stubs / "routewave").read_text(encoding="utf-8"), encoding="utf-8")
+    rw.chmod(0o755)
     script = tmp_path / "block.sh"
     script.write_text("\n".join(lines) + "\n", encoding="utf-8")  # the approved text, not the raw block
     env = {"PATH": str(stubs), "HOME": str(tmp_path)}

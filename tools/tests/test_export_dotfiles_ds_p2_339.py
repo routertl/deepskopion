@@ -26,8 +26,8 @@ import export_github  # noqa: E402
 import public_artifact_hygiene as hygiene  # noqa: E402
 
 # The rule lines of .gitignore (non-blank, non-comment), unchanged by this ticket.
-GITIGNORE_RULES = 147   # DS-P2.360: + libs/routertl/rea/, libs/routertl/rr_ddr_stream/; DS-P2.219: + generated_mix/canfd_demo/, generated_mix/de25_canfd/
-GITIGNORE_RULES_SHA256 = "48c35d926407d00397382c637724508381799d046b3c705098bc2bbe73809965"
+GITIGNORE_RULES = 148   # DS-P2.360: + libs/routertl/rea/, libs/routertl/rr_ddr_stream/; DS-P2.219: + generated_mix/canfd_demo/, generated_mix/de25_canfd/; DS-P1.128: + !docs/captures/*.fst (DS-P2.407)
+GITIGNORE_RULES_SHA256 = "80b39d27d7f4191f276631f9b89039920d705332b1baff5f83b7ec4e6a02a137"
 PLANTED = b"# kept out of the history (DS-P1.106)\n"
 
 
@@ -70,8 +70,12 @@ def test_no_exported_dot_path_cites_a_ticket(dot_paths):
 
 
 def test_the_gitignore_rules_are_unchanged():
-    lines = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
-    rules = [line for line in lines if line.strip() and not line.lstrip().startswith("#")]
+    # As git reads it: an initial UTF-8 BOM skipped, lines split on LF only, one trailing CR dropped; empty lines,
+    # "#" in column 0 and lines of spaces only (git trims trailing spaces) are not patterns. A tab or any other
+    # character is a pattern.
+    raw = (ROOT / ".gitignore").read_bytes().removeprefix(b"\xef\xbb\xbf")
+    lines = [ln[:-1] if ln.endswith("\r") else ln for ln in raw.decode("utf-8").split("\n")]
+    rules = [line for line in lines if line and not line.startswith("#") and line.strip(" ")]
     assert len(rules) == GITIGNORE_RULES
     assert hashlib.sha256("".join(r + "\n" for r in rules).encode()).hexdigest() == GITIGNORE_RULES_SHA256
 

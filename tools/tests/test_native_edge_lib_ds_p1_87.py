@@ -98,10 +98,35 @@ def _tree(tmp: Path) -> Path:
     for rel in ("tools/native_edge_lib.py", *nel.SOURCES,
                 "sw/linux/extract_python_overlay.sh", "sw/linux/clean_python_overlay.py",
                 "sw/linux/pfsoc/build_python_overlay.sh",
-                "sw/linux/pfsoc/buildroot_pfsoc_defconfig"):
+                "sw/linux/pfsoc/buildroot_pfsoc_defconfig",
+                # DS-P2.401: build_python_overlay.sh runs the linux-stage preflight first.
+                "tools/preflight/ds_preflight.py", "tools/preflight/supported_environment.yml",
+                "tools/active_target.py"):
         (repo / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / rel, repo / rel)
     return repo
+
+
+def _stub_missing_host_programs(repo: Path, bin_dir: Path, path: str) -> None:
+    """DS-P2.401: the preflight names Buildroot host programs; a program the child's PATH lacks gets a stub on the
+    test PATH (an absolute one is re-pointed at its stub in the copied declaration), so the test does not depend on
+    the host having Buildroot's programs. Found as the preflight finds it (shutil.which: executable, absolute names
+    checked directly) on the child's PATH; programs found are left alone, since the scripts really run them."""
+    import yaml
+    decl_path = repo / "tools/preflight/supported_environment.yml"
+    decl = yaml.safe_load(decl_path.read_text(encoding="utf-8"))
+    programs = decl.setdefault("linux_host", {}).setdefault("buildroot_programs", [])
+    for i, name in enumerate(programs):
+        alts = name.split("|")
+        if any(shutil.which(a, path=path) for a in alts):
+            continue
+        if alts[0].startswith("/"):  # outside PATH, so a bare call of the same name never reaches it
+            stub = bin_dir.parent / "absolute-stubs" / Path(alts[0]).name
+            programs[i] = str(stub)
+        else:
+            stub = bin_dir / alts[0]
+        _exe(stub, "#!/bin/sh\nexit 0\n")
+    decl_path.write_text(yaml.safe_dump(decl, sort_keys=False), encoding="utf-8")
 
 
 def _fake_buildroot(br: Path, profile: nel.Profile, lib_elf: bytes, tmp: Path) -> dict:
@@ -141,6 +166,8 @@ def test_the_overlay_build_installs_the_library_built_from_source(tmp_path, name
     repo = _tree(tmp_path)
     lib_elf = make_elf(profile, arch=RV_ARCH_GCC11)
     env = _fake_buildroot(repo / br, profile, lib_elf, tmp_path)
+    if name == "pfsoc":  # only the PolarFire script runs the preflight; Zybo keeps the host's own programs
+        _stub_missing_host_programs(repo, tmp_path / "bin", env["PATH"])
     proc = subprocess.run(["bash", str(repo / script)], env=env, capture_output=True,
                           text=True, errors="replace", timeout=120)
     assert proc.returncode == 0, proc.stdout[-3000:] + proc.stderr[-3000:]
@@ -363,3 +390,31 @@ def test_the_lib_sha256_table_states_the_pinned_buildroot_release():
     assert len(refs) == 1, f"the two overlays pin different Buildroot releases: {refs}"
     doc = (ROOT / "sw/stream/native/README.md").read_text(encoding="utf-8")
     assert f"Both compilers are Buildroot {refs.pop()} " in doc
+
+
+def test_the_overlay_preflight_still_refuses_a_program_the_host_lacks(tmp_path):
+    """DS-P2.401: the stub helper stands in only for programs the host lacks, so the preflight's refusal stays
+    reachable: a declared program with no stub stops the pfsoc overlay script before Buildroot, named in the report."""
+    profile = nel.PROFILES["pfsoc"]
+    script, br, _ = SCRIPTS["pfsoc"]
+    repo = _tree(tmp_path)
+    env = _fake_buildroot(repo / br, profile, make_elf(profile, arch=RV_ARCH_GCC11), tmp_path)
+    _stub_missing_host_programs(repo, tmp_path / "bin", env["PATH"])
+    for name in ("sed", "grep", "tar"):  # present on any host that runs this test, so never replaced by a stub
+        assert not (tmp_path / "bin" / name).exists(), name
+    import yaml
+    decl_path = repo / "tools/preflight/supported_environment.yml"
+    decl = yaml.safe_load(decl_path.read_text(encoding="utf-8"))
+    decl["linux_host"]["buildroot_programs"] += ["ds-p2-401-absent-a", "ds-p2-401-absent-b"]
+    decl_path.write_text(yaml.safe_dump(decl, sort_keys=False), encoding="utf-8")
+    make_log = tmp_path / "make.log"
+    _exe(tmp_path / "bin/make", f'#!/bin/sh\necho "make $*" >> "{make_log}"\nexit 0\n')
+    proc = subprocess.run(["bash", str(repo / script)], env=env, capture_output=True,
+                          text=True, errors="replace", timeout=120)
+    said = proc.stdout[-3000:] + proc.stderr[-3000:]
+    assert proc.returncode == 1, said
+    found = next((ln for ln in proc.stderr.splitlines() if "found    :" in ln), "")
+    assert "ds-p2-401-absent-a" in found and "ds-p2-401-absent-b" in found, said
+    assert "rr linux tools install" in proc.stderr, said
+    assert not make_log.exists(), f"Buildroot's make ran before the preflight refused: {make_log.read_text()}"
+    assert not (tmp_path / "gcc.log").exists(), f"the overlay build ran past the preflight: {said}"

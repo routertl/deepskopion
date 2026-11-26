@@ -202,6 +202,67 @@ if [ "$ds_ci_rc" -ne 0 ]; then
 fi
 echo "✓ Public CI workflow guards pass (DS-P2.197)"
 
+# ── DS-P2.407 — the .gitignore rules guard judges the STAGED rules ──
+#
+# test_export_dotfiles_ds_p2_339 pins the .gitignore rule count and hash. No
+# leg ran it, so ebd7d70d added a rule without its pin and main went red unseen.
+# The staged .gitignore, the staged guard (its pins) and its helper modules are
+# copied out of the index and the guard runs on that copy, so neither the
+# working tree nor unstaged pins can pass a staged change. About 5 s.
+echo "🚧 Checking the staged .gitignore rules against their pins (DS-P2.407)..."
+ds_gi_rc=0
+ds_gi_dir=$(mktemp -d) || ds_gi_dir=""
+if [ -z "$ds_gi_dir" ] || [ ! -d "$ds_gi_dir" ]; then
+    echo "❌ GATE COULD NOT RUN: .gitignore rules guard (no scratch directory)."
+    echo "   Commit aborted — a gate that cannot run is not a green gate."
+    exit 1
+fi
+# The raw staged blobs (git cat-file applies no smudge or text conversion), written by this shell.
+ds_gi_snapshot() {
+    for ds_gi_f in .gitignore tools/tests/test_export_dotfiles_ds_p2_339.py tools/export_github.py \
+            tools/public_artifact_hygiene.py; do
+        mkdir -p "$ds_gi_dir/$(dirname "$ds_gi_f")" && git cat-file blob ":$ds_gi_f" > "$ds_gi_dir/$ds_gi_f" \
+            2>/dev/null || return 1
+    done
+}
+# git does not read a symlinked .gitignore, so the guard must not judge a symlink's target as the rules.
+ds_gi_mode=$(git ls-files -s -- .gitignore | cut -d' ' -f1)
+if [ "$ds_gi_mode" != "100644" ] && [ "$ds_gi_mode" != "100755" ]; then
+    ds_gi_out="the staged .gitignore is not a regular file (index mode ${ds_gi_mode:-absent})"; ds_gi_rc=1
+elif ds_gi_snapshot; then
+    # Run from here (DS_GUARD_PY may be the relative .venv/bin/python3); the guard finds the copied .gitignore
+    # from its own path. Inherited pytest options are cleared, and only "1 passed" counts as a pass.
+    ds_gi_out=$(env -u PYTEST_ADDOPTS "$DS_GUARD_PY" -m pytest -q --no-header -p no:cacheprovider -o addopts= \
+        "$ds_gi_dir/tools/tests/test_export_dotfiles_ds_p2_339.py::test_the_gitignore_rules_are_unchanged" 2>&1) \
+        || ds_gi_rc=$?
+    if [ "$ds_gi_rc" -eq 0 ] && ! printf '%s\n' "$ds_gi_out" | grep -q "1 passed"; then
+        ds_gi_out="$ds_gi_out
+the guard did not report 1 passed"; ds_gi_rc=2
+    fi
+else
+    ds_gi_out="the .gitignore guard or its helpers are not in the index"; ds_gi_rc=2
+fi
+rm -rf "$ds_gi_dir"
+if [ "$ds_gi_rc" -ne 0 ]; then
+    printf '%s\n' "$ds_gi_out"
+    echo ""
+    case "$ds_gi_rc" in
+        1)
+            echo "❌ the staged .gitignore rules do not match their pins (DS-P2.407)."
+            echo "   Update GITIGNORE_RULES and GITIGNORE_RULES_SHA256 in"
+            echo "   tools/tests/test_export_dotfiles_ds_p2_339.py with the rule change."
+            echo "   Commit aborted."
+            ;;
+        *)
+            echo "❌ GATE COULD NOT RUN: .gitignore rules guard (exit $ds_gi_rc)."
+            echo "   Interpreter: $DS_GUARD_PY"
+            echo "   Commit aborted — a gate that cannot run is not a green gate."
+            ;;
+    esac
+    exit 1
+fi
+echo "✓ Staged .gitignore rules match their pins (DS-P2.407)"
+
 # ── DS-P3.337 — the telemetry exporter's copy blocks, executed ──
 #
 # The documented ssh and card copy blocks run inside bubblewrap with stub tools.
