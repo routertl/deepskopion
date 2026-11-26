@@ -56,7 +56,7 @@ EXPECTED = (
     (
         "( set -e",
         "BOARD_IP=board-ip",
-        "RW=~/routewave-2.7.0-linux-x86_64/routewave",  # DS-P3.384: RouteWave as the README unpacks it
+        "RW=~/.routertl/bin/routewave/routewave",  # DS-P3.370: RouteWave as rr ws update-viewer installs it
         'python3 tools/wait_for_port.py "$BOARD_IP" 7475 --timeout 180',
         '"$RW" -c "stream attach $BOARD_IP:7475" )',
     ),
@@ -644,9 +644,9 @@ def _run_block(tmp_path: Path, block: str, fail_on: str) -> tuple[int, list[str]
             f'case "{name} $*" in "{fail_on}"*) exit 1;; esac\n'
             "exit 0\n", encoding="utf-8")
         stub.chmod(0o755)
-    # DS-P3.384: the attach block calls RouteWave by the README's path under HOME, not on PATH.
-    rw = tmp_path / "routewave-2.7.0-linux-x86_64" / "routewave"
-    rw.parent.mkdir(exist_ok=True)
+    # DS-P3.370: the attach block calls RouteWave where rr ws update-viewer installs it under HOME, not on PATH.
+    rw = tmp_path / ".routertl" / "bin" / "routewave" / "routewave"
+    rw.parent.mkdir(parents=True, exist_ok=True)
     rw.write_text((stubs / "routewave").read_text(encoding="utf-8"), encoding="utf-8")
     rw.chmod(0o755)
     script = tmp_path / "block.sh"

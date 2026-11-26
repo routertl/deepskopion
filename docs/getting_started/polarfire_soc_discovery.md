@@ -53,9 +53,9 @@ rr linux tools install &&
 
 # 8. Put the card in the kit (J17), power it on, then attach RouteWave.
 #    BOARD_IP is the address the kit takes at first boot (see First boot).
-#    RW is RouteWave as the README unpacks it (README, RouteWave).
+#    RW is RouteWave as `rr ws update-viewer` installs it (README, RouteWave).
 BOARD_IP=board-ip
-RW=~/routewave-2.7.0-linux-x86_64/routewave
+RW=~/.routertl/bin/routewave/routewave
 "$RW" -c "stream attach $BOARD_IP:7475"
 ```
 

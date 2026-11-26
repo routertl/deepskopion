@@ -26,6 +26,7 @@ The data loggers decode these protocols:
 * QSPI
 * JTAG (passive TAP capture)
 * CAN
+* CAN FD
 * Edge (timed transitions)
 
 Every data logger has a simulation testbench. On all three boards, the self-test checks the UART, I2C, SPI and edge
@@ -34,13 +35,26 @@ data loggers with the board alone ([Self-test](docs/getting_started/self_test.md
 
 ---
 
-## Captures
+## Live capture
 
-RouteWave 2.7.0 attached live to a Zybo Z7-20 running the 0.1.0 image, with the UART, I2C, SPI and edge self-test
-traffic running at the same time. Each byte is decoded in the fabric and stamped from the board's counter; the rows
-interleave in time order, and no protocol reports an error.
+![RouteWave 2.7.0 attached live to a Zybo Z7-20 while the self-test runs UART, SPI, I2C and edge traffic and two CAN FD controllers on the board exchange frames: the Datalogger list fills as packets arrive, and the resync rows the stream reports at protocol switches are shown](docs/images/live_capture.gif)
+
+RouteWave 2.7.0 attached live to a Zybo Z7-20 while the self-test sends UART, SPI, I2C and edge traffic, then the
+board's two CAN FD controllers exchange frames on its CAN bus. UART, SPI, I2C and CAN FD are decoded live; the resync
+rows the stream reports when the traffic switches are shown as they arrive.
+
+Recorded 2026-11-26 with RouteWave 2.7.0 installed by RouteRTL 5.7.0, on the board image built from
+commit `2b50f7ef`.
+
+The same view, stopped on one exchange: each byte is decoded in the fabric and stamped from the board's counter, and
+the rows interleave in time order.
 
 ![RouteWave Datalogger view, live from the Zybo Z7-20: an SPI exchange, a UART byte, then an I2C write (START, 0xA0, 0xAB, 0xCD and 0x3E each acknowledged, STOP) and an edge-logger row, all within 1.2 ms](docs/images/datalogger_live.png)
+
+A CAN FD frame from the recording above: the last CAN fields of one frame (data, CRC, ACK, end of frame), then the
+decoded CAN FD frame.
+
+![RouteWave Datalogger view, live from the Zybo Z7-20: the last CAN fields of one frame and the decoded CAN FD frame, extended identifier 0x1F000001 with 8 data bytes](docs/images/datalogger_live_canfd.png)
 
 ---
 
@@ -71,9 +85,9 @@ On all three boards, the default targets generate bus traffic for six of the nin
 The project is built with [RouteRTL](https://routertl.dev) (`rr`): it fetches the IP packages, runs the simulations,
 builds the FPGA design and the Linux image, and programs the board.
 
-> RouteRTL is the author's own tool. It installs free from PyPI (`pip install routertl`); its licence terms are on
-> [its PyPI page](https://pypi.org/project/routertl/). No step in this README or its guides needs a paid RouteRTL
-> feature or licence. The vendor tools (Vivado, Quartus Prime Pro, Libero SoC) carry their own licences.
+> RouteRTL is the author's own tool. RouteRTL is free for individuals; organizations need a RouteRTL licence after
+> its evaluation period (see [RouteRTL's licence terms](https://pypi.org/project/routertl/)). No separate licence is
+> needed to build DeepSkopion. The vendor tools (Vivado, Quartus Prime Pro, Libero SoC) carry their own licences.
 
 ### Requirements
 
@@ -81,7 +95,7 @@ builds the FPGA design and the Linux image, and programs the board.
 |---|---|
 | RouteRTL | `routertl >= 5.7.0` |
 | Python | `>= 3.11, < 3.15` |
-| RouteWave | `>= 2.4.0`, from its [release page](https://github.com/djmazure/routewave/releases) (see below) |
+| RouteWave | `>= 2.4.0`, installed through RouteRTL (see below) |
 | Vivado (Zybo Z7-20) | `2024.1`, ML Standard or ML Enterprise |
 | Quartus Prime Pro (DE25) | `25.3.1` with patch 1.02, and a licence that covers Agilex 5 E-Series: Quartus offers a no-cost one ([details](docs/SUPPORTED_ENVIRONMENT.md#toolchain)) |
 | Libero SoC (PolarFire SoC Discovery Kit) | `2025.2` |
@@ -92,53 +106,24 @@ Host packages, and fixes for known host problems: [Host setup](docs/getting_star
 
 ### RouteWave
 
-RouteWave comes from its [release page](https://github.com/djmazure/routewave/releases): `routewave-<version>-windows-x86_64.zip`
-for Windows, and `routewave-<version>-linux-x86_64.tar.gz` for Linux. `RouteWave-<version>-x86_64.AppImage` also runs on
-Linux where FUSE is available. Each release carries `SHA256SUMS.txt`, its signature and the signing key. On Linux, with
-the packages of [Host setup](docs/getting_started/host_setup.md), the tarball is fetched, checked and unpacked in the
-home folder with:
+RouteWave, the waveform viewer, is installed through RouteRTL:
 
 ```bash
-cd ~
-VER=2.7.0
-base=https://github.com/djmazure/routewave/releases/download/v${VER}
-for f in routewave-${VER}-linux-x86_64.tar.gz SHA256SUMS.txt SHA256SUMS.txt.asc PUBLIC_KEY.asc; do curl -fsSLO ${base}/$f; done
-sha256sum --check --ignore-missing SHA256SUMS.txt
-gpg --import PUBLIC_KEY.asc && gpg --verify SHA256SUMS.txt.asc SHA256SUMS.txt
-tar xzf routewave-${VER}-linux-x86_64.tar.gz && ./routewave-${VER}-linux-x86_64/routewave --version
+pip install routertl
+rr ws update-viewer    # installs RouteWave in ~/.routertl/bin/routewave/
+rr routewave           # opens it
 ```
 
-`sha256sum` prints `OK` for the tarball, and `gpg --verify` prints `Good signature` and the line
-`Primary key fingerprint: B545 F7DE 394B 58A2 65F8  3101 BF17 E0A1 F3D0 9ED1`.
-
-On Windows, in PowerShell, the zip is fetched, checked and unpacked in the Downloads folder with the block below. It
-calls `curl.exe`: in PowerShell, `curl` names another command.
-
-```powershell
-Set-Location "$HOME\Downloads"
-$VER = "2.7.0"
-$base = "https://github.com/djmazure/routewave/releases/download/v$VER"
-curl.exe -fsSLO "$base/routewave-$VER-windows-x86_64.zip"
-curl.exe -fsSLO "$base/SHA256SUMS.txt"
-(Get-FileHash "routewave-$VER-windows-x86_64.zip").Hash
-Select-String -Path SHA256SUMS.txt -Pattern "windows-x86_64.zip"
-Expand-Archive "routewave-$VER-windows-x86_64.zip" -DestinationPath .
-```
-
-The two hashes printed are the same (`Get-FileHash` prints it in upper case). RouteWave is then
-`routewave-<version>-windows-x86_64\routewave.exe`.
+RouteRTL does not verify this download yet. The binaries for Linux and Windows, with `SHA256SUMS.txt` and its
+signature, are on the [release page](https://github.com/djmazure/routewave/releases) for a direct download and a
+manual check.
 
 ### Simulation
 
-The blocks of the design have their own testbenches: each data logger, the stimulus generators, and the gather that
-merges the data loggers' records. They run in the free NVC simulator, with no board and no vendor tool. They run in a
-git clone (a simulation hook reads the clone's commit; an unpacked archive views the shipped capture but does not
-simulate), with RouteRTL installed and the repository cloned as in
-[Host setup](docs/getting_started/host_setup.md#install-routertl-and-clone-the-repository).
-
-`rr eda install nvc` builds NVC through the system package manager and asks for `sudo`; a host that already has
-NVC 1.19.3 or newer on `PATH` leaves that line out. `rr pkg install` fetches the IP packages `ip.lock` pins and records
-them for the active target (the repository's default target, the DE25) under `.routertl_cache/`.
+Every block can be simulated with NVC, in a git clone of the repository with RouteRTL installed
+([Host setup](docs/getting_started/host_setup.md#install-routertl-and-clone-the-repository)). `rr eda install nvc`
+asks for `sudo`; a host with NVC 1.19.3 or newer on `PATH` skips it. `rr pkg install` fetches the IP packages
+`ip.lock` pins.
 
 ```bash
 rr eda install nvc
@@ -148,49 +133,9 @@ rr sim list
 rr sim run test_i2c_datalogger
 ```
 
-`rr sim list` lists every testbench and the command that runs it (excerpt):
-
-```text
-MODULE                              LOCATION                                           DISCOVERY STATUS   COMMAND
-test_i2c_datalogger                 cocotb/tests/datalogger/i2c/test_i2c_datalogger.py OK                 rr sim run test_i2c_datalogger
-test_uart_datalogger                cocotb/tests/datalogger/uart/test_uart_datalogger.py OK                 rr sim run test_uart_datalogger
-test_can_frame_fsm                  cocotb/tests/datalogger/can/test_can_frame_fsm.py  OK                 rr sim run test_can_frame_fsm
-test_datalogger_gather              cocotb/tests/datalogger/infra/datalogger_gather/test_datalogger_gather.py OK                 rr sim run test_datalogger_gather
-...
-```
-
 Each test writes an FST waveform to `hw/sim/waves/<test>/`, which RouteWave opens:
 
 ![The I2C write-transaction test in RouteWave: SCL, SDA and the datalogger's configuration and timestamp](docs/images/sim_i2c_datalogger.png)
-
-### View a capture without building anything
-
-The repository ships one capture, `docs/captures/i2c_write_transaction.fst` (6.2 kB): the waveform of the I2C data
-logger testbench's write-transaction test, under the same CERN-OHL-W-2.0 licence as the rest of the design. It opens
-in [RouteWave](#routewave) on Linux and Windows, with no simulator, vendor tool or board. The command runs in the
-DeepSkopion folder (the clone, or the unpacked archive): the capture path is relative to it. An archive downloaded from
-GitHub unpacks with `unzip deepskopion-main.zip` on Linux or `Expand-Archive deepskopion-main.zip` in PowerShell (about
-half a minute). `RW` is the RouteWave program unpacked above:
-
-```bash
-RW=~/routewave-2.7.0-linux-x86_64/routewave
-"$RW" -c "open docs/captures/i2c_write_transaction.fst; wait 3000; show --tree tb_i2c_datalogger; zoom 190.852us 190.878us"
-```
-
-On Windows, in PowerShell:
-
-```powershell
-$RW = "$HOME\Downloads\routewave-2.7.0-windows-x86_64\routewave.exe"
-& $RW -c "open docs/captures/i2c_write_transaction.fst; wait 3000; show --tree tb_i2c_datalogger; zoom 190.852us 190.878us"
-```
-
-`wait 3000` lets the file finish loading before `show` runs: RouteWave 2.7.0 runs the next command before the load
-ends. The view ends on one message of the data logger, `0xE00000AB`, while `i2c_msg_vld` is high. RouteWave reporting
-`Load finished … (failed)` means the command did not run in the DeepSkopion folder. The command opens a RouteWave
-window that stays open until it is closed; RouteWave's messages, such as `Loaded … channels`, appear in its console
-panel, not in the terminal.
-
-![The shipped I2C capture in RouteWave, zoomed on one data logger message: i2c_msg_out reads 0xE00000AB while i2c_msg_vld is high](docs/images/capture_i2c_write_transaction.png)
 
 ### Build and run on a board
 

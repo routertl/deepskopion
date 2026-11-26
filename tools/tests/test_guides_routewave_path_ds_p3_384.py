@@ -29,9 +29,11 @@ def _bash_lines(text: str) -> list[str]:
 
 
 def _readme_rw() -> str:
-    rws = {ln for ln in _bash_lines((ROOT / "README.md").read_text(encoding="utf-8")) if ln.startswith("RW=")}
-    assert len(rws) == 1, rws
-    return rws.pop()
+    """DS-P3.370: the README installs RouteWave with rr ws update-viewer and names the folder in its install block;
+    the guides' RW is the program in that folder."""
+    m = re.search(r"rr ws update-viewer\s+# installs RouteWave in (\S+)/", (ROOT / "README.md").read_text(encoding="utf-8"))
+    assert m, "the README does not name the folder rr ws update-viewer installs RouteWave in"
+    return f"RW={m.group(1)}/routewave"
 
 
 @pytest.mark.parametrize("guide", GUIDES, ids=lambda p: p.stem)

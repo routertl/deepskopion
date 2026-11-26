@@ -49,9 +49,9 @@ rr linux flash-sd --device "$CARD"
 
 # 5. Boot the board from the card with Ethernet connected, then attach RouteWave.
 #    BOARD_IP is the address the board takes at first boot (see First boot).
-#    RW is RouteWave as the README unpacks it (README, RouteWave).
+#    RW is RouteWave as `rr ws update-viewer` installs it (README, RouteWave).
 BOARD_IP=board-ip
-RW=~/routewave-2.7.0-linux-x86_64/routewave
+RW=~/.routertl/bin/routewave/routewave
 "$RW" -c "stream attach $BOARD_IP:7475"
 ```
 

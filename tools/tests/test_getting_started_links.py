@@ -184,7 +184,7 @@ def test_every_readme_link_into_the_repository_resolves():
 
 
 @pytest.mark.parametrize("doc,old,new,expect", [
-    ("reading_the_stream.md", "README.md#captures", "README.md#captures-moved", "no heading"),
+    ("reading_the_stream.md", "README.md#live-capture", "README.md#live-capture-moved", "no heading"),
     ("first_boot.md", "../SUPPORTED_ENVIRONMENT.md", "../SUPPORTED_ENVIRONMENTS.md", "no file"),
 ])
 def test_a_broken_link_out_of_the_guides_is_reported(doc, old, new, expect):

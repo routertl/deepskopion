@@ -425,7 +425,7 @@ The SDK handles register bank creation split into two parts: **Static Schema** a
 ### How It Works
 
 1. **Static Schema**: You define `project_regbank.yml`. This dictates the memory map.
-    - Generated to: `src/pkg/system_regbank_pkg.vhd` (Address constants, Types).
+    - Generated to: `hw/rtl/pkg/system_regbank_pkg.vhd` (Address constants, Types).
     - Status: **Always Created** (if YAML exists).
 2. **Dynamic Build Info**: The SDK calculates version, git hash, and build date at **build time**.
     - Generated to: `hw/rtl/pkg/rom_info_pkg.vhd` (Constants: `C_GIT_HASH`, `C_BUILD_DATE`).

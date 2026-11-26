@@ -24,7 +24,7 @@ while data := sock.recv(65536):
                 print(a["ts_start"], a["channel_id"], a["kind"], a["text"])
 ```
 
-Its output for the I2C write in [Captures](https://github.com/routertl/deepskopion/blob/main/README.md#captures) (timestamps in ns; lines left out marked `…`):
+Its output for the I2C write in [Captures](https://github.com/routertl/deepskopion/blob/main/README.md#live-capture) (timestamps in ns; lines left out marked `…`):
 
 ```text
 producer: deepskopion-daemon/0.1.0
