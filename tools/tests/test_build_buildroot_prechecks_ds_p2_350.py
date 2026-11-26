@@ -24,6 +24,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "sw" / "linux" / "build_buildroot.sh"
 README = ROOT / "README.md"
+ZYBO_GUIDE = ROOT / "docs" / "getting_started" / "zybo_z7_20.md"
 
 # The script's own list; the test keeps its copy so that a program dropped from
 # the script is a red test, not a silent shrink.
@@ -88,7 +89,7 @@ def test_every_missing_program_is_named_in_one_message(tmp_path: Path):
     r = _run(str(d))
     line = r.stderr.split("missing", 1)[1].split("\n")[0]
     assert r.returncode == 2 and all(f" {p}" in line for p in gone), (r.returncode, r.stderr)
-    assert "README" in r.stderr and "Host requirements of step 4" in r.stderr
+    assert "docs/getting_started/zybo_z7_20.md" in r.stderr and "Host requirements of step 4" in r.stderr
 
 
 def test_a_path_with_whitespace_is_refused_and_names_the_readme_one_liner(tmp_path: Path, bindir: Path):
@@ -99,10 +100,11 @@ def test_a_path_with_whitespace_is_refused_and_names_the_readme_one_liner(tmp_pa
     assert "STUB-REACHED" not in r.stdout
     assert "whitespace" in r.stderr
     assert ONE_LINER in r.stderr, r.stderr
+    assert "docs/getting_started/zybo_z7_20.md" in r.stderr, r.stderr
 
 
 def test_the_one_liner_the_script_prints_is_the_one_in_the_readme():
-    assert ONE_LINER in README.read_text(encoding="utf-8")
+    assert ONE_LINER in ZYBO_GUIDE.read_text(encoding="utf-8")
     assert ONE_LINER.replace("\\n", "\\\\n").replace('"', '\\"').replace("$", "\\$") in SCRIPT.read_text(encoding="utf-8")
 
 

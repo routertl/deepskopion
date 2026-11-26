@@ -12,35 +12,35 @@ Deepskopion is a protocol datalogger that runs on an FPGA SoC development board.
 | Terasic DE25 | [`de25_datalogger`](targets/de25_datalogger.yml) | Altera Agilex 5 `A5ED013BB32AE4SCS` | Quartus Prime Pro |
 | Microchip PolarFire SoC Discovery Kit | [`pfsoc_datalogger`](targets/pfsoc_datalogger.yml) | Microchip PolarFire SoC `MPFS095T-1FCSG325E` | Libero SoC |
 
-Each board has its own build section below, after a common setup: select the board, build the FPGA design, build the Linux image and write it to a card, program the FPGA where the board needs it, then boot and attach RouteWave. [`docs/SUPPORTED_ENVIRONMENT.md`](docs/SUPPORTED_ENVIRONMENT.md) declares the supported host, tools and board, and `tools/preflight/ds_preflight.py` checks them.
-
-On the PolarFire SoC Discovery Kit a complete board self-test has not yet passed; the kit boots Linux and runs the capture daemon. Its MSS component is generated locally from the committed configuration ([`hw/libero/pfsoc/mss/README.md`](hw/libero/pfsoc/mss/README.md)). Some cold boots of the kit do not reach the Linux shell: one recorded stop is after DDR training, in the SD-card start-up of its boot firmware (the Hart Software Services), which also occurs with Microchip's reference design.
+Each board has a build guide in [`docs/getting_started/`](docs/getting_started/README.md): select the board, build the FPGA design, build the Linux image and write it to a card, program the FPGA where the board needs it, then boot and attach RouteWave. [`docs/SUPPORTED_ENVIRONMENT.md`](docs/SUPPORTED_ENVIRONMENT.md) declares the supported host, tools and board, and `tools/preflight/ds_preflight.py` checks them.
 
 ---
 
 ## Supported Protocols
 
-| Protocol | Records | Status |
-|---|---|---|
-| UART | Baud rate calibration, frames, parity and framing errors | Default targets |
-| I2C | START and STOP, 7-bit address, ACK and NACK, data bytes | Default targets |
-| SPI | Chip-select framing, MOSI and MISO bytes | Default targets |
-| QSPI | Flash command, address and data | Selected with the configurator on the Zybo Z7-20 and the DE25; the configurator refuses it for the PolarFire SoC Discovery Kit, which has no measured resource cost for it yet |
-| JTAG | Passive TAP capture | Selected with the configurator; records no live traffic on the DE25 and the PolarFire SoC Discovery Kit, whose tops tie the tap it reads to constants |
-| Edge | Timed transitions, batched | Default targets |
-| CAN | IDs, DLC, CRC and stuff errors | Default targets; see [CAN licensing](#appendix-can-fd-licensing) |
+The data loggers decode these protocols:
+
+* UART
+* I2C
+* SPI
+* QSPI
+* JTAG (passive TAP capture)
+* CAN
+* Edge (timed transitions)
+
+Every data logger has a simulation testbench. On all three boards, the self-test checks the UART, I2C, SPI and edge
+data loggers with the board alone ([Self-test](docs/getting_started/self_test.md)). Board-specific limits are in the
+[Release Notes](docs/RELEASE_NOTES.md).
 
 ---
 
-## When Another Tool Fits
+## Captures
 
-Deepskopion decodes protocols inside a running FPGA SoC. RouteWave exports a live or recorded capture as a sigrok
-session (`.sr`) with a PulseView setup (`.pvs`), through File > Export or `routewave_cli export-sr`, so a capture opens in
-[PulseView](https://sigrok.org/) as well.
+RouteWave 2.7.0 attached live to a Zybo Z7-20 running the 0.1.0 image, with the UART, I2C, SPI and edge self-test
+traffic running at the same time. Each byte is decoded in the fabric and stamped from the board's counter; the rows
+interleave in time order, and no protocol reports an error.
 
-Another tool fits analog signals, and board bring-up before Linux runs: a mixed-signal oscilloscope.
-
-See [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md).
+![RouteWave Datalogger view, live from the Zybo Z7-20: an SPI exchange, a UART byte, then an I2C write (START, 0xA0, 0xAB, 0xCD and 0x3E each acknowledged, STOP) and an edge-logger row, all within 1.2 ms](docs/images/datalogger_live.png)
 
 ---
 
@@ -60,52 +60,20 @@ See [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md).
 
 ## In-System Self-Test
 
-On the Zybo Z7-20, the DE25 and the PolarFire SoC Discovery Kit, the default targets generate bus traffic for six of the nine data loggers of the default mix, so those loggers capture with the board alone. The other three need external traffic on their header pins. The reach is the same on all three boards; it is measured in simulation by [`test_selftest_coverage.py`](hw/sim/cocotb/tests/datalogger/infra/default_mix/test_selftest_coverage.py). On the PolarFire SoC Discovery Kit a complete board self-test has not yet passed.
-
-| Data logger | Board-alone source |
-|---|---|
-| Edge 1 | The edge stimulus, or the I2C or SPI edge route; on the Zybo Z7-20 also the CAN edge route, and on the PolarFire SoC Discovery Kit also the UART edge route |
-| Edge 2 | The I2C or SPI edge route |
-| Edge 3 | The SPI edge route: the on-chip SPI responder (spi_injector) answers each byte of the SPI stimulus on MISO |
-| I2C 4 | The I2C stimulus |
-| I2C 5 | None: external traffic only |
-| SPI 8 | The SPI stimulus |
-| UART 12 | The UART stimulus (on the PolarFire SoC Discovery Kit, MMUART_1) |
-| UART 13 | None: external traffic only |
-| CAN 20 | None: external traffic only. The SPI edge route also drives this input with the SPI chip-select, which is not CAN traffic. |
-
-The SPI edge route reaches Edge 1, Edge 2 and Edge 3 when it is requested together with the SPI stimulus, which writes the route before the first byte:
-
-```bash
-BOARD_IP=board-ip   # the board's address
-python3 -m sw.stream.testbench.live_capture_client --host "$BOARD_IP" --stim spi --edge-route spi
-```
-
-
-| Board | Traffic source | Sources |
-|---|---|---|
-| Zybo Z7-20 | The stimulus block in the fabric drives the EMIO input lines while a protocol's `STIM_*_CONTROL` enable bit is set; otherwise the Linux drivers on the PS peripherals drive them over EMIO. The `EMIO_MUX_SEL` register selects the input. | [`hw/bd/ds_emio_uart_i2c_spi.tcl`](hw/bd/ds_emio_uart_i2c_spi.tcl), [`hw/bd/ds_emio_can.tcl`](hw/bd/ds_emio_can.tcl), [`hw/rtl/emio/ds_emio_mux.vhd`](hw/rtl/emio/ds_emio_mux.vhd), [`hw/rtl/emio/glitch_filter.vhd`](hw/rtl/emio/glitch_filter.vhd), [`hw/rtl/stimulus/ds_stimulus_gen.vhd`](hw/rtl/stimulus/ds_stimulus_gen.vhd) |
-| DE25 | A stimulus block in the fabric, controlled from Linux through the `STIM_*` registers. | [`hw/rtl/stimulus/ds_stimulus_gen.vhd`](hw/rtl/stimulus/ds_stimulus_gen.vhd), [`project_regbank.yml`](project_regbank.yml) |
-| PolarFire SoC Discovery Kit | Linux writes UART traffic on MMUART_1 (`/dev/ttyS1`), which the MSS routes to the fabric. `EMIO_MUX_SEL` bits [11:8] select the MSS I2C, UART, SPI and CAN; this image arms the UART bit only. I2C, SPI and edge traffic come from the fabric stimulus block through the `STIM_*` registers. | [`hw/rtl/pfsoc/deepskopion_pfsoc_top.vhd`](hw/rtl/pfsoc/deepskopion_pfsoc_top.vhd), [`hw/libero/pfsoc/pfsoc_mss_subsys.tcl`](hw/libero/pfsoc/pfsoc_mss_subsys.tcl), [`hw/rtl/stimulus/ds_stimulus_gen.vhd`](hw/rtl/stimulus/ds_stimulus_gen.vhd) |
+On all three boards, the default targets generate bus traffic for six of the nine data loggers of the default mix, so those loggers capture with the board alone; the other three need external traffic on their header pins. Which logger gets which source: [Self-test](docs/getting_started/self_test.md).
 
 ![Self-test data flow on the Zybo Z7-20, the DE25 and the PolarFire SoC Discovery Kit: a traffic source, the source select, the dataloggers, then the gather, DDR ring and daemon](docs/images/self_test.svg)
 
 ---
 
-## Build This with RouteRTL
+## Building the System
 
-Deepskopion uses the [RouteRTL](https://routertl.dev) build system (`rr`) to manage IP dependencies, run VHDL simulations, build bitstreams and program boards.
+The project is built with [RouteRTL](https://routertl.dev) (`rr`): it fetches the IP packages, runs the simulations,
+builds the FPGA design and the Linux image, and programs the board.
 
-> Disclosure: RouteRTL is the author's own tool, written by the same person as Deepskopion.
-> `rr` installs free from PyPI (`pip install routertl`). Its CLI and build system are MIT-licensed. Its compiled core is under
-> the RouteRTL Core License 1.0: an evaluation period, then free for registered individuals and for open-hardware
-> projects whose sources are published under an open license, and a commercial licence for organisations. The terms are
-> in the Licensing table of RouteRTL's README, shown on [its PyPI page](https://pypi.org/project/routertl/).
-> Within those terms, no command in this README requires a paid licence, and none uses RouteRTL's paid features
-> (`rr loop`, `rr formal`, `rr verify`, coverage). On a fresh, unregistered RouteRTL 5.7.0 install, the simulation in
-> [Try it without a board](#try-it-without-a-board) runs to the end.
-> That covers RouteRTL only: the vendor tools in Requirements (Vivado, Quartus Prime Pro, Libero SoC) carry their own licences.
-> Deepskopion itself is open hardware and software; see [Licensing Summary](#licensing-summary).
+> RouteRTL is the author's own tool. It installs free from PyPI (`pip install routertl`); its licence terms are on
+> [its PyPI page](https://pypi.org/project/routertl/). No step in this README or its guides needs a paid RouteRTL
+> feature or licence. The vendor tools (Vivado, Quartus Prime Pro, Libero SoC) carry their own licences.
 
 ### Requirements
 
@@ -113,357 +81,150 @@ Deepskopion uses the [RouteRTL](https://routertl.dev) build system (`rr`) to man
 |---|---|
 | RouteRTL | `routertl >= 5.7.0` |
 | Python | `>= 3.11, < 3.15` |
-| RouteWave | `>= 2.4.0` |
+| RouteWave | `>= 2.4.0`, from its [release page](https://github.com/djmazure/routewave/releases) (see below) |
 | Vivado (Zybo Z7-20) | `2024.1`, ML Standard or ML Enterprise |
-| Quartus Prime Pro (DE25) | `25.3.1` with patch 1.02, and a licence that covers Agilex 5 |
+| Quartus Prime Pro (DE25) | `25.3.1` with patch 1.02, and a licence that covers Agilex 5 E-Series: Quartus offers a no-cost one ([details](docs/SUPPORTED_ENVIRONMENT.md#toolchain)) |
 | Libero SoC (PolarFire SoC Discovery Kit) | `2025.2` |
 | NVC (simulation only) | `>= 1.19.3` |
 | Host | x86_64 Linux, 24 GB RAM as the OS sees it (under WSL2: the `.wslconfig` limit), 60 GB free disk |
 
-### Python 3.11 on Ubuntu 22.04
+Host packages, and fixes for known host problems: [Host setup](docs/getting_started/host_setup.md).
 
-RouteRTL needs Python 3.11 or newer. On Ubuntu 24.04, `python3` is 3.12 and the quick starts below run as written. On
-Ubuntu 22.04, `python3` is 3.10 and the distribution has no released Python 3.11 package, so these three commands
-replace each quick start's `python3 -m venv .venv` line. They install a user-local Python 3.11 through uv and need no
-sudo:
+### RouteWave
+
+RouteWave comes from its [release page](https://github.com/djmazure/routewave/releases): `routewave-<version>-windows-x86_64.zip`
+for Windows, and `routewave-<version>-linux-x86_64.tar.gz` for Linux. `RouteWave-<version>-x86_64.AppImage` also runs on
+Linux where FUSE is available. Each release carries `SHA256SUMS.txt`, its signature and the signing key. On Linux, with
+the packages of [Host setup](docs/getting_started/host_setup.md), the tarball is fetched, checked and unpacked in the
+home folder with:
 
 ```bash
-python3 -m venv .uv && .uv/bin/pip install uv
-.uv/bin/uv python install 3.11
-.uv/bin/uv venv --seed --python 3.11 .venv
+cd ~
+VER=2.7.0
+base=https://github.com/djmazure/routewave/releases/download/v${VER}
+for f in routewave-${VER}-linux-x86_64.tar.gz SHA256SUMS.txt SHA256SUMS.txt.asc PUBLIC_KEY.asc; do curl -fsSLO ${base}/$f; done
+sha256sum --check --ignore-missing SHA256SUMS.txt
+gpg --import PUBLIC_KEY.asc && gpg --verify SHA256SUMS.txt.asc SHA256SUMS.txt
+tar xzf routewave-${VER}-linux-x86_64.tar.gz && ./routewave-${VER}-linux-x86_64/routewave --version
 ```
 
-`--seed` puts pip into the environment, so the following `pip install` lines install into Python 3.11.
+`sha256sum` prints `OK` for the tarball, and `gpg --verify` prints `Good signature` and the line
+`Primary key fingerprint: B545 F7DE 394B 58A2 65F8  3101 BF17 E0A1 F3D0 9ED1`.
 
-### Try it without a board
+On Windows, in PowerShell, the zip is fetched, checked and unpacked in the Downloads folder with the block below. It
+calls `curl.exe`: in PowerShell, `curl` names another command.
 
-The datalogger RTL runs in simulation on an x86_64 Linux host with Python, RouteRTL and the free NVC simulator. No board, vendor tool or licence is needed.
+```powershell
+Set-Location "$HOME\Downloads"
+$VER = "2.7.0"
+$base = "https://github.com/djmazure/routewave/releases/download/v$VER"
+curl.exe -fsSLO "$base/routewave-$VER-windows-x86_64.zip"
+curl.exe -fsSLO "$base/SHA256SUMS.txt"
+(Get-FileHash "routewave-$VER-windows-x86_64.zip").Hash
+Select-String -Path SHA256SUMS.txt -Pattern "windows-x86_64.zip"
+Expand-Archive "routewave-$VER-windows-x86_64.zip" -DestinationPath .
+```
+
+The two hashes printed are the same (`Get-FileHash` prints it in upper case). RouteWave is then
+`routewave-<version>-windows-x86_64\routewave.exe`.
+
+### Simulation
+
+The blocks of the design have their own testbenches: each data logger, the stimulus generators, and the gather that
+merges the data loggers' records. They run in the free NVC simulator, with no board and no vendor tool. They run in a
+git clone (a simulation hook reads the clone's commit; an unpacked archive views the shipped capture but does not
+simulate), with RouteRTL installed and the repository cloned as in
+[Host setup](docs/getting_started/host_setup.md#install-routertl-and-clone-the-repository).
+
+`rr eda install nvc` builds NVC through the system package manager and asks for `sudo`; a host that already has
+NVC 1.19.3 or newer on `PATH` leaves that line out. `rr pkg install` fetches the IP packages `ip.lock` pins and records
+them for the active target (the repository's default target, the DE25) under `.routertl_cache/`.
 
 ```bash
-python3 -m venv .venv          # Ubuntu 22.04: the three commands of "Python 3.11 on Ubuntu 22.04" instead
-source .venv/bin/activate
-pip install routertl
-git clone https://github.com/routertl/deepskopion.git deepskopion
-cd deepskopion
 rr eda install nvc
 rr pkg install
 pip install -r requirements.txt
+rr sim list
 rr sim run test_i2c_datalogger
 ```
 
-`rr eda install nvc` builds NVC from source with the system package manager; on a fresh container image, `apt-get update` comes first. The run drives an I2C bus model into the I2C datalogger and checks the messages it emits: nine tests, about 36 seconds of simulation. Each test writes an FST waveform to `hw/sim/waves/test_i2c_datalogger/`, which RouteWave opens:
+`rr sim list` lists every testbench and the command that runs it (excerpt):
 
-```bash
-routewave -c "open hw/sim/waves/test_i2c_datalogger/tb_i2c_datalogger.test_i2c_datalogger.test_write_transaction.fst; show --tree tb_i2c_datalogger; zoom fit"
+```text
+MODULE                              LOCATION                                           DISCOVERY STATUS   COMMAND
+test_i2c_datalogger                 cocotb/tests/datalogger/i2c/test_i2c_datalogger.py OK                 rr sim run test_i2c_datalogger
+test_uart_datalogger                cocotb/tests/datalogger/uart/test_uart_datalogger.py OK                 rr sim run test_uart_datalogger
+test_can_frame_fsm                  cocotb/tests/datalogger/can/test_can_frame_fsm.py  OK                 rr sim run test_can_frame_fsm
+test_datalogger_gather              cocotb/tests/datalogger/infra/datalogger_gather/test_datalogger_gather.py OK                 rr sim run test_datalogger_gather
+...
 ```
+
+Each test writes an FST waveform to `hw/sim/waves/<test>/`, which RouteWave opens:
 
 ![The I2C write-transaction test in RouteWave: SCL, SDA and the datalogger's configuration and timestamp](docs/images/sim_i2c_datalogger.png)
 
-The other datalogger testbenches run the same way; `rr sim run --all` runs every test.
+### View a capture without building anything
 
-### Install RouteRTL and clone the repository
-
-Each board's build below starts from this, in the same shell:
-
-```bash
-python3 -m venv .venv          # Ubuntu 22.04: the three commands of "Python 3.11 on Ubuntu 22.04" instead
-source .venv/bin/activate
-pip install routertl
-git clone https://github.com/routertl/deepskopion.git deepskopion
-cd deepskopion
-```
-
-### Build and run on the Zybo Z7-20
-
-The build runs Vivado 2024.1, so put it on `PATH` and set `XILINX_VIVADO` first, in the shell that runs the steps below. After a standard install, the installer's script does both:
+The repository ships one capture, `docs/captures/i2c_write_transaction.fst` (6.2 kB): the waveform of the I2C data
+logger testbench's write-transaction test, under the same CERN-OHL-W-2.0 licence as the rest of the design. It opens
+in [RouteWave](#routewave) on Linux and Windows, with no simulator, vendor tool or board. The command runs in the
+DeepSkopion folder (the clone, or the unpacked archive): the capture path is relative to it. An archive downloaded from
+GitHub unpacks with `unzip deepskopion-main.zip` on Linux or `Expand-Archive deepskopion-main.zip` in PowerShell (about
+half a minute). `RW` is the RouteWave program unpacked above:
 
 ```bash
-INSTALL_DIR=/path/to/xilinx-install   # the directory Vivado was installed into
-source "$INSTALL_DIR/Vivado/2024.1/settings64.sh"
+RW=~/routewave-2.7.0-linux-x86_64/routewave
+"$RW" -c "open docs/captures/i2c_write_transaction.fst; wait 3000; show --tree tb_i2c_datalogger; zoom 190.852us 190.878us"
 ```
 
-An install copied to another directory, rather than installed there, keeps the original directory inside `settings64.sh`, so that script points at the wrong place. Set the two variables directly instead; no vendor file needs editing:
+On Windows, in PowerShell:
 
-```bash
-INSTALL_DIR=/path/to/vivado-copy   # the directory the install was copied to
-export XILINX_VIVADO="$INSTALL_DIR/Vivado/2024.1"
-export PATH="$XILINX_VIVADO/bin:$PATH"
+```powershell
+$RW = "$HOME\Downloads\routewave-2.7.0-windows-x86_64\routewave.exe"
+& $RW -c "open docs/captures/i2c_write_transaction.fst; wait 3000; show --tree tb_i2c_datalogger; zoom 190.852us 190.878us"
 ```
 
-`vivado -version` then prints `vivado v2024.1`, and step 2 checks the same version. RouteRTL finds the pinned 2024.1 release through `XILINX_VIVADO`.
+`wait 3000` lets the file finish loading before `show` runs: RouteWave 2.7.0 runs the next command before the load
+ends. The view ends on one message of the data logger, `0xE00000AB`, while `i2c_msg_vld` is high. RouteWave reporting
+`Load finished … (failed)` means the command did not run in the DeepSkopion folder. The command opens a RouteWave
+window that stays open until it is closed; RouteWave's messages, such as `Loaded … channels`, appear in its console
+panel, not in the terminal.
 
-```bash
-# 1. Select the board, then fetch the packages its committed lock names
-rr target set zybo_datalogger
-rr pkg install
-pip install -r requirements.txt
+![The shipped I2C capture in RouteWave, zoomed on one data logger message: i2c_msg_out reads 0xE00000AB while i2c_msg_vld is high](docs/images/capture_i2c_write_transaction.png)
 
-# 2. Check the host against the supported environment
-python3 tools/preflight/ds_preflight.py --stage build
+### Build and run on a board
 
-# 3. Build the bitstream (step 4 needs it)
-rr synth run
-rr implementation run
-rr bitstream run
+RouteRTL installed and the repository cloned as in [Host setup](docs/getting_started/host_setup.md#install-routertl-and-clone-the-repository), then the board's guide:
 
-# 4. Build the Linux image, which embeds the bitstream, and write it to a microSD card.
-#    It needs step 3's implementation: without it, the Linux build stops with
-#    "Implementation checkpoint not found".
-#    The Python runtime of the image is built once from upstream Buildroot (1-3 h).
-#    CARD is the card's boot (FAT) partition in the host reader, for example /dev/sdb1.
-sw/linux/build_buildroot.sh && sw/linux/extract_python_overlay.sh
-rr linux tools install
-rr linux build
-CARD=/dev/sdX1
-rr linux flash-sd --device "$CARD"
-
-# 5. Boot the board from the card with Ethernet connected, then attach RouteWave.
-#    BOARD_IP is the address the board takes at first boot (see First boot).
-BOARD_IP=board-ip
-routewave -c "stream attach $BOARD_IP:7475"
-```
-
-Host requirements of step 4, on Ubuntu and Debian:
-
-- Buildroot's own dependency check (`support/dependencies/dependencies.sh` of the pinned release) requires these programs on the host: `make`, `gcc`, `g++`, `bash`, `git`, `patch`, `perl`, `tar`, `wget`, `cpio`, `unzip`, `rsync`, `bc`, `cmp`, `find`, `xargs`, `which`, `sed` and `file`. A stock Ubuntu 24.04 install lacks some of them (`cpio` was missing on a WSL host). One line installs all of them:
-
-  ```bash
-  sudo apt-get install build-essential cpio unzip rsync bc wget file patch perl git diffutils findutils
-  ```
-
-  Buildroot builds the other host tools it needs (`bison`, `flex`, `dtc`, `pkg-config`, OpenSSL) itself, so none of them is a host requirement of `build_buildroot.sh`.
-- `rr linux tools status` lists the tools `rr linux build` needs on the host: the ARM cross-compiler (`arm-linux-gnueabihf-gcc`), `mkimage`, `dtc` and the kernel build packages. `rr linux tools install` installs the missing ones (it uses `sudo apt-get`). Without them, `rr linux build` stops while compiling BusyBox with `arm-linux-gnueabihf-gcc: command not found`.
-- WSL: a default WSL install appends the Windows `PATH` to the Linux one, and entries such as `/mnt/c/Program Files/...` contain a space. Buildroot refuses a `PATH` with a space and stops within seconds with `Your PATH contains spaces, TABs, and/or newline characters`. This line removes the entries with whitespace from the `PATH` of the current shell; a new shell restores them:
-
-  ```bash
-  export PATH="$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '[[:space:]]' | paste -sd:)"
-  ```
-
-  It runs before `sw/linux/build_buildroot.sh`. Vivado, put on the `PATH` earlier for step 3, is not needed by step 4 itself; if its install directory contains a space, the line removes it from the `PATH` and the `XILINX_VIVADO` variable still locates it.
-
-The implementation step checks the routed design's resource use against the ceilings in `requirements.yml`. If
-`rr implementation run` fails that check right after a new `rr synth run` and its log shows `CACHE HIT`, the check
-may have read the synthesis figures, which are higher before optimisation, instead of the routed ones.
-`rr implementation run --force` runs place and route again and gives a fresh verdict on the routed design.
-
-RouteWave shows edge records in its Edge Scope. `stream status --json` in the RouteWave console reports the connection state.
-
-In the RouteWave console, `export <file.vcd>` saves the session, and `open <file>` opens a saved capture (VCD, FST or ltrace).
-
-The bitstream reaches the fabric from the card at boot, so a new bitstream goes to the board in a new card image.
-
-### First boot
-
-The Zybo Z7-20 and PolarFire SoC images ship with no network address and no SSH key. The board's USB serial console
-(115200 8N1) is available from power-on and takes these steps, in this order:
-
-1. Address. A static address is used first, from the first of these sources that is set:
-   - `ds_ip=<address>/<prefix>` (and optionally `ds_gateway=<gateway>`) on the kernel command line;
-   - `/etc/deepskopion/network.conf` with the line `address=<address>/<prefix>` (and optionally `gateway=<gateway>`),
-     applied by `/etc/init.d/S40network restart`. On the Zybo Z7-20 the root filesystem is held in RAM, so a file
-     written on the board lasts until the next boot; the same file placed as `etc/deepskopion/network.conf` under the
-     rootfs overlay directory `sw/linux/rootfs_overlay/` before the image build is part of the image. On the PolarFire
-     SoC Discovery Kit the root filesystem is the card's third partition, mounted read-write, so a file written on the
-     kit persists across boots.
-
-   Without a static address the board requests one over DHCP. Without a DHCP server it boots with no address and
-   prints `network: no DHCP lease; set ds_ip=<address>/<prefix> or create /etc/deepskopion/network.conf`.
-
-   RouteWave needs only the address: the stream on port 7475 does not use SSH.
-2. SSH key. SSH stays off until an owner key exists, and password logins are disabled. `deepskopion-authorize-key
-   /path/to/key.pub` on the serial console installs a public key (`deepskopion-authorize-key -` reads it from standard
-   input). A key file placed as `etc/deepskopion/authorized_keys` under `sw/linux/rootfs_overlay/` (ignored by git)
-   before the build is installed at every boot instead; it becomes `/etc/deepskopion/authorized_keys` in the image.
-3. SSH start. `/etc/init.d/S49dropbear start` starts the SSH server.
-
-The DE25 image differs: it ships with the static address of its deployment descriptor on its kernel command line and
-no SSH server ([Build and run on the Terasic DE25](#build-and-run-on-the-terasic-de25)).
-
-[`docs/SUPPORTED_ENVIRONMENT.md`](docs/SUPPORTED_ENVIRONMENT.md) has the details.
-
-### Build and run on the Terasic DE25
-
-RouteRTL installed in a Python 3.11 virtual environment, that environment active, and the clone as the current
-directory, as in [Install RouteRTL and clone the repository](#install-routertl-and-clone-the-repository).
-
-Preconditions:
-
-| Item | Required value |
+| Board | Guide |
 |---|---|
-| Quartus Prime Pro | 25.3.1 with patch 1.02 (without the patch it stops with Error 22912), and a licence that covers Agilex 5. Installed at `/opt/altera_pro/25.3`, the path the target names, or elsewhere with its `quartus/bin` and `quartus/sopc_builder/bin` directories on `PATH`; `command -v quartus_sh qsys-generate quartus_pfg` then prints all three. |
-| Linux host tools | `rr install linux` (with sudo: u-boot-tools, the device-tree compiler, the kernel build dependencies and the cross compilers; `rr install linux --check` lists them), and the Ubuntu packages `python3-dev`, `mtools`, `fdisk` and `e2fsprogs`. Step 3 installs the swig and setuptools releases U-Boot's build needs into the virtual environment. |
-| Deployment descriptor | `runtimes/hw.local.yml` (ignored by git), copied from `runtimes/hw.example.yml`. The image build reads the file named by `RR_BENCH_CONFIG` when that variable is set, and `runtimes/hw.local.yml` otherwise. In that file, `bench.targets.de25_bench.bench_ip` names the resource that holds the board's static address, `de25_address` in the template; that resource's `addr`, and `prefix` as a number (delete the `prefix` line for 24), are the values to set. The image build refuses the template's placeholders and a missing file. |
-| Card access | the build user can open the card's block device: a member of the `disk` group, or a udev ACL on the card reader |
-| JTAG | the board's on-board USB-Blaster III, connected to the build host as its only JTAG cable (with more than one, `rr program run` needs `--cable`) |
-| Serial console | HPS UART1 (`ttyS1` on the board), on the USB-Blaster III's USB serial port, at 115200 8N1 with DTR and RTS asserted; with either line deasserted the port reads nothing |
-| Ethernet | the board's HPS Ethernet port on the build host's IPv4 subnet: the image sets the address from step 6 and no default route |
-| microSD card | at least 1 GB, in a card reader on the build host |
+| Digilent Zybo Z7-20 | [Build and run on the Zybo Z7-20](docs/getting_started/zybo_z7_20.md) |
+| Terasic DE25 | [Build and run on the Terasic DE25](docs/getting_started/de25.md) |
+| Microchip PolarFire SoC Discovery Kit | [Build and run on the PolarFire SoC Discovery Kit](docs/getting_started/polarfire_soc_discovery.md) |
 
-Each block runs on its own, pasted alone and not joined to another with `&&` or `;`. A block in parentheses runs in a
-subshell that stops at the first failing command and returns its status. A block runs only after the previous one
-returned 0.
-
-```bash
-# 1-5. Select the board, install its packages and Python requirements (the second file pins swig and
-#      setuptools for U-Boot's build), check the host, build the FPGA design
-( set -e
-  rr target set de25_datalogger
-  rr pkg install
-  pip install -r requirements.txt
-  pip install -r tools/de25_uboot_host_requirements.txt
-  python3 tools/preflight/ds_preflight.py --stage build
-  rr synth run
-  rr implementation run
-  rr bitstream run )
-```
-
-```bash
-# 6. Create the deployment descriptor; an existing one is kept
-[ -e runtimes/hw.local.yml ] || cp runtimes/hw.example.yml runtimes/hw.local.yml
-```
-
-Set `addr` (and `prefix`, or delete it) under `bench.resources.de25_address` in `runtimes/hw.local.yml` before the
-next block.
-The image build reads the file `RR_BENCH_CONFIG` names when it is set, and `runtimes/hw.local.yml`
-otherwise. In that file, `addr` and `prefix` are set under the `bench.resources` entry that
-`bench.targets.de25_bench.bench_ip` names; in a copy of the template that entry is `de25_address`.
-
-```bash
-# 7. Build the boot chain, kernel, root file system and the card image (it needs step 5's bitstream)
-python3 tools/de25_linux_image.py build
-```
-
-```bash
-# 8. Write the whole card image. CARD is the whole card (`lsblk` lists it as TYPE disk), with none of its
-#    partitions mounted. The command shows the card, asks for its serial (or its kernel name when it reports
-#    none) before it erases anything, refuses a mounted or non-removable disk, and reads the card back.
-( set -e
-  CARD=/dev/sdX
-  rr linux flash-sd --image --device "$CARD" )
-```
-
-Put the card in the board and power it on. The board starts Linux from the card only after step 9, at every
-power-on. Step 9 runs once per power-on: before it is repeated, the board is powered off and on again.
-
-```bash
-# 9. Program the FPGA and its first-stage boot loader over JTAG, under a lease on the board
-rr lease run de25-standard -- rr program run -b sw/linux/de25/out/de25_datalogger/de25_datalogger_hps.sof
-```
-
-```bash
-# 10. Wait until the daemon listens at the address from step 6 (at most 3 minutes), then attach RouteWave.
-#     The serial console prints "network: eth0 uses user-supplied static address" on the way.
-#     BOARD_IP is the addr from step 6. This block can be repeated.
-( set -e
-  BOARD_IP=board-ip
-  python3 tools/wait_for_port.py "$BOARD_IP" 7475 --timeout 180
-  routewave -c "stream attach $BOARD_IP:7475" )
-```
-
-The board takes the address from step 6 at every boot and does not use DHCP. The DE25 image has no SSH server, so
-steps 2 and 3 of [First boot](#first-boot) do not apply to it; the serial console and the stream on port 7475 do not
-need one. A DE25 rootfs built with `rr linux rootfs` was read with debugfs (image sha256
-`14d16638fa751228a9e1df229b1bd4d23a62f3c7caaa5f898c4d79220f1aff87`): it holds no dropbear init script, no key tool and
-no dropbear binary. The root file system is on the card's second partition and is mounted read-write, so a file written on the
-board persists across boots.
-
-The build preflight judges the selected target: for the DE25 and the PolarFire SoC Discovery Kit it checks the part, the platform, the pinned tool release and the device-tree nodes, and leaves finding the Quartus Prime Pro or Libero SoC install to RouteRTL at build time. [`docs/DEPLOYMENT_CONTRACT.md`](docs/DEPLOYMENT_CONTRACT.md) describes how software reaches each board.
-
-### Build and run on the PolarFire SoC Discovery Kit
-
-RouteRTL installed in a Python 3.11 virtual environment, that environment active, and the clone as the current
-directory, as in [Install RouteRTL and clone the repository](#install-routertl-and-clone-the-repository).
-
-Preconditions:
-
-| Item | Required value |
-|---|---|
-| Libero SoC | 2025.2, with a licence that covers the MPFS095T |
-| Kit eNVM | the Hart Software Services (HSS) of Microchip's `polarfire-soc-discovery-kit-reference-design`, programmed once with that release's FlashPro Express job. The DeepSkopion build does not write the eNVM. |
-| microSD card | at least 1 GB, in a card reader on the build host |
-
-```bash
-# 1-2. Select the board, fetch its packages, and check the host against the supported environment
-rr target set pfsoc_datalogger
-rr pkg install
-pip install -r requirements.txt
-python3 tools/preflight/ds_preflight.py --stage build
-
-# 3. Build the FPGA design (Libero SoC); the result is a FlashPro Express job
-rr synth run
-rr implementation run
-rr bitstream run
-
-# 4. Program the fabric and its design-initialisation data over the kit's embedded FlashPro5,
-#    under a lease on the kit (RouteRTL refuses a hardware command without one)
-rr lease run polarfire-soc-discovery -- rr program run
-
-# 5. Build the riscv64 Python runtime of the image once from upstream Buildroot (1-3 h)
-sw/linux/pfsoc/build_python_overlay.sh
-
-# 6. Build the boot chain, kernel, root file system and the card image
-rr linux build
-
-# 7. Write the whole card image. CARD is the whole card (`lsblk` lists it as TYPE disk), with none of its
-#    partitions mounted. The command shows the card, asks for its serial (or its kernel name when it reports
-#    none) before it erases anything, refuses a mounted or non-removable disk, and reads the card back.
-CARD=/dev/sdX
-rr linux flash-sd --image --device "$CARD"
-
-# 8. Put the card in the kit (J17), power it on, then attach RouteWave.
-#    BOARD_IP is the address the kit takes at first boot (see First boot).
-BOARD_IP=board-ip
-routewave -c "stream attach $BOARD_IP:7475"
-```
-
-The fabric stays programmed across power cycles; step 4 is repeated only for a new FPGA build. The card holds the
-kernel, the root file system and the capture daemon. The first boot follows "First boot" above.
+The serial console, the network address and SSH at the first boot: [First boot](docs/getting_started/first_boot.md).
 
 ---
 
-## Choosing a Datalogger Mix
+## Data Logger Combination
 
-The set of dataloggers in a build is declared in a YAML file, which the target names in `system_config`. [`tools/datalogger-builder/configurator.py`](tools/datalogger-builder/README.md) writes that file, checks the mix against the board's pin and ID limits, estimates resource use, and prints which board pin carries each signal.
+Deepskopion builds the combination of data loggers the user selects. The configurator
+([`tools/datalogger-builder/configurator.py`](tools/datalogger-builder/README.md)) writes the combination to a YAML file
+and checks it against the board: its free header pins, and at most 31 data loggers in one design. For example, two
+UART, two I2C, one SPI and four edge data loggers on the Zybo Z7-20:
 
 ```bash
-# 1. Write the mix
-python3 tools/datalogger-builder/configurator.py \
-    --board zybo-z7-20 \
-    --uart 2 --i2c 2 --spi 1 --edge 4 \
-    -o tools/datalogger-builder/config/my_mix.yml
-
-# 2. Make a target for it
-rr target clone zybo_datalogger my_mix
-#    In targets/my_mix.yml, name the mix in both places that read it:
-#    system_config: tools/datalogger-builder/config/my_mix.yml
-#    and, in hooks.pre_build, the first argument of the datalogger-builder hook:
-#      - tools/datalogger-builder/config/my_mix.yml
-
-# 3. Select it, lock the project for it, and build as above
-rr target set my_mix
-rr lock --update
+python3 tools/datalogger-builder/configurator.py --board zybo-z7-20 \
+    --uart 2 --i2c 2 --spi 1 --edge 4 -o tools/datalogger-builder/config/my_mix.yml
 ```
 
-The build regenerates the gather RTL and its packages from the mix. `configurator.py --interactive` asks for the same values one at a time.
-
-Four named mixes ship as mix files and build the same way, from a clone of the board's datalogger target:
-
-| Mix file (`tools/datalogger-builder/config/`) | Board target to clone | Dataloggers |
-|---|---|---|
-| `zybo_datalogger_config_5uart_2i2c.yml` | `zybo_datalogger` | 5 UART, 2 I2C |
-| `zybo_datalogger_config_0uart_5i2c_1spi.yml` | `zybo_datalogger` | 5 I2C, 1 SPI |
-| `de25_datalogger_config_5uart_2i2c.yml` | `de25_datalogger` | 5 UART, 2 I2C |
-| `de25_datalogger_config_0uart_5i2c_1spi.yml` | `de25_datalogger` | 5 I2C, 1 SPI |
-
-No named mix ships for the PolarFire SoC Discovery Kit. Its mixes are written with `configurator.py --board
-polarfire-soc-discovery`, within the kit's 14-pin budget, and only from protocols with a measured resource cost there
-(the configurator refuses QSPI, MDIO, I2S and 1-Wire for the kit).
+Building a target from it, and the combinations that ship: [Data logger combination](docs/getting_started/datalogger_mix.md).
 
 ---
 
-## The On-Board Software
+## Building Linux and the Capture Daemon
 
-The capture daemon runs on Linux on the processor subsystem of each board: the Zynq PS (Arm), the Agilex HPS (Arm) or the PolarFire SoC MSS (RISC-V).
+Each board guide builds the Linux image with `rr linux`, with the capture daemon in it. The daemon runs on Linux on the processor subsystem of each board: the Zynq PS (Arm), the Agilex HPS (Arm) or the PolarFire SoC MSS (RISC-V).
 
 | Item | Value |
 |---|---|
@@ -480,18 +241,16 @@ it to each board and run it.
 
 ---
 
-## RouteWave as a Client
+## Reading the Stream
 
-RouteWave is a waveform and protocol viewer for RouteRTL designs. It is one client of the versioned `wave_stream_v1` contract. Other programs that read MessagePack can attach to the same port, such as analysis scripts or test benches that check protocol sequences.
-
-```bash
-BOARD_IP=board-ip   # the board's address
-nc "$BOARD_IP" 7475
-```
+RouteWave is one client of the versioned `wave_stream_v1` contract. Any program that reads MessagePack can attach to port 7475; [Reading the stream](docs/getting_started/reading_the_stream.md) has a 20-line Python client and its output. The frame tags, payload fields and channel IDs are defined in [`contracts/wave_stream_v1/README.md`](contracts/wave_stream_v1/README.md).
 
 ---
 
 ## Documentation Index
+
+### Getting Started
+* [Getting started](docs/getting_started/README.md): Host setup, the three board guides, first boot, self-test, data logger combination and a stream client.
 
 ### System Architecture
 * [System Overview](docs/SYSTEM_OVERVIEW.md): Architecture, data plane flow and DDR buffer model.
@@ -520,7 +279,7 @@ The SPI, CAN and JTAG dataloggers have no protocol document yet. The CAN and JTA
 
 Contributions are welcome. [`CONTRIBUTING.md`](CONTRIBUTING.md) has the full workflow.
 
-* Commits carry a `Signed-off-by:` line under the Developer Certificate of Origin.
+* Commits of outside contributions carry a `Signed-off-by:` line under the Developer Certificate of Origin (`git commit -s`).
 * A pull request that changes RTL, the daemon, a device tree or a target needs a clean simulation regression and, on the DE25, a record from `rr hw run <REQ_ID> --probe juart --write`. The hardware runs in [`runtimes/hw.yml`](runtimes/hw.yml) are declared for the DE25 only.
 * New board targets and new protocol dataloggers are welcome, for example an Efinix Ti60 port with the Sapphire RISC-V SoC, a Zynq UltraScale+ port, or an EtherCAT datalogger.
 * Every `.py`, `.vhd`, `.c`, `.h`, `.v` and `.sv` file and every shell script written with AI carries an `rr <model> (AI-generated)` comment as its first line after any `#!` line and Python encoding line (`unknown-llm` where the model is not recorded); vendored files, tool-generated files, frozen evidence records whose hashes are quoted, and the exceptions listed in [`AI_PROVENANCE_EXCEPTIONS.txt`](AI_PROVENANCE_EXCEPTIONS.txt) do not. `tools/ai_provenance_stamp.py --write` adds it to a new file.
@@ -536,12 +295,3 @@ Contributions are welcome. [`CONTRIBUTING.md`](CONTRIBUTING.md) has the full wor
 | IP packages | `libs/` | Each package's own license; `rr pkg install` fetches them at the commits `ip.lock` pins |
 
 Both licenses are weakly reciprocal at the file level. Deepskopion components can go into a larger design or a commercial product, and the rest of that design keeps its own licence. Changes to Deepskopion files stay under their licenses. See [`LICENSE.md`](LICENSE.md), [`REUSE.toml`](REUSE.toml) and [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md).
-
----
-
-## Appendix: CAN FD licensing
-
-The CAN FD data logger is DeepSkopion's own passive receiver (`hw/rtl/datalogger/can/`). It contains no CTU CAN FD code, and none of the three targets in `targets/` includes the CTU CAN FD core. The core appears only in bench targets, which are not part of this distribution. Its licence terms, for reference:
-
-* CTU CAN FD core: Copyright (C) 2021-present Ondrej Ille. Free of charge for educational, research, evaluation and self-interest purposes. Commercial use requires prior agreement with the copyright holder. See [`LICENSES/LicenseRef-CTU-CAN-FD-NonCommercial.txt`](LICENSES/LicenseRef-CTU-CAN-FD-NonCommercial.txt).
-* CAN protocol patents: Robert Bosch GmbH holds patents on the CAN protocol. Implementing the core in hardware requires a CAN protocol licence from Bosch.

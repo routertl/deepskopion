@@ -54,6 +54,16 @@ def test_the_repo_matches_the_contract(decl):
     )
 
 
+def test_every_getting_started_guide_is_bound(decl):
+    """The README's board and Linux instructions live in docs/getting_started/ (DS-P2.397). Every page there hands a
+    reader commands, so each is bound and this check, which the commit hook runs, scans it; a guide added in a
+    subdirectory or with an upper-case extension counts too."""
+    guides = sorted(p.relative_to(_ROOT).as_posix() for p in (_ROOT / "docs" / "getting_started").rglob("*")
+                    if p.is_file() and p.suffix.lower() in (".md", ".markdown"))
+    assert guides, "no guide under docs/getting_started/"
+    assert sorted(set(guides) - set(decl["docs_bound_by_this_contract"])) == []
+
+
 def test_the_check_is_wired_into_the_one_script_every_linux_target_runs():
     """A check nobody invokes is a document with extra steps.
 

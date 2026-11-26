@@ -21,6 +21,10 @@ from markdown_it import MarkdownIt
 ROOT = Path(__file__).resolve().parents[2]
 SANDBOX_TICKET = "DS-P3.320"
 README = ROOT / "README.md"
+# The board build steps moved from the README to the guides it links; every block in both is checked.
+GUIDES = sorted((p for p in (ROOT / "docs" / "getting_started").rglob("*") if p.is_file() and p.suffix.lower() in (".md", ".markdown")))
+GUIDE_FOR = {"pfsoc_datalogger": ROOT / "docs" / "getting_started" / "polarfire_soc_discovery.md",
+             "de25_datalogger": ROOT / "docs" / "getting_started" / "de25.md"}
 SHELLS = {"bash", "sh", "shell"}
 def _target_boards() -> dict[str, str]:
     """target name -> the board token RouteRTL resolves for its lease (hardware.board, else .platform)."""
@@ -40,19 +44,24 @@ def _blocks(text: str) -> list[tuple[int, str]]:
             if tok.type == "fence" and (tok.info.split() or [""])[0] in SHELLS]
 
 
-def _bash_errors(blocks, tmp_path) -> list[str]:
+def _rel(doc: Path) -> str:
+    """The file a diagnostic names (T1 rv-8977f8b564: a guide's line is not a README line)."""
+    return doc.relative_to(ROOT).as_posix()
+
+
+def _bash_errors(blocks, tmp_path, name: str = "README.md") -> list[str]:
     bad = []
     for i, (line, body) in enumerate(blocks):
         script = tmp_path / f"block{i}.sh"
         script.write_text(body, encoding="utf-8")
         proc = subprocess.run(["bash", "-n", str(script)], capture_output=True, text=True)
         if proc.returncode != 0:
-            bad.append(f"README.md:{line}: {proc.stderr.strip()}")
+            bad.append(f"{name}:{line}: {proc.stderr.strip()}")
     return bad
 
 
-def _placeholders(blocks) -> list[str]:
-    return [f"README.md:{line}: {ph}" for line, body in blocks for ph in re.findall(r"<[^<>\n]+>", body)]
+def _placeholders(blocks, name: str = "README.md") -> list[str]:
+    return [f"{name}:{line}: {ph}" for line, body in blocks for ph in re.findall(r"<[^<>\n]+>", body)]
 
 
 # Every external command becomes a logging stub; `cd` and `source` are stubbed too, so
@@ -82,7 +91,7 @@ def _sandbox(scratch: Path, cwd: Path, script: Path) -> list[str] | None:
     return flags + ["/bin/bash", str(script)]
 
 
-def _executed(text: str, tmp_path: Path) -> list[tuple[int, str, list[str]]]:
+def _executed(text: str, tmp_path: Path, name: str = "README.md") -> list[tuple[int, str, list[str]]]:
     """Run each shell block in a clean bash whose PATH finds nothing, and return the
     external commands it actually invoked: (block line, RR_TARGET, argv)."""
     calls = []
@@ -93,7 +102,7 @@ def _executed(text: str, tmp_path: Path) -> list[tuple[int, str, list[str]]]:
             if head.startswith("/") or head in {"exec", "eval", "command", "builtin", "enable"} \
                     or re.search(r"(^|[\s;&|(])(ba|da|z)?sh\s+-c\b", code) \
                     or re.search(r"(^|[\s;&|(=])[^\s;&|()]*/rr(\s|$)", code):
-                raise AssertionError(f"README.md:{line}: refusing to execute {raw.strip()!r}")
+                raise AssertionError(f"{name}:{line}: refusing to execute {raw.strip()!r}")
         log = tmp_path / f"calls{i}.log"
         log.write_text("", encoding="utf-8")
         script = tmp_path / f"block{i}.sh"
@@ -107,7 +116,7 @@ def _executed(text: str, tmp_path: Path) -> list[tuple[int, str, list[str]]]:
                               env={"PATH": "/nonexistent", "S2_LOG": str(log), "HOME": str(run)})
         records = log.read_text(encoding="utf-8").split("\x1e")
         if not records or records[0] != "START":  # the sandbox launched and bash ran the block
-            raise AssertionError(f"README.md:{line}: the sandboxed bash never started ({proc.stderr[-300:]!r})")
+            raise AssertionError(f"{name}:{line}: the sandboxed bash never started ({proc.stderr[-300:]!r})")
         for record in records:
             fields = record.split("\x1f")
             if fields[0] == "CMD":  # argument boundaries as bash passed them, never re-split
@@ -132,12 +141,12 @@ def _hardware_at(argv: list[str]) -> list[int]:
     return out
 
 
-def _unleased(text: str, boards: dict[str, str], tmp_path: Path) -> list[str]:
+def _unleased(text: str, boards: dict[str, str], tmp_path: Path, name: str = "README.md") -> list[str]:
     """Executed hardware rr commands not run as `rr lease run <board> -- rr ...` on the
     board of the target selected last (`rr target set <t>`), or under a RR_TARGET that
     names another target. Judged on the exact argv bash passed."""
     out, active = [], None
-    for line, rr_target, argv in _executed(text, tmp_path):
+    for line, rr_target, argv in _executed(text, tmp_path, name):
         if argv[:3] == ["rr", "target", "set"] and len(argv) > 3:
             active = argv[3]
             continue
@@ -147,11 +156,11 @@ def _unleased(text: str, boards: dict[str, str], tmp_path: Path) -> list[str]:
         leased = argv[:3] == ["rr", "lease", "run"] and len(argv) > 5 and argv[4] == "--"
         want = boards.get(active or "")
         if not leased or hits != [5]:
-            out.append(f"README.md:{line}: outside a lease: {argv}")
+            out.append(f"{name}:{line}: outside a lease: {argv}")
         elif argv[3] != want:
-            out.append(f"README.md:{line}: lease on {argv[3]!r}, active target {active!r} needs {want!r}")
+            out.append(f"{name}:{line}: lease on {argv[3]!r}, active target {active!r} needs {want!r}")
         if rr_target and rr_target not in (f"targets/{active}.yml", active):
-            out.append(f"README.md:{line}: RR_TARGET={rr_target} overrides the active target {active!r}")
+            out.append(f"{name}:{line}: RR_TARGET={rr_target} overrides the active target {active!r}")
     return out
 
 
@@ -160,17 +169,28 @@ def _fenced(body: str) -> str:
 
 
 def test_every_readme_shell_block_is_valid_bash(tmp_path):
-    blocks = _blocks(README.read_text(encoding="utf-8"))
-    assert len(blocks) >= 10
-    assert _bash_errors(blocks, tmp_path) == []
+    docs = (README, *GUIDES)
+    per_doc = [_blocks(doc.read_text(encoding="utf-8")) for doc in docs]
+    assert sum(len(blocks) for blocks in per_doc) >= 10
+    errors = []
+    for i, blocks in enumerate(per_doc):
+        (tmp_path / str(i)).mkdir()
+        errors += _bash_errors(blocks, tmp_path / str(i), _rel(docs[i]))
+    assert errors == []
 
 
 def test_no_readme_shell_block_holds_an_angle_bracket_placeholder():
-    assert _placeholders(_blocks(README.read_text(encoding="utf-8"))) == []
+    assert [ph for doc in (README, *GUIDES)
+            for ph in _placeholders(_blocks(doc.read_text(encoding="utf-8")), _rel(doc))] == []
 
 
 def test_no_hardware_rr_command_runs_outside_a_lease_on_the_active_board(tmp_path):
-    assert _unleased(README.read_text(encoding="utf-8"), _target_boards(), tmp_path) == []
+    boards = _target_boards()
+    found = []
+    for i, doc in enumerate((README, *GUIDES)):
+        (tmp_path / str(i)).mkdir()
+        found += _unleased(doc.read_text(encoding="utf-8"), boards, tmp_path / str(i), _rel(doc))
+    assert found == []
 
 
 def _assert_leased_program_step(text: str, target: str, board: str, tmp_path: Path) -> None:
@@ -189,7 +209,7 @@ def _assert_leased_program_step(text: str, target: str, board: str, tmp_path: Pa
                                           ("de25_datalogger", "de25-standard")])
 def test_each_programmed_board_has_its_leased_program_step(target, board, tmp_path):
     assert _target_boards()[target] == board
-    _assert_leased_program_step(README.read_text(encoding="utf-8"), target, board, tmp_path)
+    _assert_leased_program_step(GUIDE_FOR[target].read_text(encoding="utf-8"), target, board, tmp_path)
 
 
 @pytest.mark.parametrize("fence", ["~~~bash\n{body}~~~\n", "```bash  \n{body}```\n", "```sh\n{body}```\n"])
@@ -231,7 +251,7 @@ def test_the_lease_check_accepts_a_lease_on_the_active_board(tmp_path):
     lambda t: t.replace(LEASED, 'rr "lease run polarfire-soc-discovery -- rr program run"\n', 1),
 ])
 def test_an_absent_or_unreachable_polarfire_program_step_fails_its_positive_control(mutate, tmp_path):
-    text = README.read_text(encoding="utf-8")
+    text = GUIDE_FOR["pfsoc_datalogger"].read_text(encoding="utf-8")
     bad = mutate(text)
     assert bad != text
     with pytest.raises(AssertionError, match="no leased program step"):

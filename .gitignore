@@ -18,6 +18,8 @@ Thumbs.db
 *.ghw
 *.vcd
 *.fst
+# The one shipped capture a newcomer opens without building anything.
+!docs/captures/*.fst
 *.dcp
 *.class
 *.jar

@@ -24,8 +24,8 @@ case "$PATH" in
     *[[:space:]]*)
         echo "ERROR: PATH contains whitespace (WSL appends Windows entries such as" >&2
         echo "       '/mnt/c/Program Files/...'), and Buildroot refuses to build with it." >&2
-        echo "       Remove those entries for this shell, as in the README section" >&2
-        echo "       'Host requirements of step 4, on Ubuntu and Debian':" >&2
+        echo "       Remove those entries for this shell, as in docs/getting_started/zybo_z7_20.md," >&2
+        echo "       section 'Host requirements of step 4, on Ubuntu and Debian':" >&2
         echo "         export PATH=\"\$(printf '%s' \"\$PATH\" | tr ':' '\\n' | grep -v '[[:space:]]' | paste -sd:)\"" >&2
         exit 2
         ;;
@@ -36,8 +36,8 @@ for prog in bash bc cmp cpio file find g++ gcc git make patch perl rsync sed tar
 done
 if [ -n "$MISSING" ]; then
     echo "ERROR: host programs missing for the Buildroot build:$MISSING" >&2
-    echo "       On Ubuntu and Debian, the README section 'Host requirements of step 4'" >&2
-    echo "       lists the apt-get line that installs them." >&2
+    echo "       On Ubuntu and Debian, the section 'Host requirements of step 4' of" >&2
+    echo "       docs/getting_started/zybo_z7_20.md lists the apt-get line that installs them." >&2
     exit 2
 fi
 

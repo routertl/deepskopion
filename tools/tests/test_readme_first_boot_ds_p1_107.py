@@ -18,6 +18,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 README = ROOT / "README.md"
+# The First boot section moved from the README to the guide it links.
+FIRST_BOOT = ROOT / "docs" / "getting_started" / "first_boot.md"
 OVERLAY = ROOT / "sw" / "linux" / "rootfs_overlay"
 S40 = OVERLAY / "etc" / "init.d" / "S40network"
 S49 = OVERLAY / "etc" / "init.d" / "S49dropbear"
@@ -25,9 +27,9 @@ AUTH = OVERLAY / "usr" / "local" / "bin" / "deepskopion-authorize-key"
 
 
 def _first_boot_section() -> str:
-    text = README.read_text(encoding="utf-8")
-    m = re.search(r"^#{2,4} First boot\b.*?$(.*?)(?=^#{1,4} |\Z)", text, re.M | re.S)
-    assert m, "README has no 'First boot' section"
+    text = FIRST_BOOT.read_text(encoding="utf-8")
+    m = re.search(r"^#{1,4} First boot\b.*?$(.*?)(?=^#{1,4} |\Z)", text, re.M | re.S)
+    assert m, "docs/getting_started/first_boot.md has no 'First boot' section"
     return m.group(1)
 
 

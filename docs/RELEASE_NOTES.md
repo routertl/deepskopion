@@ -28,7 +28,7 @@ Each target builds the same nine data loggers, read on the board's external head
 | CAN | 1 | CAN 20 |
 | Edge | 3 | Edge 1, Edge 2, Edge 3 |
 
-Other mixes, including QSPI and JTAG data loggers, are built with the configurator (README section "Choosing a Datalogger Mix").
+Other mixes, including QSPI and JTAG data loggers, are built with the configurator ([Data logger combination](getting_started/datalogger_mix.md)).
 
 ### Board-alone self-test
 
@@ -55,16 +55,16 @@ The default targets generate bus traffic for six of the nine data loggers, so th
 | Zybo Z7-20 | The image built by the README steps at `87d88829` (2026-11-24) boots from the microSD card, runs Python 3.12 and the capture daemon, and streams `wave_stream_v1`. The board-alone traffic of all six reachable data loggers decodes exactly: UART 12, I2C 4 and SPI 8 annotations; Edge 1 (the 4-edge vector, 200 / 320 / 280 ns), Edge 2 (the I2C write A0 AB CD 3E with four ACKs) and Edge 3 (SPI MOSI DE AD BE EF, MISO A5 5A C3 3C), decoded from the edge words. Evidence `79ad423a`. The same captures passed on the image built at `8b9dc7b5` (2026-11-18), evidence `b23c67ed`. |
 | Zybo Z7-20 | The FPGA build follows the README with `routertl 5.7.0` from PyPI in a fresh virtual environment: every step through the bitstream exits 0 and the host check passes 13 of 13. The Linux image and board steps were not part of that run. |
 | DE25 | A fresh clone at `8ce1c03d` with `routertl 5.6.0` from PyPI in a clean virtual environment builds the image, programs the board, boots Linux from the microSD card and streams `wave_stream_v1` from the capture daemon. The board-alone UART, I2C, SPI and Edge captures decode exactly and RouteWave 2.5.3 accepts each stream. The run sets `RR_NO_CONFINE_HINT=1`, because without it `rr` under an unconfined board lease prints a hint on standard output ahead of its `--json` output. Evidence `ea429091`. |
-| PolarFire SoC Discovery Kit | Linux boots and the capture daemon runs. A complete board self-test has not yet passed: a recorded self-test run on the kit failed. |
+| PolarFire SoC Discovery Kit | Linux boots, the capture daemon runs, and the self-test traffic of all six board-alone data loggers decodes exactly: UART, I2C and SPI annotations, and the three edge vectors, including SPI MOSI DE AD BE EF and MISO A5 5A C3 3C (2026-11-19). |
 
 ### Known limitations
 
 | Area | Limitation |
 |---|---|
 | Self-test reach | Three of the nine default data loggers need external traffic (see Board-alone self-test). |
-| PolarFire SoC Discovery Kit | Preview target. The evidence it lacks against the Zybo Z7-20 and the DE25: a self-test capture on the board in which every armed default data logger decodes its traffic and RouteWave accepts the capture. The kit boots Linux and runs the capture daemon. |
-| PolarFire SoC Discovery Kit | Some cold boots do not reach the Linux shell. One recorded stop is after DDR training, in the SD-card start-up of the kit's boot firmware (the Hart Software Services), and also occurs with Microchip's reference design; other cold boots start Linux and then print no further console output. A later cold boot of the same card reaches the shell. |
+| PolarFire SoC Discovery Kit | Preview target. At the first edge-logger enable after a cold power-on, the edge loggers recorded extra edges on the SPI MISO and MOSI lines around the transfer (2026-11-19 and 2026-11-24); the decoded SPI bytes were correct, and the nine repeat captures of 2026-11-19 showed none. A design change that clears the edge detector at enable is built and is not yet measured on the kit. |
+| PolarFire SoC Discovery Kit | On the kit used for testing, 2 of 6 cold boots stopped before the Linux shell; after a few minutes powered off, a new cold boot reached it. |
 | PolarFire SoC Discovery Kit | A build from a clone of the public repository is not tested. |
-| DE25 | A fresh clone built by the README steps with `routertl 5.7.0` from PyPI stopped after synthesis on 2026-11-23: the memory gate reported the 4 declared block RAMs as not confirmed for Altera. A fix in RouteRTL is pending. The board, programmed with an image built on the bench, boots and streams (see Tested on the board). |
-| DE25 | The daemon drains the DDR ring at about 13.1e6 B/s. A sustained ring write at 20.0e6 B/s fills the ring in about 39 s, after which records are lost upstream. |
+| DE25 | A fresh clone built by the README steps with `routertl 5.7.0` from PyPI stopped after synthesis on 2026-11-23: the memory gate reported the 4 declared block RAMs as not confirmed for Altera. A fix in RouteRTL is pending. The board, programmed with an image the maintainers built, boots and streams (see Tested on the board). |
+| DE25 | Over a 2 s window the daemon drains the DDR ring at 19.4e6 to 20.1e6 B/s against a 20.0e6 B/s ring write (image built at `d2447f7e`, 2026-11-23). Over 65 s an earlier image (`2104e288`, 2026-11-11) drained 1.4e6 to 2.1e6 B/s less than the write, so a sustained full-rate write fills the 256 MiB ring after about 2 to 3 minutes; the 65 s measurement has not been repeated on the current drain code. |
 | JTAG data logger | Records no live traffic on the DE25 and the PolarFire SoC Discovery Kit, whose tops tie the tap it reads to constants. Not part of the default mix. |

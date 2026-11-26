@@ -14,7 +14,7 @@ By submitting a pull request or patch, you certify that you have the right to su
 
 ### Sign-off Requirement
 
-Every commit must include a `Signed-off-by:` line in the commit message:
+Every commit of an outside contribution must include a `Signed-off-by:` line in the commit message (DCO). Maintainer commits, including those made with automated tools, are exempt: a sign-off is a personal certification, and a tool does not make it in a person's name.
 
 ```
 Signed-off-by: Random J Developer <developer@example.org>

@@ -238,7 +238,9 @@ def _armer_writes(fn_name: str, mss: bool, route: str | None = None,
     is applied only after the armer returns. ``arm_route`` is an edge route the armer takes itself (op=stim with a
     route, DS-P2.343), written before its burst. The armer's MMUART1 transmit (PolarFire) is captured, never sent:
     on this host /dev/ttyS1 is the host's own serial port."""
-    os.environ["DS_MSS_FABRIC"] = "1" if mss else "0"
+    # DS-P2.398: set inside the try and restored in its finally. A value left set made every later armer test in the
+    # same process run as MSS fabric.
+    fabric_was = os.environ.get("DS_MSS_FABRIC")
     import time as _time
     from sw.stream import edge_route, stimulus_armer
     rec = _Recorder()
@@ -246,6 +248,7 @@ def _armer_writes(fn_name: str, mss: bool, route: str | None = None,
     send = stimulus_armer.transmit_mmuart1
     stimulus_armer.transmit_mmuart1 = lambda data: MMUART1_SENT.append(bytes(data)) or data
     try:
+        os.environ["DS_MSS_FABRIC"] = "1" if mss else "0"
         with _no_host_devices():
             if fn_name:
                 arm = getattr(stimulus_armer, fn_name)
@@ -256,6 +259,10 @@ def _armer_writes(fn_name: str, mss: bool, route: str | None = None,
     finally:
         _time.sleep = sleep
         stimulus_armer.transmit_mmuart1 = send
+        if fabric_was is None:
+            os.environ.pop("DS_MSS_FABRIC", None)
+        else:
+            os.environ["DS_MSS_FABRIC"] = fabric_was
 
 
 def _collect(dut, got: list) -> None:

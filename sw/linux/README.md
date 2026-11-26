@@ -209,11 +209,13 @@ rr linux verify --board-file /tmp/board-provenance     # one-line verdict
 rr linux verify --fetch                                # same, over ssh
 ```
 
-It compares the **payload hash** of the last-baked rootfs against the one the
-running board reports, so it answers the question directly instead of by
-inference. A mismatch means the board is running a different rootfs than the
-one in `sw/linux/out/<target>/rootfs/` — redeploy before debugging anything
-else.
+It compares the **payload hash** (`RR_SW_PAYLOAD_SHA`, the field in
+`/etc/rr-sw-provenance` that identifies the deployed rootfs software content)
+and the source git revision (`RR_SW_GIT_HASH` / `RR_SW_GIT_REV`) of the
+last-baked rootfs against what the running board reports, so it answers the
+question directly instead of by inference. A mismatch in `RR_SW_PAYLOAD_SHA`
+means the board is running different software content than the rootfs in
+`sw/linux/out/<target>/rootfs/` — redeploy before debugging anything else.
 
 Two things that make this a real trap rather than a theoretical one:
 

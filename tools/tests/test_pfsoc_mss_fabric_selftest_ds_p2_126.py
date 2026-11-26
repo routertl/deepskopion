@@ -20,6 +20,7 @@ CORE = ROOT / "hw/rtl/deepskopion_core.vhd"
 FABRIC = ROOT / "hw/rtl/pfsoc/deepskopion_pfsoc_fabric.vhd"
 TCL = ROOT / "hw/libero/pfsoc/pfsoc_mss_subsys.tcl"
 README = ROOT / "README.md"
+SELF_TEST_DOC = ROOT / "docs" / "getting_started" / "self_test.md"
 SELF_TEST_SVG = ROOT / "docs" / "images" / "self_test.svg"
 CONTRACT = ROOT / "sw/stream/stimulus_contract.py"  # moved out of testbench, DS-P2.136
 TARGET = ROOT / "targets/pfsoc_datalogger.yml"
@@ -121,8 +122,10 @@ def test_mss_fabric_source_select_reaches_the_datalogger_inputs(monkeypatch) -> 
     # DS-P1.68: the self-test diagram is an SVG; the PolarFire panel lives there.
     assert "Microchip PolarFire SoC Discovery Kit" in SELF_TEST_SVG.read_text(encoding="utf-8")
     assert "self_test.svg" in readme
-    assert "EMIO_MUX_SEL" in readme and "bits [11:8]" in readme
-    assert "ds_stimulus_gen.vhd" in readme
+    # The per-board traffic sources moved from the README to the self-test guide it links.
+    self_test_doc = SELF_TEST_DOC.read_text(encoding="utf-8")
+    assert "EMIO_MUX_SEL" in self_test_doc and "bits [11:8]" in self_test_doc
+    assert "ds_stimulus_gen.vhd" in self_test_doc
 
     contract = CONTRACT.read_text(encoding="utf-8")
     assert re.search(

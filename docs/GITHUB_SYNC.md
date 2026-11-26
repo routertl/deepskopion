@@ -60,10 +60,13 @@ Synchronization operates as a continuous, re-runnable lifecycle across two expli
 ### Outbound Sync (Bitbucket → GitHub)
 
 1. Qualified changes on the Bitbucket repository are ready for public release.
-2. The export script (`tools/export_github.py`) is invoked targeting the public repository directory:
+2. The export script (`tools/export_github.py`) runs from a separate checkout at the source commit, targeting a clone of the public repository:
    ```bash
-   python3 tools/export_github.py --dest /path/to/github/repo --sha HEAD
+   git worktree add --detach /path/to/export-worktree <source-sha>
+   cd /path/to/export-worktree
+   python3 tools/export_github.py --dest /path/to/github/repo --sha <source-sha>
    ```
+   The hygiene gate that judges an export is the one the source commit ships. From a checkout at any other commit, or one with tracked changes, the script refuses before it writes anything to `--dest`.
 3. The script executes the following stages:
    - **Tracked file export**: Extracts tracked files from the specified Bitbucket commit hash.
    - **Drop list exclusion**: Filters out internal documentation, internal agent workflows, and private modules.

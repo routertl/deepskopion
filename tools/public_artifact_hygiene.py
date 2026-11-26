@@ -172,6 +172,12 @@ def _joined_literal_runs(data: bytes):
             pieces.append(body[1:-1])
         yield run.start(), b"".join(pieces)
 _CABLE_RE = re.compile(rb"(?<![A-Z0-9])21[A-Z0-9]{10}(?![A-Z0-9])")
+# A pasted kernel banner carries the account and host that built the kernel, in parentheses after the version.
+# Exported text shows the placeholder instead.
+# The whole parenthesised field is captured (any characters but brackets and blanks), so no account spelling slips
+# through; an address in plain prose is not a banner and is not matched.
+_KERNEL_BUILD_ID_RE = re.compile(rb"Linux version \S+ \(([^()\s]+@[^()\s]+)\)")
+KERNEL_BUILD_ID_PLACEHOLDER = b"builder@buildhost"
 _PUBLIC_KEY_RE = re.compile(
     rb"(?m)^[ \t]*(?:ssh-(?:ed25519|rsa)|ecdsa-sha2-nistp(?:256|384|521))[ \t]+"
     rb"[A-Za-z0-9+/]{20,}={0,3}(?:[ \t]|$)"
@@ -495,13 +501,15 @@ _DOC_PATH_ALLOWLIST: dict[str, set[bytes]] = {
         b"libs/.targets/<target>/ctu-fee/ctucanfd_ip_core/src/memory_registers/generated/",
     },
     "README.md": {
-        b"hw/sim/waves/test_i2c_datalogger/",
-        b"hw/sim/waves/test_i2c_datalogger/tb_i2c_datalogger.test_i2c_datalogger.test_write_transaction.fst",
+        b"hw/sim/waves/",                               # simulation output folder, written by rr sim run
+        b"tools/datalogger-builder/config/my_mix.yml",  # the configurator example's output file
+    },
+    "docs/getting_started/datalogger_mix.md": {
         b"tools/datalogger-builder/config/my_mix.yml",
         b"targets/my_mix.yml",
-        # DS-P1.119: the DE25 image tool's output, programmed over JTAG by the README's step 9.
-        b"sw/linux/de25/out/de25_datalogger/de25_datalogger_hps.sof",
     },
+    # DS-P1.119: the DE25 image tool's output, programmed over JTAG by step 9 of the DE25 guide.
+    "docs/getting_started/de25.md": {b"sw/linux/de25/out/de25_datalogger/de25_datalogger_hps.sof"},
     "docs/DEPLOYMENT_CONTRACT.md": {
         b"sw/linux/rootfs_overlay/usr/local/share/deepskopion/sw/stream/",
         b"sw/linux/rootfs_overlay/usr/sbin/dropbear",
@@ -985,6 +993,9 @@ def inspect_bytes(name: str, data: bytes, *, export_gate: bool = False,
             add(kind, match, match.group(0))
 
     if export_gate:
+        for match in _KERNEL_BUILD_ID_RE.finditer(data):
+            if match.group(1) != KERNEL_BUILD_ID_PLACEHOLDER:
+                add("kernel build account and host", match, match.group(1))
         for match in _AGENT_NAMES_RE.finditer(data):
             add("agent identity reference", match, match.group(0))
         for match in _TICH_RE.finditer(data):

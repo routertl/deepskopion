@@ -85,6 +85,12 @@ the target names the same release, and a different one re-times and re-fits the
 design. `xc7z020clg400-1` is inside the free **ML Standard** device set, so
 there is no licence purchase on the golden path; ML Enterprise works too.
 
+The DE25's `A5ED013BB32AE4SCS` is an Agilex 5 E-Series device. From release 24.1, Quartus Prime Pro offers a
+no-cost licence for Agilex 5 E-Series devices: it is requested from Quartus (Tools > License Setup) or from Altera's
+Self-Service Licensing Center, a fixed licence is tied to the network-card ID of the computer that compiles, and it
+runs for one year. A clean-machine DE25 build under this licence has not been run yet, so whether it covers every
+IP the design generates (the HPS and the external memory interface) is not verified.
+
 Preflight finds Vivado via `$XILINX_VIVADO`, then `PATH`, then the usual
 install roots — it does not require you to have sourced `settings64.sh` first.
 

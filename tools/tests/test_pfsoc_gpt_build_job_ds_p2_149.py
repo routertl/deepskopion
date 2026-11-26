@@ -31,6 +31,7 @@ file+regex guard cannot see that; only running the job does.
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import shutil
@@ -362,3 +363,90 @@ def test_pfsoc_gpt_build_job_runs_unskipped_in_desk_ci_and_precommit_gate(
     assert suite_rel in m.group(0), (
         f"hooks/pre-commit.local DS-P2.197 leg omits {suite_rel}"
     )
+
+
+# ── DS-P2.402 — no full mode: the job refuses and points to the guide ──
+
+_GUIDE = "docs/getting_started/polarfire_soc_discovery.md"
+_REFUSAL = (
+    "build_gpt_sdcard.sh: full mode is retired; this script only assembles from a "
+    "prebuilt staging tree (--from <dir>).\n"
+    f"To build the card image, follow {_GUIDE}.\n"
+)
+_RECORDING_RR = r"""#!/bin/sh
+echo "$*" >> "$RR_CALL_LOG"
+"""
+
+
+def _tree_snapshot(root: Path) -> dict[str, tuple[int, int, int, str]]:
+    """Mode, mtime, size and content digest of ``root`` and everything under it."""
+    snap = {}
+    for path in [root, *root.rglob("*")]:
+        info = path.lstat()
+        if path.is_symlink():
+            digest = os.readlink(path)
+        elif path.is_file():
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        else:
+            digest = ""
+        snap[str(path.relative_to(root))] = (info.st_mode, info.st_mtime_ns, info.st_size, digest)
+    return snap
+
+
+def test_full_mode_is_retired_and_points_to_the_guide(tmp_path: Path) -> None:
+    """RUN the job without ``--from``: it exits 2, runs no ``rr``, changes nothing
+    in the clone, and points to the PolarFire guide without repeating its commands.
+
+    The retired full mode passed ``--target`` to ``rr linux`` commands that have
+    no such option and named five ``rr linux`` steps in one command, and its
+    closing ``inspect`` required a file that ``rr linux sdcard`` does not write.
+    """
+    assert (ROOT / _GUIDE).is_file(), f"the refusal points to a missing file: {_GUIDE}"
+    stub_dir = tmp_path / "stub-bin"
+    stub_dir.mkdir()
+    stub = stub_dir / "rr"
+    stub.write_text(_RECORDING_RR, encoding="utf-8")
+    stub.chmod(0o755)
+    log = tmp_path / "rr-calls.log"
+    env = os.environ.copy()
+    env["PATH"] = f"{stub_dir}{os.pathsep}{env['PATH']}"
+    env["RR_CALL_LOG"] = str(log)
+
+    # Overlay present: a step before the refusal would get far enough to call
+    # rr. Overlay absent (a fresh clone, LFS not pulled): fetching it would fail
+    # before the refusal is ever printed.
+    for overlay_present in (True, False):
+        clone = _fresh_clone_without_lfs(tmp_path / f"overlay-{overlay_present}")
+        if overlay_present:
+            ovl_py = (
+                clone / "sw" / "linux" / "pfsoc" / "python_overlay" / "usr" / "bin" / "python3.12"
+            )
+            ovl_py.parent.mkdir(parents=True, exist_ok=True)
+            ovl_py.write_bytes(b"ELF-python-overlay-stub")
+            ovl_py.chmod(0o755)
+        clone_job = clone / "sw" / "linux" / "pfsoc" / "build_gpt_sdcard.sh"
+
+        before = _tree_snapshot(clone)
+        # Bare, and the shapes an old full-mode command may have had.
+        for args in (
+            [], ["--size-mb", "256"], ["--size-mb"], ["--out", str(tmp_path / "x.img")],
+        ):
+            proc = subprocess.run(
+                [str(clone_job), *args],
+                cwd=str(clone), env=env, capture_output=True, text=True, check=False,
+            )
+            said = (
+                f"overlay_present={overlay_present} args={args} rc={proc.returncode}\n"
+                f"{proc.stdout}{proc.stderr}"
+            )
+            assert not log.exists(), f"full mode ran rr: {log.read_text()}\n{said}"
+            after = _tree_snapshot(clone)
+            changed = sorted(
+                k for k in before.keys() | after.keys() if before.get(k) != after.get(k)
+            )
+            assert changed == [], f"the refusal changed files in the clone: {changed}\n{said}"
+            assert proc.returncode == 2, said
+            assert proc.stdout == "", f"full mode must do nothing but refuse: {said}"
+            # No second copy of the guide's procedure: it would drift from the guide.
+            assert not re.search(r"\brr\s", proc.stderr), f"an rr command in the refusal: {said}"
+            assert proc.stderr == _REFUSAL, said

@@ -705,8 +705,9 @@ def test_build_passes_a_card_with_no_problem(tmp_path, monkeypatch):
 
 
 def test_the_readme_states_the_measured_image():
-    """Done-when 3: the README's DE25 SSH statement names the inspected image by sha256."""
-    flat = " ".join((ROOT / "README.md").read_text(encoding="utf-8").split())
+    """Done-when 3: the DE25 SSH statement (now in the DE25 guide the README links) names the inspected image by
+    sha256."""
+    flat = " ".join((ROOT / "docs" / "getting_started" / "de25.md").read_text(encoding="utf-8").split())
     assert "The DE25 image has no SSH server" in flat
     assert ("A DE25 rootfs built with `rr linux rootfs` was read with debugfs (image sha256 "
             "`14d16638fa751228a9e1df229b1bd4d23a62f3c7caaa5f898c4d79220f1aff87`): it holds no dropbear init "

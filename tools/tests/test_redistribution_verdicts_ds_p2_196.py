@@ -152,13 +152,35 @@ def test_no_verdict_is_open(rows):
 
 
 @pytest.mark.parametrize("name", [
-    "README.md",
+    "ATTRIBUTIONS.md",   # owner 2026-11-25: the README does not discuss the CAN FD licence; ATTRIBUTIONS states it
     "docs/REDISTRIBUTION.md",
 ])  # DS-P1.103 param split: the two bench target files run in the _bench.py sibling
 def test_ctu_can_fd_licence_and_patent_notice_are_stated(name):
     text = (ROOT / name).read_text(encoding="utf-8")
     assert "LicenseRef-CTU-CAN-FD-NonCommercial" in text
     assert re.search(r"Bosch.*patent|patent.*Bosch", text, re.IGNORECASE)
+
+
+def test_the_readme_does_not_discuss_the_ctu_can_fd_licence():
+    """Owner 2026-11-25: the CTU CAN FD core is not shipped, so the README does not mention its licence."""
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert not _names_ctu_can_fd(text), "README.md discusses the CTU CAN FD core"
+    assert "LicenseRef-CTU-CAN-FD-NonCommercial" not in text
+
+
+def _names_ctu_can_fd(text: str) -> bool:
+    """Any spelling of the core's name (CTU CAN FD, CTU CAN-FD with any hyphen, ctucanfd), formatting removed
+    (T1 rv-b5f52f1a37, rv-f91c9d6c3b)."""
+    plain = re.sub(r"[*_`]", "", text)
+    return bool(re.search(r"ctu[\s\-\u2010\u2011\u2012\u2013]*can[\s\-\u2010\u2011\u2012\u2013]*fd", plain, re.IGNORECASE))
+
+
+def test_the_ctu_name_check_sees_spelling_variants():
+    """Control: the README prohibition's own predicate recognises the core's common spellings."""
+    for t in ("The CTU CAN-FD controller is licensed for non-commercial use only.", "the **ctucanfd** core",
+              "CTU CAN\u2011FD"):
+        assert _names_ctu_can_fd(t), t
+    assert not _names_ctu_can_fd("Deepskopion decodes CAN FD with its own data logger.")
 
 
 ITEM_REF_RE = re.compile(r"\bitem (\d+)\b", re.IGNORECASE)

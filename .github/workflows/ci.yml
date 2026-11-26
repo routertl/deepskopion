@@ -74,6 +74,10 @@ jobs:
         env:
           DS_RR_BIN: rr
         run: python tools/lock_check_leg.py --all
+      - name: rr generates the DE25 HPS from ip.yml on this release
+        # rr's real pre-synth HPS step (sdk.engine.hps_regen) with a stand-in Quartus. On the floor
+        # leg it is red, by name, when the declared floor cannot make the HPS ip.yml declares.
+        run: python tools/ci/hps_pregen_leg.py
       - name: Generate the build-time package lint reads
         # rom_info_pkg.vhd is gitignored; rr linting runs no hooks.
         run: bash tools/ci/materialize_lint_packages.sh

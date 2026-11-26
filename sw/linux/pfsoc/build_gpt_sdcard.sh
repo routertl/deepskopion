@@ -27,12 +27,14 @@
 # generate_payload caller, never a raw copy.
 #
 # USAGE
-#   sw/linux/pfsoc/build_gpt_sdcard.sh                 # full: rr linux chain -> assemble
 #   sw/linux/pfsoc/build_gpt_sdcard.sh --from <dir>    # assemble from a prebuilt
 #                                                        staging dir (chain already
 #                                                        built) — deterministic,
 #                                                        no board-side toolchain
-#   sw/linux/pfsoc/build_gpt_sdcard.sh --out <img> --hss-dir <hss>
+#   sw/linux/pfsoc/build_gpt_sdcard.sh --from <dir> --out <img> --hss-dir <hss>
+#
+# There is no full mode (DS-P2.402): without --from the script exits 2 and points
+# to the guide (docs/getting_started/polarfire_soc_discovery.md).
 #
 # The `--from` path is what CI / a fresh clone runs to reproduce the image from
 # a captured chain without a 1-3 h kernel build.
@@ -42,21 +44,19 @@ THIS_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$THIS_DIR/../../.." && pwd)"
 cd "$REPO_ROOT"
 
-TARGET="targets/pfsoc_datalogger.yml"
 STAGING="$REPO_ROOT/sw/linux/pfsoc/out/pfsoc_datalogger"
 OUT="$STAGING/sdcard.img"
 HSS_DIR="${PFSOC_HSS_DIR:-$REPO_ROOT/sw/linux/pfsoc/src/hart-software-services}"
 FROM_STAGING=""
-ROOTFS_SIZE_MB=128   # DS-P2.146: the SDK default 32 MiB is too small for the
-                     # riscv64 overlay+daemon tree; pass an explicit larger size.
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --from)     FROM_STAGING="$2"; shift 2 ;;
     --out)      OUT="$2"; shift 2 ;;
     --hss-dir)  HSS_DIR="$2"; shift 2 ;;
-    --size-mb)  ROOTFS_SIZE_MB="$2"; shift 2 ;;
-    -h|--help)  sed -n '2,44p' "$0"; exit 0 ;;
+    # No effect. Accepted so an old full-mode command reaches the refusal below.
+    --size-mb)  shift; [ $# -eq 0 ] || shift ;;
+    -h|--help)  sed -n '2,40p' "$0"; exit 0 ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
@@ -105,20 +105,11 @@ if [ -n "$FROM_STAGING" ]; then
   python3 tools/pfsoc_boot_media.py assemble \
       --from "$STAGING" --out "$OUT" --hss-dir "$HSS_DIR"
 else
-  # Full path: resolve the riscv64 python_overlay from its committed git-lfs
-  # tarball, build the RISC-V Linux chain, then the sanctioned rr linux
-  # rootfs/sdcard steps run stage_daemon.sh + pfsoc_boot_media.py assemble
-  # via the target's stage_command.
-  log "resolve python_overlay (DS-P2.146 payload baseline)"
-  "$THIS_DIR/fetch_python_overlay.sh"
-  log "rr target set + build chain"
-  rr target set pfsoc_datalogger
-  rr linux hss uboot kernel dtb bootscr --target "$TARGET"
-  log "rr linux rootfs (partition mode, $ROOTFS_SIZE_MB MiB)"
-  rr linux rootfs --mode partition --size-mb "$ROOTFS_SIZE_MB" --target "$TARGET"
-  log "rr linux sdcard (GPT assemble via pfsoc_boot_media.py)"
-  rr linux sdcard --refresh --no-deps --target "$TARGET"
-  OUT="$STAGING/sdcard.img"
+  cat >&2 <<'EOF_REFUSE'
+build_gpt_sdcard.sh: full mode is retired; this script only assembles from a prebuilt staging tree (--from <dir>).
+To build the card image, follow docs/getting_started/polarfire_soc_discovery.md.
+EOF_REFUSE
+  exit 2
 fi
 
 # Verify + fingerprint the produced GPT image.

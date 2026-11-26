@@ -238,6 +238,16 @@ docs_bound_by_this_contract:
   - docs/software/telemetry_exporter.md
   - sw/linux/README.md
   - README.md
+  # The board guides and the rest of the README's long instructions (owner 2026-11-25).
+  - docs/getting_started/README.md
+  - docs/getting_started/host_setup.md
+  - docs/getting_started/zybo_z7_20.md
+  - docs/getting_started/de25.md
+  - docs/getting_started/polarfire_soc_discovery.md
+  - docs/getting_started/first_boot.md
+  - docs/getting_started/self_test.md
+  - docs/getting_started/datalogger_mix.md
+  - docs/getting_started/reading_the_stream.md
 
 # ── If a systemd target ever becomes real ────────────────────────────────────
 # Recorded so the answer is not re-litigated: a future target may land a DE25

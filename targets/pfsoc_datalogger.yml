@@ -449,9 +449,10 @@ linux:
     rootfs: partition
     # 0 = autosize to overlay + daemon + headroom at sdcard *assembly*.
     # The card's ext4 is built at assembly from this value (rr's PolarFire
-    # sdcard step), so `rr linux build` / `rr linux sdcard` need no size flag;
-    # the 32 MiB `rr linux rootfs --mode partition` default never reaches the
-    # card (DS-P2.146, DS-P1.118).
+    # sdcard step). On RouteRTL 5.7.0 `rr linux build` still stops earlier:
+    # its rootfs stage makes a 32 MiB ext4 without this value, and ~53 MiB of
+    # files do not fit ("Could not allocate block"; measured on a clean
+    # ubuntu:24.04, RTL-P1.340, fixed for 5.7.1). DS-P2.146, DS-P1.118.
     # DS-P2.157: an explicit size. MEASURED on the kit: autosize (0 = du + 8 MiB)
     # produced a 51 MiB ext4 at 100% use with 0 bytes free (ext4 journal and
     # metadata ate the headroom), so the daemon's log write hit ENOSPC and S99's

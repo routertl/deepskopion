@@ -24,7 +24,12 @@ from markdown_it import MarkdownIt
 
 ROOT = Path(__file__).resolve().parents[2]
 README = ROOT / "README.md"
-HEADING = "### Build and run on the Terasic DE25"
+# The DE25 section moved from the README to its guide (docs/getting_started/), where it is the page heading;
+# First boot moved to its own guide.
+DE25_GUIDE = ROOT / "docs" / "getting_started" / "de25.md"
+FIRST_BOOT = ROOT / "docs" / "getting_started" / "first_boot.md"
+HEADING = "# Build and run on the Terasic DE25"
+HEADING_TAG = f"h{len(HEADING) - len(HEADING.lstrip('#'))}"
 HPS_SOF = "sw/linux/de25/out/de25_datalogger/de25_datalogger_hps.sof"
 
 # The non-comment lines of each command block, in order.
@@ -74,7 +79,19 @@ def _image_tool():
 
 
 def _readme() -> str:
-    return README.read_text(encoding="utf-8")
+    return DE25_GUIDE.read_text(encoding="utf-8")
+
+
+def _section_end(text: str) -> int:
+    """Offset of the next rendered heading of HEADING's level or higher after HEADING (a `# ` comment line inside a
+    fence is not a heading), or the end of the text."""
+    starts = [0] + [m.end() for m in re.finditer("\n", text)]
+    after = text.index(HEADING) + len(HEADING)
+    for tok in MarkdownIt("commonmark").parse(text):
+        if (tok.type == "heading_open" and tok.level == 0 and int(tok.tag[1]) <= int(HEADING_TAG[1])
+                and starts[tok.map[0]] >= after):
+            return starts[tok.map[0]] - 1
+    return len(text)
 
 
 _COMMENT = r"<!--(?:(?!-->)[\s\S])*-->"  # one comment: it cannot run past its own -->
@@ -116,14 +133,22 @@ def _section(text: str) -> _Section:
     be bypassed by moving a command into it. A section that is not a rendered heading fails."""
     tokens = MarkdownIt("commonmark").parse(text)
     title = HEADING.lstrip("# ")
-    start = next((i for i, tok in enumerate(tokens) if tok.type == "heading_open" and tok.tag == "h3"
+    start = next((i for i, tok in enumerate(tokens) if tok.type == "heading_open" and tok.tag == HEADING_TAG
                   and tok.level == 0 and tokens[i + 1].content == title), None)
     if start is None:
-        raise AssertionError(f"README has no rendered heading {HEADING!r}")
+        raise AssertionError(f"the DE25 guide has no rendered heading {HEADING!r}")
+    # The title opens the page: anything a reader sees above it would sit outside the checks (T1 rv-4b55c5529d).
+    before = [tok for tok in tokens[:start]
+              if not (tok.type == "html_block" and re.fullmatch(rf"\s*(?:{_COMMENT}\s*)+", tok.content))]
+    if before:
+        raise AssertionError(f"the DE25 guide has visible content before {HEADING!r} that the checks do not read")
     out, fences, pos = [HEADING + "\n\n"], [], len(HEADING) + 2
     for tok in tokens[start + 3:]:
-        if tok.type == "heading_open" and tok.tag in ("h1", "h2", "h3") and tok.level == 0:
-            break
+        # The section is the whole guide page: subsections stay in scope, and a second heading of the page's own
+        # level is refused rather than read as the end of the section (T1 rv-b0295d1941).
+        if tok.type == "heading_open" and int(tok.tag[1]) <= int(HEADING_TAG[1]) and tok.level == 0:
+            raise AssertionError(f"the DE25 guide has a second top-level heading after {HEADING!r}; "
+                                 "the checks do not read past it")
         if tok.type == "fence" and (tok.info.split() or [""])[0] == "bash":
             piece = f"```bash\n{tok.content}```\n\n"
             fences.append((pos, pos + len(piece), tok.content))
@@ -169,7 +194,7 @@ def test_a_hidden_section_fails(wrap):
     section a reader sees, so every check built on `_section` fails."""
     text = _readme()
     start = text.index(HEADING)
-    end = text.index("\n### ", start + len(HEADING))
+    end = _section_end(text)
     hidden = text[:start] + wrap[0] + text[start:end] + wrap[1] + text[end:]
     assert hidden != text
     with pytest.raises(AssertionError, match="no rendered heading"):
@@ -200,18 +225,46 @@ def test_a_command_in_an_html_comment_is_not_shown_and_is_dropped():
 
 
 def _next_heading(text: str) -> int:
-    start = text.index(HEADING)
-    return text.index("\n### ", start + len(HEADING)) + 1
+    return min(_section_end(text) + 1, len(text))
 
 
 def test_a_nested_heading_does_not_end_the_section():
-    """A blockquoted h3 is not a section boundary: a bash fence after it is still read."""
+    """A blockquoted heading of the section's own level (h1 on the guide page) is not a section boundary: a bash
+    fence after it is still read."""
     text = _readme()
     end = _next_heading(text)
-    moved = text[:end] + "> ### Aside\n\n```bash\nrr program run\n```\n\n" + text[end:]
+    moved = text[:end] + "> # Aside\n\n```bash\nrr program run\n```\n\n" + text[end:]
     assert moved != text
     with pytest.raises(AssertionError, match="commands differ"):
         _assert_commands_in_order(_commands(_section(moved)))
+
+
+@pytest.mark.parametrize("sub", ["## Writing the card again", "### Writing the card again"])
+def test_a_command_under_a_subsection_is_still_judged(sub):
+    """The section is the whole page under its h1: a seventh block under a subsection heading is one of its
+    commands, so the exact command list refuses it (T1 rv-752b3828fb)."""
+    text = _readme()
+    end = _section_end(text)
+    moved = text[:end] + f"\n\n{sub}\n\n```bash\nrr linux flash-sd --image --device /dev/sdX\n```\n" + text[end:]
+    assert moved != text
+    with pytest.raises(AssertionError, match="commands differ"):
+        _assert_commands_in_order(_commands(_section(moved)))
+
+
+def test_content_before_the_title_is_refused():
+    """A seventh block placed above the guide's title would sit outside the checked section (T1 rv-4b55c5529d)."""
+    text = _readme()
+    moved = "# Before\n\n```bash\nrr linux flash-sd --image --device /dev/sdX\n```\n\n" + text
+    with pytest.raises(AssertionError, match="visible content before"):
+        _section(moved)
+
+
+def test_a_second_top_level_heading_is_refused():
+    """A seventh block under a second h1 on the guide page would sit outside the checked section (T1 rv-b0295d1941)."""
+    text = _readme()
+    moved = text + "\n# Writing the card again\n\n```bash\nrr linux flash-sd --image --device /dev/sdX\n```\n"
+    with pytest.raises(AssertionError, match="second top-level heading"):
+        _section(moved)
 
 
 def test_a_fence_body_is_read_whole_past_a_backtick_run_inside_it():
@@ -351,22 +404,211 @@ def test_the_template_needs_the_edit_the_readme_asks_for(monkeypatch, tmp_path):
     assert "bench.resources.de25_address" in _section(_readme())
 
 
-def test_the_first_boot_text_matches_the_baked_address():
-    """The DE25 image carries ds_ip= on its kernel command line, so First boot may
-    not say every image ships with no address."""
-    text = _readme()
-    first = text[text.index("### First boot"):text.index(HEADING)]
-    flat = " ".join(first.split())
-    assert "The image ships with no network address" not in first
+#: Marks a rendered ordered-list number in _visible_text. Markdown text cannot carry it, so prose that spells
+#: "1. Address." cannot stand in for the list's first item (T1 rv-47763b7493).
+LIST_MARK = "\x00"
+
+
+def _flat(text: str) -> str:
+    return " ".join(text.split())
+
+
+def _alt_text(image) -> str:
+    """An image's alt text as rendered: every text and code descendant, nested images included, breaks as spaces."""
+    parts = []
+    for child in image.children or []:
+        if child.type in ("text", "code_inline"):
+            parts.append(child.content)
+        elif child.type in ("softbreak", "hardbreak"):
+            parts.append(" ")
+        elif child.type == "image":
+            parts.append(_alt_text(child))
+    return "".join(parts)
+
+
+def _reader_view(markdown: str) -> tuple[str, list[tuple[int, str]]]:
+    """Markdown as a reader reads it, taken from the CommonMark tokens: the body text (text, inline code, code
+    blocks; emphasis markers and comments are not text: T1 rv-a00ad460bc), and separately the metadata a reader can
+    also see, link and image titles (tooltips) and image alt text, each with the length of the body text before it.
+    Metadata is not spliced into the body, so a phrase stays intact around a link (T1 rv-45e967244a). Raw HTML
+    other than a comment is refused, as the DE25 section refuses it (T1 rv-5960ee971c)."""
+    meta: list[tuple[int, str]] = []
+    out, lists = [], []        # lists: the next item number of each open ordered list, None for a bullet list
+    items = []                 # per open list item: its number until the item's own text has taken it
+    for tok in MarkdownIt("commonmark").parse(markdown):
+        # An ordered list item shows its number as the reader sees it: the list's start, then +1 per item
+        # (T1 rv-6543102979: '2. Address.' is not step 1).
+        if tok.type == "ordered_list_open":
+            start = tok.attrGet("start")      # absent means 1; a start of 0 is 0 (T1 rv-3b05fb442d)
+            lists.append(int(start) if start is not None else 1)
+        elif tok.type == "bullet_list_open":
+            lists.append(None)
+        elif tok.type in ("ordered_list_close", "bullet_list_close"):
+            lists.pop()
+        elif tok.type == "list_item_open":
+            # The number belongs to the item's own text only: an empty item followed by a paragraph does not give
+            # that paragraph the number (T1 rv-7dd66a9d2e).
+            if lists and lists[-1] is not None:
+                items.append(f"{LIST_MARK}{lists[-1]}. ")
+                lists[-1] += 1
+            else:
+                items.append("")
+        elif tok.type == "list_item_close":
+            if items.pop():
+                out.append(f"{LIST_MARK}(empty list item)")
+        if tok.type == "html_block" and not re.fullmatch(rf"\s*(?:{_COMMENT}\s*)+", tok.content):
+            raise AssertionError(f"raw HTML the checks do not read: {tok.content[:60]!r}")
+        if tok.type in ("fence", "code_block"):
+            out.append(tok.content)
+        elif tok.type == "inline":
+            parts = []
+            for child in tok.children or []:
+                here = len(_flat(" ".join(out) + " " + (items[-1] if items else "") + "".join(parts)))
+                if child.type in ("link_open", "image") and child.attrGet("title"):
+                    meta.append((here, _flat(child.attrGet("title"))))       # a tooltip (T1 rv-0b759f3955)
+                if child.type == "image":
+                    # The parsed alt text (emphasis markers are not text: T1 rv-6bb005685e) is metadata, not the
+                    # body text a required label must be (T1 rv-0c60199f6a, rv-a89f9b8661). It is read through
+                    # nested images and line breaks (T1 rv-5f7cf6c980).
+                    meta.append((here, _flat(_alt_text(child))))
+                if child.type in ("text", "code_inline"):
+                    parts.append(child.content)
+                elif child.type in ("softbreak", "hardbreak"):
+                    parts.append(" ")
+                elif child.type == "html_inline" and not re.fullmatch(rf"\s*{_COMMENT}\s*", child.content):
+                    raise AssertionError(f"raw HTML the checks do not read: {child.content[:60]!r}")
+            text = "".join(parts)
+            if items and items[-1] and text.strip():   # only visible text takes the number (T1 rv-e7fd2a1fde)
+                text, items[-1] = items[-1] + text, ""
+            out.append(text)
+    return _flat(" ".join(out)), meta
+
+
+
+def _check_first_boot(raw: str) -> None:
+    # Scoped to the rendered First boot section: from its heading to the next heading of any level, so a note
+    # moved to an appendix of the page no longer counts (T1 rv-4b55c5529d).
+    # Judged as a reader sees it: _visible_text drops only tokens CommonMark parses as HTML comments, so a comment
+    # written inside a code span stays visible (T1 rv-836fde037c, rv-011e9bc77c).
+    page = raw
+    # main's own assertions, on the raw page from its first byte, kept beside the rendered checks below so the pair is
+    # never weaker than main's check (T1 rv-5f7cf6c980).
+    raw_flat = " ".join(raw.split())
+    assert "The image ships with no network address" not in raw
+    assert ("The DE25 image differs: it ships with the static address of its deployment descriptor "
+            "on its kernel command line and no SSH server") in raw_flat
+    for needed in ("ds_ip=", "1. Address.", "The DE25 image differs", "/etc/init.d/S49dropbear start",
+                   "ds_ip=<address>/<prefix>", "over DHCP"):
+        assert needed in raw, f"first_boot.md lost {needed!r}"
+    assert raw.index("ds_ip=") > raw.index("1. Address.")
+    assert raw.index("The DE25 image differs") > raw.index("/etc/init.d/S49dropbear start")
+    assert raw.index("ds_ip=<address>/<prefix>") < raw.index("over DHCP")
+    tokens = MarkdownIt("commonmark").parse(page)
+    heads = [tok.map[0] for tok in tokens if tok.type == "heading_open" and tok.level == 0]
+    lines = page.splitlines(keepends=True)
+    assert heads and lines[heads[0]].startswith("# First boot"), "first_boot.md does not open with its First boot heading"
+    # Nothing a reader sees sits above the title (T1 rv-5f7cf6c980).
+    above = [t for t in tokens if t.map and t.map[0] < heads[0] and t.level == 0
+             and not (t.type == "html_block" and re.fullmatch(rf"\s*(?:{_COMMENT}\s*)+", t.content))]
+    assert not above, "first_boot.md has visible content above its First boot heading"
+    first = "".join(lines[heads[0]:heads[1] if len(heads) > 1 else len(lines)])
+    flat, meta = _reader_view(first)   # required text is body text; metadata is checked on its own
+    # The contradicting claim is refused anywhere on the page, not only in the section (T1 rv-f2fc046c84), in the
+    # body text and in every tooltip or alt text (wrapped lines, emphasis: T1 rv-836fde037c, rv-a00ad460bc).
+    page_body, page_meta = _reader_view(page)
+    banned = "The image ships with no network address"
+    assert banned not in page_body and not any(banned in text for _, text in page_meta)
     assert ("The DE25 image differs: it ships with the static address of its deployment descriptor "
             "on its kernel command line and no SSH server") in flat
-    # The DE25 note follows the numbered steps, so step 1 stays the first ds_ip= mention.
-    assert first.index("ds_ip=") > first.index("1. Address.")
-    assert first.index("The DE25 image differs") > first.index("/etc/init.d/S49dropbear start")
+    # The DE25 note follows the numbered steps, so step 1 stays the first ds_ip= mention. Positions are taken in the
+    # same visible text the note is found in (T1 rv-1f018c1160).
+    step1 = f"{LIST_MARK}1. Address."
+    assert step1 in flat, "First boot no longer opens its numbered steps with '1. Address.'"
+    # ... and it is the section's first numbered item: no other ordered list comes before it (T1 rv-296b8dac2b).
+    assert flat.index(LIST_MARK) == flat.index(step1), "an ordered list item comes before '1. Address.'"
+    # The label must be body text; an earlier ds_ip= mention counts in the body and in any tooltip or alt text
+    # before the label (T1 rv-6bb005685e, rv-45e967244a).
+    assert flat.index("ds_ip=") > flat.index(step1)
+    # Metadata up to the end of the label counts as before it: a tooltip inside item 1 ahead of 'Address.' sits
+    # after the list number but before the label (T1 rv-6825d4f6e9).
+    assert not any("ds_ip=" in text for at, text in meta if at < flat.index(step1) + len(step1))
+    assert flat.index("The DE25 image differs") > flat.index("/etc/init.d/S49dropbear start")
     # Static first, then DHCP, as S40network does it.
     s40 = (ROOT / "sw/linux/rootfs_overlay/etc/init.d/S40network").read_text(encoding="utf-8")
     assert s40.index("cmdline_value ds_ip") < s40.index("udhcpc -q")
-    assert first.index("ds_ip=<address>/<prefix>") < first.index("over DHCP")
+    assert flat.index("ds_ip=<address>/<prefix>") < flat.index("over DHCP")
+
+
+def test_the_first_boot_text_matches_the_baked_address():
+    """The DE25 image carries ds_ip= on its kernel command line, so First boot may
+    not say every image ships with no address."""
+    _check_first_boot(FIRST_BOOT.read_text(encoding="utf-8"))
+
+
+DE25_NOTE = ("The DE25 image differs: it ships with the static address of its deployment descriptor on its kernel "
+             "command line and\nno SSH server")
+
+
+@pytest.mark.parametrize("mutate", [
+    # The required note only in a link title, while the visible text says the opposite (T1 rv-a00ad460bc).
+    lambda t: t.replace(DE25_NOTE, f'[The DE25 image requests DHCP](de25.md "{" ".join(DE25_NOTE.split())}")', 1),
+    # The banned claim, split by emphasis.
+    lambda t: t + "\nThe image ships with **no network address**.\n",
+    # The banned claim as an image's alt text (T1 rv-0c60199f6a).
+    lambda t: t + "\n![The image ships with no network address](../images/self_test.svg)\n",
+    # Step 1 renumbered: the address step is no longer the first item (T1 rv-6543102979).
+    lambda t: "<!-- 1. Address. -->\n" + t.replace("\n1. Address.", "\n2. Address.", 1),
+    # An empty first item, then the address text as a paragraph outside the list (T1 rv-7dd66a9d2e).
+    lambda t: "<!-- 1. Address. -->\n" + t.replace("\n1. Address.", "\n1.\n\nAddress.", 1),
+    # An item holding only an empty link, then the address text outside the list (T1 rv-e7fd2a1fde).
+    lambda t: "<!-- 1. Address. -->\n" + t.replace("\n1. Address.", "\n1. [](#first-boot)\n\nAddress.", 1),
+    # The banned claim around a link whose tooltip would split it if spliced (T1 rv-45e967244a).
+    lambda t: t + '\nThe image ships with [no network address](de25.md "Network setup").\n',
+    # ds_ip= in a nested image's alt text before step 1, and the ban split over two alt-text lines (T1 rv-5f7cf6c980).
+    # (Each leading '<!-- 1. Address. -->' satisfies main's raw ordering, so the rendered checks are what refuse it:
+    # T1 rv-6825d4f6e9.)
+    lambda t: "<!-- 1. Address. -->\n" + t.replace(
+        "\n1. Address.", "\n![See ![ds_ip=](../images/self_test.svg)](../images/architecture.svg)\n\n1. Address.", 1),
+    lambda t: t + "\n![The image ships with\nno network address](../images/self_test.svg)\n",
+    # A ds_ip= mention above the title (T1 rv-5f7cf6c980).
+    lambda t: "<!-- 1. Address. -->\n\nUse ds_ip= before following this guide.\n\n" + t,
+    # The list renumbered to start at 0 (T1 rv-3b05fb442d).
+    lambda t: "<!-- 1. Address. -->\n" + t.replace("\n1. Address.", "\n0. Address.", 1),
+    # A separate ordered list before the steps (T1 rv-296b8dac2b).
+    lambda t: "<!-- 1. Address. -->\n" + t.replace("\n1. Address.", "\n1) Put SSH setup before addressing.\n\n1. Address.", 1),
+    # A tooltip or alt text holding ds_ip= inside item 1, ahead of the label (T1 rv-6825d4f6e9).
+    lambda t: "<!-- 1. Address. -->\n" + t.replace("\n1. Address.", '\n1. [](#a "ds_ip=") Address.', 1),
+    lambda t: "<!-- 1. Address. -->\n" + t.replace("\n1. Address.", "\n1. ![ds_ip=](../images/self_test.svg) Address.", 1),
+    # ds_ip= rendered across a link before step 1 (T1 rv-45e967244a).
+    lambda t: t.replace("\n1. Address.", '\nds_[ip=](de25.md "Addressing")\n\n1. Address.', 1),
+    # A ds_ip= mention before step 1, only in a link tooltip (T1 rv-6bb005685e).
+    lambda t: t.replace("\n1. Address.", '\n[address](#first-boot "Use ds_ip= as the boot argument")\n\n1. Address.', 1),
+    # The banned claim as emphasised alt text (T1 rv-6bb005685e).
+    lambda t: t + "\n![The image ships with **no network address**](../images/self_test.svg)\n",
+    # The banned claim as a link title (tooltip) (T1 rv-0b759f3955).
+    lambda t: t + '\n[DE25](de25.md "The image ships with no network address")\n',
+    # The step label replaced by an image whose alt text is the label (T1 rv-a89f9b8661).
+    lambda t: "<!-- 1. Address. -->\n" + t.replace("\n1. Address.", "\n1. ![Address.](../images/self_test.svg)", 1),
+    # Prose spelling the label before a renumbered list (T1 rv-47763b7493).
+    lambda t: "<!-- 1. Address. -->\n" + t.replace(
+        "\n1. Address.", "\nExpected label: 1. **Address.**\n\n2. Address.", 1),
+    # The required note only in a raw HTML title whose text holds '>' (T1 rv-5960ee971c).
+    lambda t: t.replace(DE25_NOTE, f'<span title="> {" ".join(DE25_NOTE.split())}">The DE25 image requests DHCP</span>', 1),
+])
+def test_the_first_boot_check_reads_the_visible_text(mutate):
+    raw = FIRST_BOOT.read_text(encoding="utf-8")
+    bad = mutate(raw)
+    assert bad != raw
+    with pytest.raises(AssertionError):
+        _check_first_boot(bad)
+
+
+def test_metadata_after_the_step1_label_is_allowed():
+    """Positive control (T1 rv-a1ac530f21): a tooltip that follows the whole label is not before it."""
+    raw = FIRST_BOOT.read_text(encoding="utf-8")
+    ok = raw.replace("\n1. Address.", '\n1. Address. [Details](#first-boot "ds_ip= boot argument")', 1)
+    assert ok != raw
+    _check_first_boot(ok)
 
 
 def test_every_command_block_is_valid_bash(tmp_path):

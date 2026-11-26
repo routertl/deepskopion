@@ -18,12 +18,16 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
 import yaml
+from markdown_it import MarkdownIt
 
 ROOT = Path(__file__).resolve().parents[2]
 SANDBOX_TICKET = "DS-P3.320"
 FENCE = re.compile(r"^```(?:bash|sh|shell)?\s*$\n(.*?)^```\s*$", re.M | re.S)
-SECTION = "### Build and run on the Zybo Z7-20"
+# The Zybo build section moved from the README to the guide it links (its title is the page heading).
+SECTION = "# Build and run on the Zybo Z7-20"
+ZYBO_GUIDE = ROOT / "docs" / "getting_started" / "zybo_z7_20.md"
 
 
 def _vivado_version() -> str:
@@ -31,10 +35,28 @@ def _vivado_version() -> str:
     return str(decl["vivado"]["version"])
 
 
+_COMMENT = r"<!--(?:(?!-->)[\s\S])*-->"
+
+
 def _zybo_blocks(text: str) -> list[list[str]]:
-    start = text.index(SECTION)
-    end = text.find("\n### ", start + len(SECTION))
-    section = text[start:end if end != -1 else len(text)]
+    # The title is found as CommonMark renders it, and only real HTML-comment blocks may precede it: a visible
+    # block above the title would run before the setup unchecked (T1 rv-a1ac530f21, rv-296b8dac2b, rv-3adb597606).
+    tokens = MarkdownIt("commonmark").parse(text)
+    title = SECTION.lstrip("# ")
+    at = next((i for i, t in enumerate(tokens) if t.type == "heading_open" and t.level == 0
+               and tokens[i + 1].content == title), None)
+    assert at is not None, f"no rendered heading {SECTION!r}"
+    above = [t for t in tokens[:at] if t.level == 0
+             and not (t.type == "html_block" and re.fullmatch(rf"\s*(?:{_COMMENT}\s*)+", t.content))]
+    assert not above, "the Zybo guide has visible content above its title"
+    lines = text.splitlines(keepends=True)
+    start = len("".join(lines[:tokens[at].map[0]]))
+    # The section runs to the next rendered heading of the title's own level: its subsections stay in it
+    # (T1 rv-85f9bcd6cf).
+    level = int(tokens[at].tag[1])
+    nxt = next((t for t in tokens[at + 1:] if t.type == "heading_open" and t.level == 0 and int(t.tag[1]) <= level), None)
+    end = len("".join(lines[:nxt.map[0]])) if nxt else len(text)
+    section = text[start:end]
     blocks = []
     for body in FENCE.findall(section):
         lines = [line.split("#", 1)[0].strip() for line in body.splitlines()]
@@ -140,19 +162,19 @@ def _recipe_errors(text: str) -> list[str]:
 
 def test_the_vivado_setup_comes_before_the_first_rr_command():
     version = _vivado_version()
-    setup = _setup_before_first_rr((ROOT / "README.md").read_text(encoding="utf-8"))
+    setup = _setup_before_first_rr(ZYBO_GUIDE.read_text(encoding="utf-8"))
     assert any(c.startswith("INSTALL_DIR=") for c in setup), setup
     values = [c.split("=", 1)[1].strip().strip('"\'') for c in setup if c.startswith("INSTALL_DIR=")]
     assert values and all(v and not re.fullmatch(r"<[^<>]*>", v) for v in values), values
     assert f'source "$INSTALL_DIR/Vivado/{version}/settings64.sh"' in setup, setup
     assert f'export XILINX_VIVADO="$INSTALL_DIR/Vivado/{version}"' in setup, setup
     assert 'export PATH="$XILINX_VIVADO/bin:$PATH"' in setup, setup
-    assert _recipe_errors((ROOT / "README.md").read_text(encoding="utf-8")) == []
+    assert _recipe_errors(ZYBO_GUIDE.read_text(encoding="utf-8")) == []
 
 
 def test_the_recipe_check_refuses_a_borrowed_or_late_assignment():
     """Mutants: the second recipe without its assignment, and with it after the use."""
-    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    text = ZYBO_GUIDE.read_text(encoding="utf-8")
     copy_assign = next(ln for ln in text.splitlines() if ln.startswith("INSTALL_DIR=") and "copy" in ln)
     deleted = text.replace(copy_assign + "\n", "", 1)
     assert deleted != text
@@ -175,14 +197,14 @@ def test_the_recipe_check_refuses_a_borrowed_or_late_assignment():
 
 def test_the_readme_states_the_declared_vivado_release():
     version = _vivado_version()
-    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    text = ZYBO_GUIDE.read_text(encoding="utf-8")
     section = text[text.index(SECTION):]
     assert f"Vivado {version}" in section.split("```", 1)[0]
     assert f"`vivado -version` then prints `vivado v{version}`" in text
 
 
 def test_the_setup_names_no_machine_path():
-    setup = " ".join(_setup_before_first_rr((ROOT / "README.md").read_text(encoding="utf-8")))
+    setup = " ".join(_setup_before_first_rr(ZYBO_GUIDE.read_text(encoding="utf-8")))
     assert not re.search(r"/home/|/Users/|/tools/Xilinx", setup), setup
 
 
@@ -192,6 +214,26 @@ def test_a_recipe_cannot_write_outside_its_scratch_directory(tmp_path):
     _run_recipe([f"echo x > {outside}", f"true; /usr/bin/touch {outside}.2"])
     assert not outside.exists()
     assert not Path(f"{outside}.2").exists()
+
+
+def test_a_subsection_before_the_build_block_keeps_the_setup():
+    """Positive control (T1 rv-85f9bcd6cf): an h3 subsection inside the guide does not end the section."""
+    text = ZYBO_GUIDE.read_text(encoding="utf-8")
+    first_block = text.index("```bash")
+    with_sub = text[:first_block] + "### Before the build\n\nNothing here.\n\n" + text[first_block:]
+    assert _setup_before_first_rr(with_sub) == _setup_before_first_rr(text)
+
+
+def test_a_block_between_comments_above_the_title_is_refused():
+    """Negative control (T1 rv-296b8dac2b): comments above the title may not hide a visible block between them."""
+    text = ZYBO_GUIDE.read_text(encoding="utf-8")
+    bad = "<!-- a -->\n\n```bash\nrr synth run\n```\n\n<!-- b -->\n" + text
+    with pytest.raises(AssertionError, match="visible content above its title"):
+        _setup_before_first_rr(bad)
+    # An indented '<!--' is not a comment opener: the fence after it renders (T1 rv-3adb597606).
+    indented = ("    <!--\n\n```bash\nrr target set zybo_datalogger\nrr pkg install\nrr synth run\n```\n-->\n" + text)
+    with pytest.raises(AssertionError, match="visible content above its title"):
+        _setup_before_first_rr(indented)
 
 
 def test_the_check_refuses_a_readme_without_the_setup():

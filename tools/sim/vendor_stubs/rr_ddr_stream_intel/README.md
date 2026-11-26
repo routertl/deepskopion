@@ -1,7 +1,7 @@
 # rr_ddr_stream Intel/Altera XPM-body stubs
 
 Vendored verbatim from `routertl/rr_ddr_stream`'s upstream `rtl/support/intel/`
-directory at commit `6d1089a1e01f016777a118cc9af1c88774a195f8` — the SAME
+directory at commit `2319261cb86f39b3a91d37cff0e716b12ea65112` (v0.3.7) — the SAME
 commit `ip.lock` and the target locks (`targets/<t>.routertl.lock`) pin for this project's
 `routertl/rr_ddr_stream` dependency (see the `routertl/rr_ddr_stream:` entry in either lockfile). Pure
 IEEE entity-declaration stubs: no `library xpm;`, no `library unisim;`, no

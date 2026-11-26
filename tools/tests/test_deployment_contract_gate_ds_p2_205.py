@@ -43,6 +43,7 @@ def _hook_leg() -> str:
 def tree(tmp_path: Path) -> Path:
     listing = subprocess.run(
         ["git", "-C", str(ROOT), "ls-files", "-z", "sw/linux", "targets", "docs/*.md",
+         "docs/getting_started",  # every bound guide, whatever its extension (T1 rv-14f0886228)
          "docs/software/README.md", "README.md", ".gitignore",
          "bench"],  # DS-P1.103: the bench targets and bench/deployment_contract.yml
         check=True, capture_output=True, text=True,
@@ -135,7 +136,7 @@ def _staged_scratch_tree(tmp_path, skip):
     listing = subprocess.run(
         ["git", "-C", str(ROOT), "ls-files", "-z", "sw/linux", "sw/stream", "contracts",
          "targets", "docs/DEPLOYMENT_CONTRACT.md", "docs/software/telemetry_exporter.md",
-         "README.md", ".gitignore"],
+         "README.md", "docs/getting_started", ".gitignore"],  # the guides the contract binds (DS-P2.397)
         check=True, capture_output=True, text=True,
     ).stdout
     work = tmp_path / "work"

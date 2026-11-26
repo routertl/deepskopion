@@ -813,8 +813,9 @@ _PROJECT_RELEASE_URL = re.compile(r"github\.com/routertl/", re.IGNORECASE)
 
 
 def _quick_start_step(number: int) -> str:
-    """The README quick-start block from `# <number>.` up to the next numbered step."""
-    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    """The Zybo Z7-20 quick-start block (docs/getting_started/zybo_z7_20.md, linked from the README) from
+    `# <number>.` up to the next numbered step."""
+    text = (ROOT / "docs" / "getting_started" / "zybo_z7_20.md").read_text(encoding="utf-8")
     start = text.index(f"# {number}. ")
     return text[start:text.index(f"# {number + 1}. ", start)]
 

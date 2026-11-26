@@ -2151,21 +2151,56 @@ def _payload_sha(rootfs: Path) -> str:
     return digest.hexdigest()
 
 
+_GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+_GIT_ENV_STRIP = ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE")
+
+
+def _source_git_rev(root: Path) -> str:
+    """Resolve the full 40-char git commit SHA of *root*, or refuse.
+
+    DS-P3.264: ``RR_SW_GIT_HASH`` / ``RR_SW_GIT_REV`` must name the real source
+    revision the payload was built from — never a fabricated hash of
+    ``lock_inputs()`` that looks like a git revision and stays identical across
+    daemon commits.
+    """
+    if not (root / ".git").exists():
+        raise RuntimeError(
+            f"cannot stamp provenance: {root} is not a git checkout "
+            "(missing .git); refusing to fabricate RR_SW_GIT_HASH"
+        )
+    env = {k: v for k, v in os.environ.items() if k not in _GIT_ENV_STRIP}
+    proc = subprocess.run(
+        ["git", "rev-parse", "--verify", "HEAD"],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    rev = proc.stdout.strip().lower()
+    if proc.returncode != 0 or not _GIT_SHA_RE.fullmatch(rev):
+        detail = proc.stderr.strip() or proc.stdout.strip() or f"exit {proc.returncode}"
+        raise RuntimeError(
+            f"cannot stamp provenance: unable to resolve git HEAD in {root}: {detail}"
+        )
+    return rev
+
+
 def normalize_provenance(root: Path, rootfs: Path) -> None:
-    """Replace RouteRTL's wall-clock stamp with content-addressed provenance."""
-    input_digest = hashlib.sha256()
-    for name in lock_inputs(root):
-        input_digest.update(name.encode("utf-8") + b"\0")
-        input_digest.update((root / name).read_bytes())
-        input_digest.update(b"\0")
-    identity = input_digest.hexdigest()
+    """Replace RouteRTL's wall-clock stamp with deterministic source + payload provenance.
+
+    DS-P3.264: stamps the real git revision of ``root`` (or refuses when it
+    cannot be determined) instead of hashing only ``lock_inputs()``, while
+    keeping ``SOURCE_DATE_EPOCH`` and ``RR_SW_PAYLOAD_SHA`` deterministic.
+    """
+    rev = _source_git_rev(root)
     date = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(SOURCE_DATE_EPOCH))
     stamp = rootfs / "etc/rr-sw-provenance"
     stamp.parent.mkdir(parents=True, exist_ok=True)
     stamp.write_text(
         "# DE-L0 deterministic rr linux PS-software provenance\n"
-        f"RR_SW_GIT_HASH={identity[:8]}\n"
-        f"RR_SW_GIT_REV=inputs-{identity}\n"
+        f"RR_SW_GIT_HASH={rev[:8]}\n"
+        f"RR_SW_GIT_REV={rev}\n"
         "RR_SW_GIT_DIRTY=0\n"
         f"RR_SW_BUILD_DATE={date}\n"
         f"RR_SW_BUILD_EPOCH={SOURCE_DATE_EPOCH}\n"

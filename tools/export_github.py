@@ -118,6 +118,49 @@ def target_input_refusals(treeish: str, root: Path) -> list[str]:
     return out
 
 
+#: The files whose code judges an export. The gate that judges an export must be the gate shipped with that source.
+GATE_FILES = ("tools/export_github.py", "tools/public_artifact_hygiene.py")
+
+
+def gate_checkout_refusal(full_sha: str, code_root: Path = ROOT) -> str | None:
+    """DS-P2.396: why the gate running from ``code_root`` may not judge source ``full_sha``, or None.
+
+    When the running checkout's repository holds the source commit, the checkout must be at that commit with no
+    tracked change: an older or edited checkout would judge the source with a different gate. When it does not
+    hold the commit (a separate source repository), every gate file the source ships must equal the running one."""
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", "-C", str(code_root), *args], capture_output=True, check=False)
+
+    if git("cat-file", "-e", f"{full_sha}^{{commit}}").returncode == 0:
+        head = git("rev-parse", "HEAD").stdout.decode().strip()
+        if head != full_sha:
+            return (f"the export tool runs from a checkout at {head[:8] or 'no commit'}, not at the source "
+                    f"{full_sha[:8]}; run it from a worktree at {full_sha[:8]} so the gate is the one that source ships")
+        dirty = git("status", "--porcelain", "--untracked-files=no").stdout.decode().strip()
+        if dirty:
+            return (f"the export tool's checkout at {full_sha[:8]} has tracked changes, so the running gate is not "
+                    f"the one {full_sha[:8]} ships:\n{dirty}")
+    return None
+
+
+def gate_file_refusal(full_sha: str, root: Path, code_root: Path = ROOT) -> str | None:
+    """A separate source repository that ships the gate (every file of GATE_FILES) must ship the same gate bytes as
+    the running tool. A source that lacks any of them ships no gate, and there is nothing to compare."""
+    shipped = {}
+    for rel in GATE_FILES:
+        shown = subprocess.run(["git", "-C", str(root), "show", f"{full_sha}:{rel}"], capture_output=True,
+                               check=False)
+        if shown.returncode != 0:
+            return None
+        shipped[rel] = shown.stdout
+    for rel, data in shipped.items():
+        running = (code_root / rel).read_bytes() if (code_root / rel).is_file() else b""
+        if data != running:
+            return (f"{rel} at the source {full_sha[:8]} differs from the running copy in {code_root}; "
+                    f"run the export from a worktree at {full_sha[:8]}")
+    return None
+
+
 def _resolve_source_commit(sha_or_ref: str, root: Path) -> tuple[str, str, str]:
     """Resolve full sha, short sha, and iso date for the source commit."""
     proc_full = subprocess.run(
@@ -450,6 +493,10 @@ def export_github(
         full_sha, short_sha, source_date = _resolve_source_commit(source_sha, repo_root)
     except ValueError as exc:
         return 1, str(exc)
+
+    stale = gate_checkout_refusal(full_sha) or gate_file_refusal(full_sha, repo_root)
+    if stale:
+        return 1, f"PUBLIC EXPORT GATE REFUSAL (DS-P2.396): {stale}\nExport aborted before any file was written."
 
     refused = managed_package_refusals(full_sha, repo_root)
     if refused:

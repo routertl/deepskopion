@@ -4,7 +4,8 @@
 
 The header is one comment line in the file's own syntax, ``<comment> rr <model> (AI-generated)``: ``--`` for VHDL,
 ``//`` for C, C headers, Verilog and SystemVerilog, ``#`` for Python and shell (``.sh``, any other file whose first
-line is a ``sh``/``bash``/``dash`` shebang, and the sourced shell files listed under ``[shell]``). It is the first line after any ``#!``
+line is a ``sh``/``bash``/``dash`` shebang, every init and command script a rootfs overlay ships (by path, see
+``overlay_shell_paths``), and the sourced shell files listed under ``[shell]``). It is the first line after any ``#!``
 line and any Python encoding declaration. The text matches RouteRTL's V-019 rule, which reads the first 20 lines of a
 VHDL file under a directory holding a ``.routertl-ai-generated`` sentinel.
 
@@ -46,6 +47,11 @@ MODEL_RE = r"[A-Za-z0-9_./\-:]+"   # ASCII only: the header must be valid in any
 #: An extensionless file whose first line is one of these is a shell source (comment "#").
 SHELL_SHEBANG = re.compile(
     rb"#!\s*(?:/usr/bin/env\s+(?:-\S+\s+)*)?(?:\S*/)?(?:(?:ba|da|a)?sh|busybox\s+a?sh)(?:\s|$)")
+#: A tracked file directly inside one of these directories of a rootfs overlay is a command the image runs: shell by
+#: path, whatever its first line and the [shell] list say. The overlay root is the path before the directory.
+OVERLAY_SHELL_FILE = re.compile(r"^(?:(.*)/)?(?:etc/init\.d|usr/local/s?bin|usr/s?bin)/[^/]+$")
+#: Files at an overlay root that the kernel runs as PID 1.
+OVERLAY_PID1 = ("init", "linuxrc")
 #: A PEP 263 encoding declaration; it must stay on line 1 or 2, so the header goes after it.
 CODING_RE = re.compile(rb"^[ \t\f]*#.*?coding[:=][ \t]*[-\w.]+")
 
@@ -60,6 +66,22 @@ def prefix_of(path: str, first_line: bytes, shell_paths: frozenset = frozenset()
     if path in shell_paths or SHELL_SHEBANG.match(first_line):
         return "#"
     return None
+
+
+def overlay_shell_paths(paths) -> frozenset:
+    """The shipped init and command scripts, derived from the overlay layout alone: every path directly under
+    etc/init.d/, usr/bin/, usr/sbin/, usr/local/bin/ or usr/local/sbin/, and the init/linuxrc at the root of each
+    overlay those paths name. Removing a script's header, its #! line and its [shell] entry together leaves it here."""
+    paths = set(paths)
+    found, roots = set(), set()
+    for p in paths:
+        m = OVERLAY_SHELL_FILE.match(p)
+        if m:
+            found.add(p)
+            roots.add(m.group(1))
+    for r in roots:
+        found.update(q for q in (f"{r}/{n}" if r else n for n in OVERLAY_PID1) if q in paths)
+    return frozenset(found)
 
 
 def _first_line(data: bytes) -> bytes:
@@ -87,10 +109,10 @@ def tracked(root: Path = ROOT) -> dict[str, str]:
     """Tracked regular source files -> comment prefix (suffix map, or an extensionless file with a shell shebang)."""
     out = {}
     top = root.resolve()
-    shell = frozenset(load_exceptions(root)["shell"])
-    for e in _git(root, "ls-files", "-s", "-z").split(b"\0"):
-        if not e:
-            continue
+    listed = [e for e in _git(root, "ls-files", "-s", "-z").split(b"\0") if e]
+    shell = frozenset(load_exceptions(root)["shell"]) | overlay_shell_paths(
+        e.partition(b"\t")[2].decode("utf-8", "surrogateescape") for e in listed)
+    for e in listed:
         head, _, raw = e.partition(b"\t")
         p = raw.decode("utf-8", "surrogateescape")
         # Regular files only: a tracked symlink (mode 120000) or a path that resolves outside the checkout is never
@@ -230,6 +252,7 @@ def indexed(root: Path = ROOT) -> dict[str, tuple[str, bytes]]:
             mode, sha = head.split()[0], head.split()[1].decode()
             if mode in (b"100644", b"100755"):
                 entries.append((raw.decode("utf-8", "surrogateescape"), sha))
+    shell |= overlay_shell_paths(p for p, _ in entries)
     blobs = _git(root, "cat-file", "--batch", input_=("".join(f"{s}\n" for _, s in entries)).encode())
     out, pos = {}, 0
     for path, _sha in entries:
@@ -397,9 +420,9 @@ def verify_diff(root: Path, base: str, head: str | None = None) -> int:
     bad = [f"deleted or renamed away: {p}" for p in removed]
     stamped, tests, other = 0, 0, []
     sec = load_exceptions(root, from_index=head or True)
-    shell = frozenset(sec["shell"])
+    shell = frozenset(sec["shell"]) | overlay_shell_paths(new)
     old_sec = _exceptions_at(root, base)
-    old_shell = frozenset(old_sec["shell"])
+    old_shell = frozenset(old_sec["shell"]) | overlay_shell_paths(old)
     # A policy-only change that waives an existing source: once the base has a manifest, a source that existed and
     # was not excluded there may not become excluded in the same change (the exception needs its own review).
     if subprocess.run(["git", "-C", str(root), "cat-file", "-e", f"{base}:{EXCEPTIONS}"],
